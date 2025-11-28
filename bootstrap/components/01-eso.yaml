@@ -1,26 +1,28 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: crossplane
+  name: external-secrets
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   project: default
   source:
-    chart: crossplane
-    repoURL: https://charts.crossplane.io/stable
-    targetRevision: 1.14.0
+    chart: external-secrets
+    repoURL: https://charts.external-secrets.io
+    targetRevision: 0.9.13
     helm:
-      parameters:
-        - name: "args[0]"
-          value: "--enable-composition-revisions"
+      values: |
+        installCRDs: true
+        webhook:
+          create: true
   destination:
     server: https://kubernetes.default.svc
-    namespace: crossplane-system
+    namespace: external-secrets
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - ServerSideApply=true

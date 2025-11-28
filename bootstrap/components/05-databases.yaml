@@ -1,23 +1,24 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: platform-bootstrap
+  name: databases
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
   source:
     repoURL: https://github.com/arun4infra/zerotouch-infra.git
     targetRevision: feat/migrate-secrets-to-eso
-    path: bootstrap/components
-    directory:
-      recurse: true
+    path: platform/05-databases
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd
+    # No namespace - XRDs and Compositions are cluster-scoped
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - ServerSideApply=true
-      - RespectIgnoreDifferences=true
