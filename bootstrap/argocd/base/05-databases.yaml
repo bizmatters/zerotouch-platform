@@ -1,27 +1,27 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: platform-bootstrap
+  name: databases
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/sync-wave: "5"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
   source:
     repoURL: https://github.com/arun4infra/zerotouch-platform.git
-    targetRevision: main
-    path: bootstrap/components
+    targetRevision: chore/split-root
+    path: platform/05-databases
     directory:
       recurse: true
+      exclude: '*.md'
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd
-  ignoreDifferences:
-    - group: argoproj.io
-      kind: Application
-      jsonPointers:
-        - /status
+    # No namespace - XRDs and Compositions are cluster-scoped
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
