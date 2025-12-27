@@ -16,7 +16,7 @@ set -euo pipefail
 # ==============================================================================
 
 # Configuration
-CLEANUP_CLUSTER=${CLEANUP_CLUSTER:-false}  # Default: keep cluster for debugging
+CLEANUP_CLUSTER=${CLEANUP_CLUSTER:-true}   # Default: always cleanup cluster
 
 # Default values
 SERVICE_NAME=""
@@ -350,13 +350,11 @@ trap cleanup EXIT
     if [[ -n "${OVERRIDE_IMAGE_TAG:-}" ]]; then
         log_info "Skipping service build - using pre-built artifact: ${OVERRIDE_IMAGE_TAG}"
         # Set the build variables for downstream scripts
+        BUILD_MODE="artifact"
+        IMAGE_TAG="${OVERRIDE_IMAGE_TAG}"
         if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
             echo "BUILD_MODE=artifact" >> "$GITHUB_OUTPUT"
             echo "IMAGE_TAG=${OVERRIDE_IMAGE_TAG}" >> "$GITHUB_OUTPUT"
-        else
-            # Fallback for local execution
-            BUILD_MODE="artifact"
-            IMAGE_TAG="${OVERRIDE_IMAGE_TAG}"
         fi
     else
         log_info "Building service image..."
