@@ -39,6 +39,7 @@ jobs:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      TENANTS_REPO_NAME: ${{ secrets.TENANTS_REPO_NAME }}
 
   # Add more test jobs as needed:
   # test-api:
