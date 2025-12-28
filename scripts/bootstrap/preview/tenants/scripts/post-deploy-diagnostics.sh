@@ -24,7 +24,9 @@ log_warn() { echo -e "${YELLOW}[POST-DEPLOY]${NC} $*"; }
 load_service_config() {
     # Get the script directory and calculate service root
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local service_root="$(cd "$script_dir/../../../../../.." && pwd)"
+    
+    # In CI, we're in service-code subdirectory, so service root is current working directory
+    local service_root="$(pwd)"
     local config_file="$service_root/ci/config.yaml"
     
     log_info "Debug: Script dir: $script_dir"
