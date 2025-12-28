@@ -12,7 +12,9 @@ set -euo pipefail
 # ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../../../.." && pwd)"  # Go back to service root
+# PROJECT_ROOT should be the current working directory (service root)
+# since the script is called from the service directory
+PROJECT_ROOT="$(pwd)"
 
 # Load service configuration from ci/config.yaml
 load_service_config() {
