@@ -115,8 +115,28 @@ spec:
             pip install pytest pytest-asyncio
           fi
           
-          # Run integration tests directly
+          # Build ignore patterns to exclude other test files in the same directory
+          # This prevents pytest from discovering and collecting tests from other files
+          TEST_DIR=$(dirname "{{TEST_PATH}}")
+          TEST_FILE=$(basename "{{TEST_PATH}}")
+          IGNORE_ARGS=""
+          
+          if [ -d "$TEST_DIR" ]; then
+            echo "Scanning for other test files to ignore in: $TEST_DIR"
+            for other_test in "$TEST_DIR"/test_*.py; do
+              if [ -f "$other_test" ] && [ "$(basename "$other_test")" != "$TEST_FILE" ]; then
+                IGNORE_ARGS="$IGNORE_ARGS --ignore=$other_test"
+                echo "  Will ignore: $other_test"
+              fi
+            done
+          fi
+          
+          echo "Running pytest with ignore args: $IGNORE_ARGS"
+          echo ""
+          
+          # Run integration tests directly with ignore patterns
           if pytest "{{TEST_PATH}}" \
+              $IGNORE_ARGS \
               -v \
               --tb=short \
               --disable-warnings \

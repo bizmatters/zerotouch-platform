@@ -459,8 +459,6 @@ trap cleanup EXIT
             chmod +x "$TEST_JOB_SCRIPT"
             # Use the final image tag (either from build or override)
             FINAL_IMAGE_TAG="${OVERRIDE_IMAGE_TAG:-$IMAGE_TAG}"
-            # Export PLATFORM_ROOT so child script can use it
-            export PLATFORM_ROOT
             if "$TEST_JOB_SCRIPT" "${TEST_PATH}" "${TEST_NAME}" "${TIMEOUT}" "${NAMESPACE}" "${FINAL_IMAGE_TAG}"; then
                 log_success "✅ In-cluster tests completed successfully!"
             else
@@ -505,6 +503,9 @@ setup_ci_infrastructure() {
         log_error "Platform directory not found. Expected ../zerotouch-platform or ./zerotouch-platform"
         exit 1
     fi
+    
+    # Export PLATFORM_ROOT so all child scripts can use it
+    export PLATFORM_ROOT
     log_success "Using platform checkout at: $PLATFORM_ROOT"
 
     # Step 3: Configure AWS credentials (skip for local - assume already configured)
