@@ -8,6 +8,18 @@ set -euo pipefail
 # Usage: ./setup-external-dependencies.sh
 # ==============================================================================
 
+# Color codes
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+log_info() { echo -e "${BLUE}[EXTERNAL-DEPS]${NC} $*"; }
+log_success() { echo -e "${GREEN}[EXTERNAL-DEPS]${NC} $*"; }
+log_error() { echo -e "${RED}[EXTERNAL-DEPS]${NC} $*"; }
+log_warn() { echo -e "${YELLOW}[EXTERNAL-DEPS]${NC} $*"; }
+
 # Get script directory for finding platform root
 # Check if PLATFORM_ROOT is already set by parent script
 if [[ -n "${PLATFORM_ROOT:-}" ]]; then
@@ -18,16 +30,6 @@ else
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     PLATFORM_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 fi
-
-# Color codes
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-log_info() { echo -e "${BLUE}[EXTERNAL-DEPS]${NC} $*"; }
-log_success() { echo -e "${GREEN}[EXTERNAL-DEPS]${NC} $*"; }
 log_error() { echo -e "${RED}[EXTERNAL-DEPS]${NC} $*"; }
 log_warn() { echo -e "${YELLOW}[EXTERNAL-DEPS]${NC} $*"; }
 
