@@ -494,9 +494,15 @@ setup_ci_infrastructure() {
     # Step 2: Platform checkout handled by service entry point
     log_info "Platform checkout handled by service entry point"
     
-    # Set platform root path
-    CURRENT_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    PLATFORM_ROOT="$(cd "$CURRENT_SCRIPT_DIR/../../../../.." && pwd)"
+    # Set platform root path - in CI, we're in service-code/ and platform is in ../zerotouch-platform/
+    if [[ -d "../zerotouch-platform" ]]; then
+        PLATFORM_ROOT="$(cd ../zerotouch-platform && pwd)"
+    elif [[ -d "./zerotouch-platform" ]]; then
+        PLATFORM_ROOT="$(cd ./zerotouch-platform && pwd)"
+    else
+        log_error "Platform directory not found. Expected ../zerotouch-platform or ./zerotouch-platform"
+        exit 1
+    fi
     log_success "Using platform checkout at: $PLATFORM_ROOT"
 
     # Step 3: Configure AWS credentials (skip for local - assume already configured)
