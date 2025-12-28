@@ -18,13 +18,13 @@ set -euo pipefail
 # Configuration
 CLEANUP_CLUSTER=${CLEANUP_CLUSTER:-true}   # Default: always cleanup cluster
 
-# Default values
-SERVICE_NAME=""
-TEST_PATH=""
-TEST_NAME=""
-TIMEOUT=600
-IMAGE_TAG="ci-test"
-NAMESPACE=""
+# Default values - preserve environment variables if already set
+SERVICE_NAME="${SERVICE_NAME:-}"
+TEST_PATH="${TEST_PATH:-}"
+TEST_NAME="${TEST_NAME:-}"
+TIMEOUT="${TIMEOUT:-600}"
+IMAGE_TAG="${IMAGE_TAG:-ci-test}"
+NAMESPACE="${NAMESPACE:-}"
 
 # Color codes
 RED='\033[0;31m'
