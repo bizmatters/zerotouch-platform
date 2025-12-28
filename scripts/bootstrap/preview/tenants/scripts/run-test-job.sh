@@ -32,7 +32,15 @@ else
 fi
 
 # Platform root directory (when running from service directory)
-PLATFORM_ROOT="./zerotouch-platform"
+# In CI, we're in service-code subdirectory, so platform is one level up
+if [[ -d "./zerotouch-platform" ]]; then
+    PLATFORM_ROOT="./zerotouch-platform"
+elif [[ -d "../zerotouch-platform" ]]; then
+    PLATFORM_ROOT="../zerotouch-platform"
+else
+    log_error "Platform directory not found"
+    exit 1
+fi
 
 # Color codes
 RED='\033[0;31m'
