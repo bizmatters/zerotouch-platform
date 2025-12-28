@@ -18,8 +18,13 @@ service-repo/
 │   └── config.yaml              # Required: All service configuration
 ├── platform/
 │   └── claims/<namespace>/      # Required: Kubernetes manifests (with production-ready image references)
+├── patches/                     # Required: If ci/config.yaml declares internal dependencies
+│   ├── 01-downsize-postgres.sh # Required: If postgres in dependencies.internal
+│   └── 02-optimize-resources.sh # Required: Resource optimization for Kind
 └── Dockerfile                   # Required: Service container build instructions
 ```
+
+**CRITICAL RULE**: If `ci/config.yaml` declares any `dependencies.internal` services (postgres, redis, etc.), the service MUST provide corresponding patches in `patches/` directory. These patches adapt the service for Kind/preview environments during CI testing.
 
 ### Optional Structure
 
@@ -28,13 +33,10 @@ service-repo/
 ├── migrations/                  # Optional: Database migration files
 │   ├── 001_initial.up.sql
 │   └── 002_add_users.up.sql
-├── tests/
-│   └── integration/             # Optional: Integration test files
-│       ├── test_api.py
-│       └── test_db.py
-└── patches/                     # Optional: Preview environment patches
-    ├── 01-downsize-postgres.sh
-    └── 02-optimize-resources.sh
+└── tests/
+    └── integration/             # Optional: Integration test files
+        ├── test_api.py
+        └── test_db.py
 ```
 
 ## Configuration Files
@@ -267,12 +269,17 @@ The platform validates service compliance:
 # Required files/directories
 ✓ ci/config.yaml exists
 ✓ platform/claims/<namespace>/ exists
+✓ patches/ exists (if dependencies.internal declared in ci/config.yaml)
 ✓ No scripts under scripts/ci/ (removed)
 
 # Optional validation
 ✓ migrations/ contains valid SQL files
 ✓ tests/integration/ contains test files
 ✓ env/ci.env has valid environment variables
+
+# Internal dependencies validation
+✓ patches/01-downsize-postgres.sh exists (if postgres in dependencies.internal)
+✓ patches/02-optimize-resources.sh exists (if redis in dependencies.internal)
 ```
 
 ## Benefits

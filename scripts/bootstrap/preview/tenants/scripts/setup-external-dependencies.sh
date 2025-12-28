@@ -53,29 +53,8 @@ get_external_dependencies() {
 # Setup specific external dependency
 setup_external_dependency() {
     local dep="$1"
-    case "$dep" in
-        "deepagents-runtime")
-            log_info "Setting up DeepAgents Runtime service"
-            setup_deepagents_runtime_service
-            ;;
-        *)
-            log_error "Unknown external dependency: $dep"
-            log_error "Supported external dependencies: deepagents-runtime"
-            exit 1
-            ;;
-    esac
-}
-
-setup_deepagents_runtime_service() {
-    # Use the existing platform setup-dependencies.sh for deepagents-runtime
-    local setup_deps_script="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/setup-dependencies.sh"
-    if [[ -f "$setup_deps_script" ]]; then
-        chmod +x "$setup_deps_script"
-        "$setup_deps_script"
-    else
-        log_error "DeepAgents Runtime setup script not found: $setup_deps_script"
-        exit 1
-    fi
+    log_info "External dependencies must be mocked. It is not supported in in-cluster integration tests."
+    exit 0
 }
 
 # Main execution
