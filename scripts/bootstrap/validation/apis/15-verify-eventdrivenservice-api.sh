@@ -17,7 +17,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" || {
     exit 1
 }
 
+<<<<<<<< HEAD:scripts/bootstrap/validation/06-apis/15-verify-eventdrivenservice-api.sh
 # Navigate to repo root from script location (4 levels up from scripts/bootstrap/validation/06-apis/)
+========
+# Navigate to repo root from script location (4 levels up from scripts/bootstrap/validation/apis/)
+>>>>>>>> ad3892423e89ac86668cd1958b206ef98d0386d4:scripts/bootstrap/validation/apis/15-verify-eventdrivenservice-api.sh
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)" || {
     echo "ERROR: Failed to navigate to repo root from $SCRIPT_DIR" >&2
     # Fallback: assume we're in the repo root already
