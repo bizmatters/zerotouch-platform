@@ -259,55 +259,19 @@ run_ci_workflow() {
 
 # Cleanup function (matches workflow cleanup step)
 cleanup() {
-    log_info "Cleanup: Investigating failed pods..."
-    
-    # Find the name of any pod that is not Running
-    FAILED_POD=$(kubectl get pods -n "${NAMESPACE}" -l "app.kubernetes.io/name=${SERVICE_NAME}" --field-selector=status.phase!=Running -o name 2>/dev/null | head -n 1 || true)
-    
-    if [[ -n "$FAILED_POD" ]]; then
-        echo "=== CRASH LOG FOR $FAILED_POD ==="
-        # Capture logs even if the container has crashed (previous instance)
-        kubectl logs "$FAILED_POD" -n "${NAMESPACE}" --all-containers=true --tail=100 || true
-        echo "================================="
-        echo "=== POD DESCRIPTION ==="
-        kubectl describe "$FAILED_POD" -n "${NAMESPACE}" || true
-        echo "================================="
-    fi
-    
-    # Also check for any CrashLoopBackOff pods with different label selector
-    CRASH_PODS=$(kubectl get pods -n "${NAMESPACE}" -l "app=${SERVICE_NAME}" --field-selector=status.phase!=Running -o name 2>/dev/null || true)
-    
-    if [[ -n "$CRASH_PODS" ]]; then
-        echo "$CRASH_PODS" | while read -r pod; do
-            if [[ -n "$pod" ]]; then
-                echo "=== CRASH LOG FOR $pod ==="
-                kubectl logs "$pod" -n "${NAMESPACE}" --all-containers=true --tail=100 || true
-                echo "================================="
-                echo "=== POD DESCRIPTION ==="
-                kubectl describe "$pod" -n "${NAMESPACE}" || true
-                echo "================================="
-            fi
-        done
-    fi
-    
-    log_info "Cleanup: Getting logs from failed pods for debugging..."
-    if kubectl get pods -n "${NAMESPACE}" -l test-suite="${TEST_NAME}" --field-selector=status.phase=Failed -o name 2>/dev/null | grep -q .; then
-        echo "=== Failed Pod Logs ==="
-        kubectl get pods -n "${NAMESPACE}" -l test-suite="${TEST_NAME}" --field-selector=status.phase=Failed -o name | while read pod; do
-            echo "--- Logs for $pod ---"
-            kubectl logs "$pod" -n "${NAMESPACE}" || true
-        done
-    fi
-    
-    log_info "Cleanup: Cleaning up test jobs..."
-    kubectl delete jobs -n "${NAMESPACE}" -l test-suite="${TEST_NAME}" --ignore-not-found=true || true
-    
-    if [[ "${CLEANUP_CLUSTER}" == "true" ]]; then
-        log_info "Cleanup: Cleaning up Kind cluster..."
-        kind delete cluster --name zerotouch-preview || true
+    # Use dedicated cleanup script for better modularity
+    CLEANUP_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/cleanup-failed-pods.sh"
+    if [[ -f "$CLEANUP_SCRIPT" ]]; then
+        chmod +x "$CLEANUP_SCRIPT"
+        "$CLEANUP_SCRIPT" "${SERVICE_NAME}" "${NAMESPACE}" "${TEST_NAME:-}"
     else
-        log_info "Cleanup: Keeping cluster for debugging (set CLEANUP_CLUSTER=true to auto-cleanup)"
-        log_info "Cleanup: Manual cleanup: kind delete cluster --name zerotouch-preview"
+        log_warn "Cleanup script not found: $CLEANUP_SCRIPT"
+        log_info "Performing basic cleanup..."
+        
+        if [[ "${CLEANUP_CLUSTER:-true}" == "true" ]]; then
+            log_info "Cleaning up Kind cluster..."
+            kind delete cluster --name zerotouch-preview || true
+        fi
     fi
 }
 

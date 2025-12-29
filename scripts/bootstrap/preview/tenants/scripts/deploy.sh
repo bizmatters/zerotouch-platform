@@ -96,13 +96,13 @@ if [[ -d "${PROJECT_ROOT}/platform/claims/${NAMESPACE}" ]]; then
     kubectl apply -f "${PROJECT_ROOT}/platform/claims/${NAMESPACE}/" -n "${NAMESPACE}" --recursive
     echo "✅ Platform claims applied"
     
-    # Wait for ghcr-pull-secret to be synced by ExternalSecrets Operator
-    WAIT_SECRET_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/wait/wait-for-external-secret.sh"
-    if [[ -f "$WAIT_SECRET_SCRIPT" ]]; then
-        chmod +x "$WAIT_SECRET_SCRIPT"
-        "$WAIT_SECRET_SCRIPT" ghcr-pull-secret "${NAMESPACE}" --timeout 120
+    # Wait for infrastructure dependencies using dedicated script
+    INFRA_WAIT_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/wait-for-database-and-secrets.sh"
+    if [[ -f "$INFRA_WAIT_SCRIPT" ]]; then
+        chmod +x "$INFRA_WAIT_SCRIPT"
+        "$INFRA_WAIT_SCRIPT" "${SERVICE_NAME}" "${NAMESPACE}"
     else
-        echo "❌ Wait script not found: $WAIT_SECRET_SCRIPT"
+        echo "❌ Database and secrets wait script not found: $INFRA_WAIT_SCRIPT"
         exit 1
     fi
     
