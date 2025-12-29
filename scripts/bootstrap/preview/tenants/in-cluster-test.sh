@@ -259,6 +259,37 @@ run_ci_workflow() {
 
 # Cleanup function (matches workflow cleanup step)
 cleanup() {
+    log_info "Cleanup: Investigating failed pods..."
+    
+    # Find the name of any pod that is not Running
+    FAILED_POD=$(kubectl get pods -n "${NAMESPACE}" -l "app.kubernetes.io/name=${SERVICE_NAME}" --field-selector=status.phase!=Running -o name 2>/dev/null | head -n 1 || true)
+    
+    if [[ -n "$FAILED_POD" ]]; then
+        echo "=== CRASH LOG FOR $FAILED_POD ==="
+        # Capture logs even if the container has crashed (previous instance)
+        kubectl logs "$FAILED_POD" -n "${NAMESPACE}" --all-containers=true --tail=100 || true
+        echo "================================="
+        echo "=== POD DESCRIPTION ==="
+        kubectl describe "$FAILED_POD" -n "${NAMESPACE}" || true
+        echo "================================="
+    fi
+    
+    # Also check for any CrashLoopBackOff pods with different label selector
+    CRASH_PODS=$(kubectl get pods -n "${NAMESPACE}" -l "app=${SERVICE_NAME}" --field-selector=status.phase!=Running -o name 2>/dev/null || true)
+    
+    if [[ -n "$CRASH_PODS" ]]; then
+        echo "$CRASH_PODS" | while read -r pod; do
+            if [[ -n "$pod" ]]; then
+                echo "=== CRASH LOG FOR $pod ==="
+                kubectl logs "$pod" -n "${NAMESPACE}" --all-containers=true --tail=100 || true
+                echo "================================="
+                echo "=== POD DESCRIPTION ==="
+                kubectl describe "$pod" -n "${NAMESPACE}" || true
+                echo "================================="
+            fi
+        done
+    fi
+    
     log_info "Cleanup: Getting logs from failed pods for debugging..."
     if kubectl get pods -n "${NAMESPACE}" -l test-suite="${TEST_NAME}" --field-selector=status.phase=Failed -o name 2>/dev/null | grep -q .; then
         echo "=== Failed Pod Logs ==="
