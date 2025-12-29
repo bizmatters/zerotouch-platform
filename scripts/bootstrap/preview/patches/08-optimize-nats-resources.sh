@@ -36,7 +36,7 @@ fi
 if [ "$IS_PREVIEW_MODE" = true ]; then
     echo -e "${BLUE}Optimizing NATS resources for preview mode...${NC}"
     
-    NATS_FILE="$REPO_ROOT/bootstrap/argocd/base/01-nats.yaml"
+    NATS_FILE="$REPO_ROOT/bootstrap/argocd/base/05-nats.yaml"
     
     if [ -f "$NATS_FILE" ]; then
         # Disable JetStream file store (uses PVCs)

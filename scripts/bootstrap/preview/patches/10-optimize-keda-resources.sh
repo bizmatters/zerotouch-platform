@@ -36,7 +36,7 @@ fi
 if [ "$IS_PREVIEW_MODE" = true ]; then
     echo -e "${BLUE}Optimizing KEDA resources for preview mode...${NC}"
     
-    KEDA_FILE="$REPO_ROOT/bootstrap/argocd/base/01-keda.yaml"
+    KEDA_FILE="$REPO_ROOT/bootstrap/argocd/base/04-keda.yaml"
     
     if [ -f "$KEDA_FILE" ]; then
         # Reduce KEDA operator resources
