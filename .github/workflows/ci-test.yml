@@ -136,8 +136,8 @@ jobs:
           USE_REAL_LLM: ${{ inputs.use_real_llm }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          SPEC_ENGINE_URL: ${{ secrets.SPEC_ENGINE_URL }}
+          IDEO_JWT_SECRET: ${{ secrets.IDEO_JWT_SECRET }}
+          IDEO_SPEC_ENGINE_URL: ${{ secrets.IDEO_SPEC_ENGINE_URL }}
           # Override image for in-cluster testing
           OVERRIDE_IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
