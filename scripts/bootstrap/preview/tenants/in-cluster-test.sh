@@ -302,7 +302,7 @@ trap cleanup EXIT
     PLATFORM_READINESS_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/check-platform-readiness.sh"
     if [[ -f "$PLATFORM_READINESS_SCRIPT" ]]; then
         chmod +x "$PLATFORM_READINESS_SCRIPT"
-        "$PLATFORM_READINESS_SCRIPT"
+        "$PLATFORM_READINESS_SCRIPT" --wait --timeout 300
     else
         log_error "Platform readiness script not found: $PLATFORM_READINESS_SCRIPT"
         exit 1

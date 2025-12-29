@@ -264,8 +264,6 @@ ${YELLOW}What's Happening Now:${NC}
 - ArgoCD applications have been created but are still syncing
 - Applications may show "Unknown" status initially - this is normal
 - Foundation layer (Cilium, Crossplane, KEDA, Kagent) will deploy first
-- Intelligence layer (Qdrant, docs-mcp, Librarian Agent) will deploy next
-- Observability and APIs layers are DISABLED (as configured)
 
 ${YELLOW}⚠️  Note: Applications are NOT yet synced - use the monitoring commands below${NC}
 
