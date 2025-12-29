@@ -75,49 +75,20 @@ check_platform_dependencies() {
     for dep in $platform_deps; do
         log_info "Checking platform dependency: $dep"
         
-        local found=false
-        local found_namespace=""
-        local found_type=""
-        local found_name=""
-        
-        # First try to find exact match by name
-        local deployment_result=$(kubectl get deployments --all-namespaces -o jsonpath='{range .items[?(@.metadata.name=="'$dep'")]}{.metadata.namespace}{" "}{.metadata.name}{"\n"}{end}' 2>/dev/null)
-        local statefulset_result=$(kubectl get statefulsets --all-namespaces -o jsonpath='{range .items[?(@.metadata.name=="'$dep'")]}{.metadata.namespace}{" "}{.metadata.name}{"\n"}{end}' 2>/dev/null)
-        
-        if [[ -n "$deployment_result" ]]; then
-            found_namespace=$(echo "$deployment_result" | awk '{print $1}')
-            found_type="deployment"
-            found_name="$dep"
-            found=true
-        elif [[ -n "$statefulset_result" ]]; then
-            found_namespace=$(echo "$statefulset_result" | awk '{print $1}')
-            found_type="statefulset"
-            found_name="$dep"
-            found=true
-        else
-            # Try common variations
-            for variation in "${dep}-operator" "${dep}-controller" "${dep}-server" "${dep}-admission-webhooks"; do
-                local var_deployment_result=$(kubectl get deployments --all-namespaces -o jsonpath='{range .items[?(@.metadata.name=="'$variation'")]}{.metadata.namespace}{" "}{.metadata.name}{"\n"}{end}' 2>/dev/null)
-                if [[ -n "$var_deployment_result" ]]; then
-                    found_namespace=$(echo "$var_deployment_result" | awk '{print $1}')
-                    found_type="deployment"
-                    found_name="$variation"
-                    found=true
-                    break
-                fi
-            done
-        fi
-        
-        if [[ "$found" == "true" ]]; then
-            # Verify the namespace exists
-            if kubectl get namespace "$found_namespace" &>/dev/null; then
-                log_success "✓ Platform dependency '$dep' found as $found_type '$found_name' in namespace '$found_namespace'"
+        # Check if ArgoCD application exists and is synced/healthy
+        if kubectl get application "$dep" -n argocd >/dev/null 2>&1; then
+            local sync_status=$(kubectl get application "$dep" -n argocd -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "Unknown")
+            local health_status=$(kubectl get application "$dep" -n argocd -o jsonpath='{.status.health.status}' 2>/dev/null || echo "Unknown")
+            
+            if [[ "$sync_status" == "Synced" && "$health_status" == "Healthy" ]]; then
+                log_success "✓ Platform dependency '$dep' is ready (ArgoCD: $sync_status/$health_status)"
             else
-                log_error "✗ Platform dependency '$dep' found but namespace '$found_namespace' does not exist"
+                log_error "✗ Platform dependency '$dep' is not ready (ArgoCD: $sync_status/$health_status)"
+                log_error "Platform dependencies must be Synced & Healthy before service deployment"
                 exit 1
             fi
         else
-            log_error "✗ Platform dependency '$dep' not found in cluster"
+            log_error "✗ Platform dependency '$dep' not found as ArgoCD application"
             log_error "Service declared '$dep' as a platform dependency in ci/config.yaml"
             log_error "This dependency must be deployed and running for the service to function correctly"
             exit 1
