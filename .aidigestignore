@@ -18,3 +18,4 @@ artifacts
 codebase.md
 .talos-credentials
 .tenants-cache
+.release-artifacts
