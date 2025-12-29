@@ -581,6 +581,11 @@ setup_ci_infrastructure() {
         log_error "Platform sync script not found: $SYNC_SCRIPT"
         exit 1
     fi
+    
+    # Step 9: Additional settling time for ArgoCD operations
+    log_info "Allowing additional time for ArgoCD operations to settle..."
+    sleep 15
+    log_success "Infrastructure setup completed - ArgoCD operations have settled"
 }
 
 # Call main function with all arguments

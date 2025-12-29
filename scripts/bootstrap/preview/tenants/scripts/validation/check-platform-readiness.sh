@@ -114,7 +114,7 @@ main() {
     if [[ "$WAIT_MODE" == "true" ]]; then
         log_info "Wait mode enabled - using wait-for-platform-readiness.sh"
         
-        local wait_script="$SCRIPT_DIR/wait/wait-for-platform-readiness.sh"
+        local wait_script="$SCRIPT_DIR/../wait/wait-for-platform-readiness.sh"
         if [[ -f "$wait_script" ]]; then
             log_info "Delegating to wait script with timeout: ${TIMEOUT}s"
             exec "$wait_script" --timeout "$TIMEOUT"

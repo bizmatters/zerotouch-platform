@@ -159,6 +159,10 @@ main() {
     # Step 3: Sync required platform dependencies
     sync_platform_dependencies
     
+    # Step 4: Allow ArgoCD to settle after manual sync operations
+    log_info "Allowing ArgoCD to settle after sync operations..."
+    sleep 10
+    
     log_success "Platform component synchronization completed"
 }
 
