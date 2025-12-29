@@ -161,7 +161,7 @@ disable_service() {
             if [[ "$OSTYPE" == "darwin"* ]]; then
                 sed -i '' "s|^- ${resource_name}|# DISABLED by conditional patch: ${resource_name}|" "$kustomization_file"
             else
-                sed -i "s|^- ${resource_name}|# DISABLED by conditional patch: ${resource_name}|" "$kustomization_file"
+                sed -i "s|^[[:space:]]*- ${resource_name}|# DISABLED by conditional patch: ${resource_name}|" "$kustomization_file"
             fi
             
             log_info "Debug: Applied sed command" >&2
