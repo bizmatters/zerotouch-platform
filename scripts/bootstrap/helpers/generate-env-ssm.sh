@@ -94,6 +94,9 @@ while IFS='=' read -r key value || [ -n "$key" ]; do
             */argocd/repos/zerotouch-tenants/url) env_var="TENANTS_REPO_URL" ;;
             */argocd/repos/zerotouch-tenants/username) env_var="BOT_GITHUB_USERNAME" ;;
             */argocd/repos/zerotouch-tenants/password) env_var="BOT_GITHUB_TOKEN" ;;
+            # IDE Orchestrator service secrets
+            /zerotouch/prod/ide-orchestrator/jwt-secret) env_var="IDEO_JWT_SECRET" ;;
+            /zerotouch/prod/ide-orchestrator/spec-engine-url) env_var="IDEO_SPEC_ENGINE_URL" ;;
             # Other repos - use REPOS_<NAME>_<FIELD> pattern
             */argocd/repos/*/url)
                 repo_name=$(echo "$key" | sed 's|.*/argocd/repos/\([^/]*\)/url|\1|' | tr '[:lower:]' '[:upper:]' | tr '-' '_')
