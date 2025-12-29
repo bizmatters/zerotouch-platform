@@ -52,17 +52,15 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
     fi
     
     # Ensure no 00-* files leak into base/ directory (overlays don't include them)
-    ZERO_FILES_IN_BASE=$(find "$REPO_ROOT/bootstrap/argocd/base/" -name "00-*.yaml" 2>/dev/null || true)
+    # Specifically target local-path-provisioner to avoid moving other 00-* files like eso
+    LOCAL_PATH_IN_BASE="$REPO_ROOT/bootstrap/argocd/base/00-local-path-provisioner.yaml"
     
-    if [ -n "$ZERO_FILES_IN_BASE" ]; then
-        echo -e "${YELLOW}⚠️  Found 00-* files in base directory - moving them:${NC}"
-        for file in $ZERO_FILES_IN_BASE; do
-            filename=$(basename "$file")
-            mv "$file" "$REPO_ROOT/bootstrap/argocd/bootstrap-files/$filename"
-            echo -e "  ${GREEN}✓${NC} Moved: $filename to bootstrap-files"
-        done
+    if [ -f "$LOCAL_PATH_IN_BASE" ]; then
+        echo -e "${YELLOW}⚠️  Found 00-local-path-provisioner.yaml in base directory - moving it:${NC}"
+        mv "$LOCAL_PATH_IN_BASE" "$REPO_ROOT/bootstrap/argocd/bootstrap-files/00-local-path-provisioner.yaml"
+        echo -e "  ${GREEN}✓${NC} Moved: 00-local-path-provisioner.yaml to bootstrap-files"
     else
-        echo -e "  ${GREEN}✓${NC} No 00-* files found in base directory"
+        echo -e "  ${GREEN}✓${NC} No 00-local-path-provisioner.yaml found in base directory"
     fi
     
     echo -e "  ${BLUE}ℹ${NC} Kind clusters use built-in local-path storage"

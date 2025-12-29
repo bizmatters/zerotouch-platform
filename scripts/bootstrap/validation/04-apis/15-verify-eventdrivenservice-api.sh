@@ -99,7 +99,7 @@ if kubectl_retry get application apis -n argocd &>/dev/null; then
     fi
 else
     echo -e "${RED}✗ Application 'apis' not found${NC}"
-    echo -e "${BLUE}ℹ  Check if platform/04-apis.yaml exists and is applied${NC}"
+    echo -e "${BLUE}ℹ  Check if platform/06-apis.yaml exists and is applied${NC}"
     ERRORS=$((ERRORS + 1))
 fi
 
