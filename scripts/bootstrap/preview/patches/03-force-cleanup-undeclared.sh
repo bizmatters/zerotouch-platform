@@ -51,6 +51,11 @@ find_service_config() {
     # Check SERVICE_ROOT first
     if [[ -n "${SERVICE_ROOT:-}" && -f "${SERVICE_ROOT}/ci/config.yaml" ]]; then
         config_file="${SERVICE_ROOT}/ci/config.yaml"
+    # Check GitHub Actions structure (service-code directory)
+    elif [[ -f "${current_dir}/../service-code/ci/config.yaml" ]]; then
+        config_file="${current_dir}/../service-code/ci/config.yaml"
+    elif [[ -f "${current_dir}/service-code/ci/config.yaml" ]]; then
+        config_file="${current_dir}/service-code/ci/config.yaml"
     # Check standard locations
     elif [[ -f "${current_dir}/ci/config.yaml" ]]; then
         config_file="${current_dir}/ci/config.yaml"
@@ -107,6 +112,34 @@ force_delete_service() {
 main() {
     log_info "Running cleanup for undeclared services..."
     
+    # Check ArgoCD auto-sync status first
+    log_info "Checking ArgoCD auto-sync configuration..."
+    if kubectl get namespace argocd &>/dev/null; then
+        if kubectl get configmap argocd-cm -n argocd &>/dev/null; then
+            log_info "ArgoCD ConfigMap found, checking auto-sync settings..."
+            
+            # Check for auto-sync disable configuration
+            local autosync_disabled=$(kubectl get configmap argocd-cm -n argocd -o yaml 2>/dev/null | grep -c "application.instanceLabelKey" || echo "0")
+            local policy_config=$(kubectl get configmap argocd-cm -n argocd -o jsonpath='{.data.policy\.default}' 2>/dev/null || echo "")
+            
+            if [[ "$autosync_disabled" -gt 0 ]]; then
+                log_success "✓ ArgoCD auto-sync disable configuration detected"
+                log_info "Policy config: ${policy_config:-none}"
+            else
+                log_warn "⚠️  ArgoCD auto-sync disable configuration NOT found"
+                log_warn "This may cause conflicts during cleanup"
+            fi
+            
+            # Show current application sync policies
+            log_info "Current ArgoCD application sync policies:"
+            kubectl get applications -n argocd -o custom-columns="NAME:.metadata.name,AUTO-SYNC:.spec.syncPolicy.automated" 2>/dev/null || log_warn "Could not retrieve application sync policies"
+        else
+            log_warn "ArgoCD ConfigMap not found"
+        fi
+    else
+        log_warn "ArgoCD namespace not found"
+    fi
+    
     install_dependencies
     
     local config_file=$(find_service_config)
@@ -119,23 +152,52 @@ main() {
     
     # List of all optional services (from 02 script logic)
     # Excludes foundation services (eso, crossplane, cnpg, foundation-config)
+    # Include all services that could be running from ArgoCD sync
     local optional_services=("agents.kagent.dev" "kagent" "keda" "nats" "apis" "databases" "intelligence")
     
     # Get allowed services from config
     local allowed_deps=$(yq eval '.dependencies.platform[]' "$config_file" 2>/dev/null | tr '\n' ' ' || echo "")
     log_info "Allowed platform dependencies: ${allowed_deps:-none}"
     
+    # Debug: Show current applications
+    log_info "Debug: Current ArgoCD Applications:"
+    kubectl get applications -n argocd -o name | sed 's/application.argoproj.io\///' || echo "Failed to list apps"
+    
     for service in "${optional_services[@]}"; do
-        if echo "$allowed_deps" | grep -q "$service"; then
+        # Check if service is in allowed dependencies
+        local is_allowed=false
+        if [[ -n "$allowed_deps" ]]; then
+            for allowed in $allowed_deps; do
+                if [[ "$service" == "$allowed" ]]; then
+                    is_allowed=true
+                    break
+                fi
+            done
+        fi
+        
+        if [[ "$is_allowed" == "true" ]]; then
             log_info "Keeping declared service: $service"
         else
-            log_warn "Found undeclared service candidate: $service"
-            # Check if it's actually running
-            if kubectl get application "$service" -n argocd &>/dev/null || kubectl get namespace "$service" &>/dev/null; then
-                log_warn "Service $service is RUNNING but NOT DECLARED. Force cleaning..."
+            log_warn "Processing undeclared service candidate: $service"
+            
+            # AGGRESSIVE CHECK: Check if it exists, regardless of status
+            local app_exists=false
+            if kubectl get application "$service" -n argocd --ignore-not-found | grep -q "$service"; then
+                app_exists=true
+                log_warn "Found active Application: $service"
+            fi
+            
+            local ns_exists=false
+            if kubectl get namespace "$service" --ignore-not-found | grep -q "$service"; then
+                ns_exists=true
+                log_warn "Found active Namespace: $service"
+            fi
+            
+            if [[ "$app_exists" == "true" || "$ns_exists" == "true" ]]; then
+                log_warn "Service $service is PRESENT but NOT DECLARED. Force cleaning..."
                 force_delete_service "$service"
             else
-                log_info "Service $service is correctly not running."
+                log_info "Service $service not found in cluster."
             fi
         fi
     done
