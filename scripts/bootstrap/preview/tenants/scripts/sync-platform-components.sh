@@ -53,7 +53,7 @@ get_platform_dependencies() {
 
 # Clear corrupted ArgoCD state
 clear_argocd_state() {
-    log_info "Clearing corrupted ArgoCD state..."
+    log_info "Clearing corrupted ArgoCD state (fixes 'tasks not valid' errors)..."
     
     # Get all applications and clear their operation state
     local apps=$(kubectl_retry get applications -n argocd -o name 2>/dev/null || echo "")
@@ -74,14 +74,18 @@ clear_argocd_state() {
     fi
 }
 
-# Trigger root sync with pruning
+# Trigger root sync with pruning (executes patch deletions)
 trigger_root_sync() {
-    log_info "Triggering root sync to prune undeclared services..."
+    log_info "Pruning undeclared services via root sync (executes Patch 02 deletions)..."
     
     if kubectl_retry get application platform-bootstrap -n argocd >/dev/null 2>&1; then
         if kubectl patch application platform-bootstrap -n argocd --type merge \
             -p '{"operation":{"sync":{"prune":true}}}' 2>/dev/null; then
-            log_success "Root sync triggered successfully"
+            log_success "Root sync with pruning triggered successfully"
+            
+            # Give ArgoCD time to process the pruning operations
+            log_info "Waiting for ArgoCD to process pruning operations..."
+            sleep 15
         else
             log_warn "Failed to trigger root sync - ArgoCD may not be ready yet"
         fi

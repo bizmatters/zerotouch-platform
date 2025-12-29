@@ -136,3 +136,24 @@ patches:
             # Disable kmcp controller - platform uses RemoteMCPServer (v1alpha2) instead of MCPServer (v1alpha1)
             kmcp:
               enabled: false
+
+# 4. Fix ArgoCD-Crossplane Sync Fight for Databases
+- target:
+    kind: Application
+    name: databases
+  patch: |-
+    apiVersion: argoproj.io/v1alpha1
+    kind: Application
+    metadata:
+      name: databases
+    spec:
+      ignoreDifferences:
+      - group: apiextensions.k8s.io
+        kind: CustomResourceDefinition
+        jqPathExpressions:
+        - .status
+        - .metadata.annotations["controller-gen.kubebuilder.io/version"]
+      - group: apiextensions.crossplane.io
+        kind: Composition
+        jqPathExpressions:
+        - .status
