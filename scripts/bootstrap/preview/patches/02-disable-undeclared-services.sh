@@ -155,17 +155,11 @@ disable_service() {
         if [[ -f "$kustomization_file" ]]; then
             # Create backup
             cp "$kustomization_file" "${kustomization_file}.bak"
-            log_info "Debug: Created backup file" >&2
             
-            # Comment out the resource line (macOS compatible)
-            if [[ "$OSTYPE" == "darwin"* ]]; then
-                sed -i '' "s|^- ${resource_name}|# DISABLED by conditional patch: ${resource_name}|" "$kustomization_file"
-            else
-                sed -i "s|^[[:space:]]*- ${resource_name}|# DISABLED by conditional patch: ${resource_name}|" "$kustomization_file"
-            fi
-            
-            log_info "Debug: Applied sed command" >&2
-            log_success "Disabled $service by commenting out $resource_name in kustomization.yaml" >&2
+            # Use yq to delete the item from the resources list (indentation-proof)
+            # This is robust against YAML formatting differences
+            yq eval "del(.resources[] | select(. == \"$resource_name\"))" -i "$kustomization_file"
+            log_success "Disabled $service by removing $resource_name from kustomization.yaml" >&2
             
             # Delete the ArgoCD application if it exists
             if kubectl get application "$service" -n argocd &>/dev/null; then
