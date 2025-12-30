@@ -49,8 +49,62 @@ ANTHROPIC_API_KEY=12345567
 AWS_ROLE_ARN=
 ```
 
-## Run below command,
+## Run below command
 
 ```bash
 export CLEANUP_CLUSTER=false && export $(grep -v '^#' .env | grep -v '^$' | xargs) && ./scripts/ci/in-cluster-test.sh
+```
+
+## Example - Testing single test locally
+
+```bash
+kubectl run integration-test-manual --image=ide-orchestrator:ci-test --rm -i --restart=Never -n intelligence-orchestrator --overrides='
+{
+  "spec": {
+    "containers": [
+      {
+        "name": "integration-test-manual",
+        "image": "ide-orchestrator:ci-test",
+        "command": ["python", "-m", "pytest", "tests/integration/test_workflow_integration.py::test_complete_workflow_lifecycle", "-v"],
+        "env": [
+          {"name": "POSTGRES_HOST", "value": "ide-orchestrator-db-rw.intelligence-orchestrator.svc.cluster.local"},
+          {"name": "POSTGRES_PORT", "value": "5432"},
+          {"name": "POSTGRES_USER", "value": "ide-orchestrator-db"},
+          {"name": "POSTGRES_PASSWORD", "value": "0KNzcnnKO1NlJgSrdCX3ORbybFFMrd2TuUGr8kkTsQjrdogAv908QuOgZb7T5Zmy"},
+          {"name": "POSTGRES_DB", "value": "ide-orchestrator-db"},
+          {"name": "JWT_SECRET", "value": "test-secret-key-for-testing"},
+          {"name": "REDIS_URL", "value": "redis://redis:6379"},
+          {"name": "API_BASE_URL", "value": "http://ide-orchestrator:8000"}
+        ]
+      }
+    ]
+  }
+}'
+```
+
+## Example - Testing all tests locally
+
+```bash
+kubectl run integration-test-all --image=ide-orchestrator:ci-test --rm -i --restart=Never -n intelligence-orchestrator --overrides='
+{
+  "spec": {
+    "containers": [
+      {
+        "name": "integration-test-all",
+        "image": "ide-orchestrator:ci-test",
+        "command": ["python", "-m", "pytest", "tests/integration/", "-v"],
+        "env": [
+          {"name": "POSTGRES_HOST", "value": "ide-orchestrator-db-rw.intelligence-orchestrator.svc.cluster.local"},
+          {"name": "POSTGRES_PORT", "value": "5432"},
+          {"name": "POSTGRES_USER", "value": "ide-orchestrator-db"},
+          {"name": "POSTGRES_PASSWORD", "value": "0KNzcnnKO1NlJgSrdCX3ORbybFFMrd2TuUGr8kkTsQjrdogAv908QuOgZb7T5Zmy"},
+          {"name": "POSTGRES_DB", "value": "ide-orchestrator-db"},
+          {"name": "JWT_SECRET", "value": "test-secret-key-for-testing"},
+          {"name": "REDIS_URL", "value": "redis://redis:6379"},
+          {"name": "API_BASE_URL", "value": "http://ide-orchestrator:8000"}
+        ]
+      }
+    ]
+  }
+}'
 ```
