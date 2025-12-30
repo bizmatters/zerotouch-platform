@@ -17,9 +17,15 @@ The ZeroTouch platform provides centralized workflows and infrastructure that ma
 
 ## Core Philosophy
 
-**"Test Real Infrastructure, Mock External Dependencies"**
+**"Test Real Infrastructure, Mock External Dependencies, Use Production Code Paths"**
 
 Integration tests validate your service against real internal platform infrastructure (PostgreSQL, Redis, NATS) while mocking external service dependencies to ensure deterministic, fast, and reliable CI execution.
+
+**Critical Principle: Same Code Paths as Production**
+- Tests must use the exact same service classes, dependency injection, and business logic as production
+- Never create separate test-only database access patterns or service implementations
+- This ensures maximum code coverage and validates actual production behavior
+- Internal services (PostgreSQL, Redis, NATS) are already available in the cluster - use them directly
 
 ## Directory Structure Standards
 
@@ -79,19 +85,43 @@ if mockURL := os.Getenv("MOCK_SERVICE_URL"); mockURL != "" {
 
 ## Database Testing Patterns
 
-### 1. Real Database, Clean State
-**Rule:** Use real PostgreSQL/Redis instances, ensure clean state per test
+### 1. Real Database, Production Code Paths
+**Rule:** Use real PostgreSQL/Redis instances with the same service classes as production
+**Critical:** Tests must use identical dependency injection and service layer code as production
 **Implementation:**
-- Run migrations before each test
-- Truncate tables after each test
-- Use test-specific database schemas when possible
+- Use actual service classes (`WorkflowService`, `AuthService`, etc.) in tests
+- Get dependencies through the same `get_database_url()`, `get_workflow_service()` functions
+- Never create test-only database access patterns or duplicate service logic
+- This maximizes code coverage by testing actual production code paths
+
+```go
+// ✅ CORRECT: Use production service classes
+func TestWorkflowCreation(t *testing.T) {
+    // Use same dependency injection as production
+    dbURL := dependencies.GetDatabaseURL()
+    workflowService := services.NewWorkflowService(dbURL)
+    
+    // Test through actual service layer
+    result := workflowService.CreateWorkflow(input)
+    
+    // Validate persistence through direct database query
+    var dbRecord WorkflowRecord
+    db.First(&dbRecord, "workflow_id = ?", result.WorkflowID)
+}
+
+// ❌ WRONG: Creating test-only database access
+func TestWorkflowCreation(t *testing.T) {
+    testDB := NewTestDatabase() // Don't create separate test database classes
+    // This bypasses production code paths and reduces code coverage
+}
+```
 
 ### 2. Persistence Validation
-**Critical:** Integration tests must validate data persistence
-**Pattern:**
+**Critical:** Integration tests must validate data persistence through direct database queries
+**Pattern:** Execute through production services, validate through database
 ```go
-// 1. Execute workflow
-result := orchestrator.ProcessWorkflow(input)
+// 1. Execute workflow through production service
+result := workflowService.ProcessWorkflow(input)
 
 // 2. Validate immediate response
 assert.Equal(t, "success", result.Status)
@@ -101,6 +131,14 @@ var dbRecord WorkflowRecord
 db.First(&dbRecord, "workflow_id = ?", result.WorkflowID)
 assert.Equal(t, expectedData, dbRecord.GeneratedFiles)
 ```
+
+### 3. Clean State Management
+**Rule:** Ensure clean state per test while using production services
+**Implementation:**
+- Run migrations before each test
+- Truncate tables after each test
+- Use test-specific database schemas when possible
+- But always use production service classes for data access
 
 ## Test Isolation Patterns
 
@@ -191,6 +229,12 @@ dependencies:
 - Never mock PostgreSQL, Redis, NATS (use real instances)
 - Never mock Kubernetes APIs (use real cluster)
 
+### ❌ Don't Create Test-Only Code Paths
+- Never create separate test database classes or service implementations
+- Never bypass production dependency injection patterns
+- Always use the same service classes, database connections, and business logic as production
+- Test-only code paths reduce code coverage and don't validate production behavior
+
 ### ❌ Don't Use Hardcoded Test Data
 - Never invent JSON payloads in test code
 - Always use exported real service data
@@ -203,15 +247,22 @@ dependencies:
 - Never use fixed `sleep()` calls
 - Never assume specific execution order without synchronization
 
+### ❌ Don't Duplicate Internal Services
+- Internal services (PostgreSQL, Redis, NATS) are already available in the cluster
+- Don't create mock versions of internal platform services
+- Use the real services directly through production code paths
+
 ## Best Practices Summary
 
 1. **Real Infrastructure**: Test against actual PostgreSQL, Redis, NATS
-2. **Mock External Services**: Use in-process HTTP mocks with real data
-3. **Clean State**: Ensure each test starts with clean database state
-4. **Validate Persistence**: Always check database after workflow completion
-5. **Environment Override**: Allow test configuration to override production URLs
-6. **Container Ready**: Include test data in Docker images
-7. **Protocol Complete**: Implement full protocol compatibility in mocks
-8. **Deterministic**: Remove timing dependencies and race conditions
+2. **Production Code Paths**: Use identical service classes and dependency injection as production
+3. **Mock External Services Only**: Use in-process HTTP mocks with real data for external dependencies
+4. **Clean State**: Ensure each test starts with clean database state
+5. **Validate Persistence**: Always check database after workflow completion
+6. **Environment Override**: Allow test configuration to override production URLs
+7. **Container Ready**: Include test data in Docker images
+8. **Protocol Complete**: Implement full protocol compatibility in mocks
+9. **Deterministic**: Remove timing dependencies and race conditions
+10. **Maximum Code Coverage**: Test through production services to validate actual business logic
 
-This pattern ensures integration tests are fast, reliable, and validate real business value while maintaining CI/CD pipeline efficiency.
+This pattern ensures integration tests are fast, reliable, validate real business value, and achieve maximum code coverage by testing the exact same code paths used in production.
