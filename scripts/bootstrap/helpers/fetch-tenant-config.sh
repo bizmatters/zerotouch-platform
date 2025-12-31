@@ -20,20 +20,15 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && w
 CACHE_DIR="$REPO_ROOT/.tenants-cache"
 ENV_FILE="$CACHE_DIR/environments/$ENV/talos-values.yaml"
 
-# Source .env.ssm to get tenant repo credentials
-if [[ ! -f "$REPO_ROOT/.env.ssm" ]]; then
-    echo "Error: .env.ssm not found at $REPO_ROOT/.env.ssm" >&2
-    exit 1
-fi
-
-# Parse .env.ssm for tenant repo URL and credentials
-TENANT_REPO_URL=$(grep "^/zerotouch/prod/argocd/repos/zerotouch-tenants/url=" "$REPO_ROOT/.env.ssm" | cut -d'=' -f2)
-TENANT_USERNAME=$(grep "^/zerotouch/prod/argocd/repos/zerotouch-tenants/username=" "$REPO_ROOT/.env.ssm" | cut -d'=' -f2)
-TENANT_PASSWORD=$(grep "^/zerotouch/prod/argocd/repos/zerotouch-tenants/password=" "$REPO_ROOT/.env.ssm" | cut -d'=' -f2)
-
-if [[ -z "$TENANT_REPO_URL" ]]; then
-    echo "Error: Tenant repository URL not found in .env.ssm" >&2
-    echo "Expected: /zerotouch/prod/argocd/repos/zerotouch-tenants/url=..." >&2
+# Get tenant repo credentials from environment variables
+if [[ -n "$BOT_GITHUB_USERNAME" && -n "$BOT_GITHUB_TOKEN" && -n "$TENANTS_REPO_NAME" ]]; then
+    TENANT_USERNAME="$BOT_GITHUB_USERNAME"
+    TENANT_PASSWORD="$BOT_GITHUB_TOKEN"
+    TENANT_REPO_URL="https://github.com/${BOT_GITHUB_USERNAME}/${TENANTS_REPO_NAME}.git"
+    echo "✓ Using tenant repo credentials from environment variables" >&2
+else
+    echo "Error: Tenant repository credentials not available" >&2
+    echo "Set environment variables: BOT_GITHUB_USERNAME, BOT_GITHUB_TOKEN, TENANTS_REPO_NAME" >&2
     exit 1
 fi
 
@@ -65,7 +60,7 @@ else
     git clone --filter=blob:none --no-checkout --depth 1 --branch main \
         "$TENANT_REPO_AUTH_URL" "$CACHE_DIR" --quiet 2>/dev/null || {
         echo "Error: Failed to clone tenant repository" >&2
-        echo "Check credentials in .env.ssm" >&2
+        echo "Check credentials: BOT_GITHUB_USERNAME, BOT_GITHUB_TOKEN, TENANTS_REPO_NAME" >&2
         exit 1
     }
     
