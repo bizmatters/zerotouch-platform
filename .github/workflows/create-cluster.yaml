@@ -59,8 +59,10 @@ jobs:
           sudo ln -sf /usr/local/bin/yq /usr/bin/yq
           # Install Talos CLI
           curl -sL https://talos.dev/install | sh
-          # The install script puts talosctl in ~/.local/bin, move it to system path
-          sudo mv ~/.local/bin/talosctl /usr/local/bin/ || sudo cp ~/.local/bin/talosctl /usr/local/bin/
+          # Find where talosctl was installed and move it to system path
+          which talosctl || find $HOME -name "talosctl" -type f 2>/dev/null | head -1 | xargs -I {} sudo cp {} /usr/local/bin/
+          # Verify installation
+          talosctl version --client
           git config --global user.email "bootstrap@zerotouch.dev"
           git config --global user.name "ZeroTouch Bootstrap"
 
