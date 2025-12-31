@@ -269,7 +269,7 @@ update_yaml_password() {
     fi
     
     # Push changes to tenant repository
-    "$HELPERS_DIR/update-tenant-config.sh" "$VALUES_FILE" "Update rescue password for $node_name ($ENV)"
+    "$HELPERS_DIR/update-tenant-config.sh" "$VALUES_FILE" "Update rescue password for $node_name ($ENV)" "$TENANT_CACHE_DIR"
 }
 
 # Function to process a single server

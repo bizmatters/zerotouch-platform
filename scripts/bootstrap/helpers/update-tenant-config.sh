@@ -2,16 +2,17 @@
 # Update tenant configuration and push to private repository
 #
 # Usage:
-#   ./helpers/update-tenant-config.sh <FILE_PATH> <COMMIT_MESSAGE>
+#   ./helpers/update-tenant-config.sh <FILE_PATH> <COMMIT_MESSAGE> [CACHE_DIR]
 
 set -e
 
 FILE_PATH="$1"
 COMMIT_MESSAGE="${2:-Update tenant configuration}"
+CACHE_DIR_PARAM="$3"
 
 if [[ -z "$FILE_PATH" ]]; then
     echo "Error: File path required" >&2
-    echo "Usage: $0 <file-path> [commit-message]" >&2
+    echo "Usage: $0 <file-path> [commit-message] [cache-dir]" >&2
     exit 1
 fi
 
@@ -20,10 +21,15 @@ if [[ ! -f "$FILE_PATH" ]]; then
     exit 1
 fi
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Find repository root by looking for .git directory
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && while [[ ! -d .git && $(pwd) != "/" ]]; do cd ..; done; pwd))"
-CACHE_DIR="$REPO_ROOT/.tenants-cache"
+# Use provided cache directory or calculate it
+if [[ -n "$CACHE_DIR_PARAM" ]]; then
+    CACHE_DIR="$CACHE_DIR_PARAM"
+else
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    # Find repository root by looking for .git directory
+    REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && while [[ ! -d .git && $(pwd) != "/" ]]; do cd ..; done; pwd))"
+    CACHE_DIR="$REPO_ROOT/.tenants-cache"
+fi
 
 # Verify file is in cache directory
 CACHE_DIR_REAL=$(realpath "$CACHE_DIR")
