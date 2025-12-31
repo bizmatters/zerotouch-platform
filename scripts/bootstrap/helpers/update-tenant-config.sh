@@ -26,8 +26,13 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && w
 CACHE_DIR="$REPO_ROOT/.tenants-cache"
 
 # Verify file is in cache directory
-if [[ ! "$FILE_PATH" =~ ^"$CACHE_DIR" ]]; then
+CACHE_DIR_REAL=$(realpath "$CACHE_DIR")
+FILE_PATH_REAL=$(realpath "$FILE_PATH")
+
+if [[ ! "$FILE_PATH_REAL" =~ ^"$CACHE_DIR_REAL" ]]; then
     echo "Error: File must be in tenant cache directory" >&2
+    echo "Cache dir: $CACHE_DIR_REAL" >&2
+    echo "File path: $FILE_PATH_REAL" >&2
     exit 1
 fi
 
