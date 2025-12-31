@@ -4,6 +4,7 @@ kind: Kustomization
 resources:
 - ../../base
 - cilium/01-cilium.yaml
+- 00-local-path-provisioner.yaml
 - components-tenants/99-tenants.yaml
 - components-tenants/argocd-repo-configs.yaml
 # ADD: Production-only Application wrapper for repo registry secret (sync-wave ordering)
