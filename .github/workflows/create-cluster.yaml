@@ -48,8 +48,15 @@ jobs:
 
       - name: Setup environment
         run: |
-          sudo apt-get update && sudo apt-get install -y jq yq
+          sudo apt-get update && sudo apt-get install -y jq
           pip install pyyaml
+          # Install yq v4 (the version that supports 'yq eval' syntax)
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          # Verify we have the right version
+          /usr/local/bin/yq --version
+          # Create symlink to ensure it's found
+          sudo ln -sf /usr/local/bin/yq /usr/bin/yq
           git config --global user.email "bootstrap@zerotouch.dev"
           git config --global user.name "ZeroTouch Bootstrap"
 
