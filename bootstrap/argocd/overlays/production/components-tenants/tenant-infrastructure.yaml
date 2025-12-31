@@ -4,8 +4,9 @@ metadata:
   name: tenant-infrastructure
   namespace: argocd
   annotations:
-    # Wave 5 ensures this runs AFTER Cluster Bootstrapping but BEFORE Apps
-    argocd.argoproj.io/sync-wave: "5"
+    # Wave 20 ensures repo credentials are ready (after ESO wave 0, registry secret wave 1)
+    # This runs BEFORE tenant apps (wave 100) to ensure namespaces are created first
+    argocd.argoproj.io/sync-wave: "20"
 spec:
   project: default
   source:
