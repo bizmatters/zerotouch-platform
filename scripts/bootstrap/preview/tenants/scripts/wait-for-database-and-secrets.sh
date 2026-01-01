@@ -96,7 +96,7 @@ discover_required_secrets() {
     local required_secrets=()
     
     if [[ -d "$secrets_dir" ]]; then
-        log_info "Discovering ExternalSecrets from: $secrets_dir"
+        log_info "Discovering ExternalSecrets from: $secrets_dir" >&2
         
         for es_file in "$secrets_dir"/*.yaml; do
             if [[ -f "$es_file" ]]; then
@@ -104,21 +104,21 @@ discover_required_secrets() {
                     local secret_name=$(yq eval '.spec.target.name' "$es_file" 2>/dev/null)
                     if [[ -n "$secret_name" && "$secret_name" != "null" ]]; then
                         required_secrets+=("$secret_name")
-                        log_info "Found ExternalSecret: $secret_name"
+                        log_info "Found ExternalSecret: $secret_name" >&2
                     fi
                 else
-                    log_warn "yq not available, falling back to grep extraction"
+                    log_warn "yq not available, falling back to grep extraction" >&2
                     local secret_name=$(grep -A 10 "spec:" "$es_file" | grep -A 5 "target:" | grep "name:" | head -1 | sed 's/.*name: *//g' | tr -d '"')
                     if [[ -n "$secret_name" ]]; then
                         required_secrets+=("$secret_name")
-                        log_info "Found ExternalSecret: $secret_name"
+                        log_info "Found ExternalSecret: $secret_name" >&2
                     fi
                 fi
             fi
         done
     else
-        log_warn "ExternalSecrets directory not found: $secrets_dir"
-        log_info "Service may not require ExternalSecrets"
+        log_warn "ExternalSecrets directory not found: $secrets_dir" >&2
+        log_info "Service may not require ExternalSecrets" >&2
     fi
     
     echo "${required_secrets[@]}"
