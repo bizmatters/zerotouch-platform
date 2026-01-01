@@ -118,9 +118,21 @@ spec:
                     labels:
                       app: dragonfly
                   spec:
+                    securityContext:
+                      runAsNonRoot: true
+                      runAsUser: 1000
+                      runAsGroup: 1000
+                      fsGroup: 2000
+                      seccompProfile:
+                        type: RuntimeDefault
                     containers:
                       - name: dragonfly
                         image: docker.dragonflydb.io/dragonflydb/dragonfly:latest
+                        securityContext:
+                          allowPrivilegeEscalation: false
+                          capabilities:
+                            drop:
+                              - ALL
                         ports:
                           - containerPort: 6379
                             name: dragonfly

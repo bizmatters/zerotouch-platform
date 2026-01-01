@@ -64,7 +64,7 @@ if [[ "$MODE" == "test" ]]; then
     # ========================================================================
     # TEST MODE: Build and load into Kind cluster
     # ========================================================================
-    IMAGE_TAG="ci-test"
+    IMAGE_TAG="${SERVICE_NAME}:ci-test"
     CLUSTER_NAME="zerotouch-preview"
     
     # Build Docker image for testing (Python services)
