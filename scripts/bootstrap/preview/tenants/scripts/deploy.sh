@@ -93,45 +93,9 @@ echo "✅ Mock landing zone '${NAMESPACE}' created"
 # Apply platform claims and manifests
 echo "📋 Applying platform claims..."
 echo "🔍 Checking for platform claims in: ${PROJECT_ROOT}/platform/claims/${NAMESPACE}"
-USING_PLATFORM_CLAIMS=false
-if [[ -d "${PROJECT_ROOT}/platform/claims/${NAMESPACE}" ]]; then
-    echo "✅ Found platform claims directory"
-    USING_PLATFORM_CLAIMS=true
-    # Apply platform claims for the namespace (recursive to include subdirectories)
-    kubectl apply -f "${PROJECT_ROOT}/platform/claims/${NAMESPACE}/" -n "${NAMESPACE}" --recursive
-    echo "✅ Platform claims applied"
-    
-    # Wait for infrastructure dependencies using dedicated script
-    INFRA_WAIT_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/wait-for-database-and-secrets.sh"
-    if [[ -f "$INFRA_WAIT_SCRIPT" ]]; then
-        chmod +x "$INFRA_WAIT_SCRIPT"
-        # Ensure we exit if the wait script fails
-        if ! "$INFRA_WAIT_SCRIPT" "${SERVICE_NAME}" "${NAMESPACE}"; then
-            echo "❌ ERROR: Infrastructure dependencies failed to become ready"
-            exit 1
-        fi
-    else
-        echo "❌ Database and secrets wait script not found: $INFRA_WAIT_SCRIPT"
-        exit 1
-    fi
-    
-    # Use platform's generalized wait script for Platform Services (EventDrivenService or WebService)
-    WAIT_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/wait/wait-for-platform-service.sh"
-    if [[ -f "$WAIT_SCRIPT" ]]; then
-        chmod +x "$WAIT_SCRIPT"
-        "$WAIT_SCRIPT" "${SERVICE_NAME}" "${NAMESPACE}" "${WAIT_TIMEOUT}"
-    else
-        echo "❌ Platform service wait script not found: $WAIT_SCRIPT"
-        exit 1
-    fi
-elif [[ -d "k8s/${ENVIRONMENT}" ]]; then
-    # Environment-specific manifests (fallback)
-    kubectl apply -f "k8s/${ENVIRONMENT}/" -n "${NAMESPACE}"
-elif [[ -d "k8s/base" ]]; then
-    # Base manifests with kustomization (fallback)
-    kubectl apply -k "k8s/base" -n "${NAMESPACE}"
-else
-    echo "❌ No platform claims found in ${PROJECT_ROOT}/platform/claims/${NAMESPACE} or k8s manifests"
+
+if [[ ! -d "${PROJECT_ROOT}/platform/claims/${NAMESPACE}" ]]; then
+    echo "❌ No platform claims found in ${PROJECT_ROOT}/platform/claims/${NAMESPACE}"
     echo "🔍 Debug: Current directory: $(pwd)"
     echo "🔍 Debug: PROJECT_ROOT: ${PROJECT_ROOT}"
     echo "🔍 Debug: Listing ${PROJECT_ROOT}/platform/claims/:"
@@ -139,49 +103,39 @@ else
     exit 1
 fi
 
-# Always update image tag with what CI provides
-echo "🏷️  Updating all image references to ${IMAGE_TAG}..."
+echo "✅ Found platform claims directory"
+# Apply platform claims for the namespace (recursive to include subdirectories)
+kubectl apply -f "${PROJECT_ROOT}/platform/claims/${NAMESPACE}/" -n "${NAMESPACE}" --recursive
+echo "✅ Platform claims applied"
 
-if [[ "${USING_PLATFORM_CLAIMS}" == "true" ]]; then
-    # Force replace ALL image references in platform claims with CI-provided tag
-    echo "🔧 Updating images in platform claims..."
-    find "${PROJECT_ROOT}/platform/claims/${NAMESPACE}/" -name "*.yaml" -type f | while read -r file; do
-        echo "  Processing: $file"
-        # Replace any image reference with the CI-built tag
-        sed -i.bak "s|image: .*|image: ${IMAGE_TAG}|g" "$file"
-        rm -f "${file}.bak"
-    done
-else
-    # Update deployment directly for non-platform-claims
-    kubectl set image deployment/${SERVICE_NAME} \
-        ${SERVICE_NAME}="${IMAGE_TAG}" \
-        -n "${NAMESPACE}"
-fi
-
-# Wait for deployment to be ready (only for non-platform-claims deployments)
-if [[ "${USING_PLATFORM_CLAIMS}" == "false" ]]; then
-    echo "⏳ Waiting for deployment to be ready..."
-    kubectl rollout status deployment/${SERVICE_NAME} \
-        -n "${NAMESPACE}" \
-        --timeout="${WAIT_TIMEOUT}s"
-
-    # Verify deployment
-    echo "🔍 Verifying deployment..."
-    READY_REPLICAS=$(kubectl get deployment ${SERVICE_NAME} -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}')
-    DESIRED_REPLICAS=$(kubectl get deployment ${SERVICE_NAME} -n "${NAMESPACE}" -o jsonpath='{.spec.replicas}')
-
-    if [[ "${READY_REPLICAS}" == "${DESIRED_REPLICAS}" ]]; then
-        echo "✅ Deployment successful: ${READY_REPLICAS}/${DESIRED_REPLICAS} replicas ready"
-    else
-        echo "❌ Deployment failed: ${READY_REPLICAS}/${DESIRED_REPLICAS} replicas ready"
+# Wait for infrastructure dependencies using dedicated script
+INFRA_WAIT_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/wait-for-database-and-secrets.sh"
+if [[ -f "$INFRA_WAIT_SCRIPT" ]]; then
+    chmod +x "$INFRA_WAIT_SCRIPT"
+    # Ensure we exit if the wait script fails
+    if ! "$INFRA_WAIT_SCRIPT" "${SERVICE_NAME}" "${NAMESPACE}"; then
+        echo "❌ ERROR: Infrastructure dependencies failed to become ready"
         exit 1
     fi
-
-    # Show service endpoints
-    echo "🌐 Service endpoints:"
-    kubectl get services -n "${NAMESPACE}" -l app=${SERVICE_NAME}
 else
-    echo "✅ Platform service deployment completed (verified by wait script)"
+    echo "❌ Database and secrets wait script not found: $INFRA_WAIT_SCRIPT"
+    exit 1
 fi
+
+# Use platform's generalized wait script for Platform Services (EventDrivenService or WebService)
+WAIT_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/wait/wait-for-platform-service.sh"
+if [[ -f "$WAIT_SCRIPT" ]]; then
+    chmod +x "$WAIT_SCRIPT"
+    "$WAIT_SCRIPT" "${SERVICE_NAME}" "${NAMESPACE}" "${WAIT_TIMEOUT}"
+else
+    echo "❌ Platform service wait script not found: $WAIT_SCRIPT"
+    exit 1
+fi
+
+# Always update image tag with what CI provides
+echo "🏷️  Image tag already updated by patch-service-images.sh: ${IMAGE_TAG}..."
+echo "✅ Platform claims already patched with correct image tags"
+
+echo "✅ Platform service deployment completed (verified by wait script)"
 
 echo "🎉 Deployment completed successfully!"

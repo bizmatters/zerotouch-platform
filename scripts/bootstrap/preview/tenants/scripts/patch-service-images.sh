@@ -36,23 +36,18 @@ main() {
     log_info "  Mode:    ${BUILD_MODE}"
     log_info "  Tag:     ${IMAGE_TAG}"
 
-    # Construct the target image string based on mode
-    local target_image=""
-    if [[ "$BUILD_MODE" == "test" ]]; then
-        # Local Kind cluster uses simple name
-        target_image="${SERVICE_NAME}:${IMAGE_TAG}"
-    elif [[ "$IMAGE_TAG" == *"/"* ]]; then
-        # Image tag is already a full path (e.g., ghcr.io/org/service:sha-123)
-        target_image="${IMAGE_TAG}"
-    else
-        # Registry for PR/Prod - construct full path
-        target_image="${REGISTRY}/${SERVICE_NAME}:${IMAGE_TAG}"
+    # Validate that image tag contains a tag (has colon)
+    if [[ "${IMAGE_TAG}" != *":"* ]]; then
+        echo "ERROR: Image tag must contain a tag (e.g., service:sha-abc123 or registry/service:tag)"
+        echo "Received: ${IMAGE_TAG}"
+        exit 1
     fi
 
+    # Use the exact image tag passed to the script
+    local target_image="${IMAGE_TAG}"
     log_info "  Target:  ${target_image}"
 
-    # Find all yaml files in platform/claims that reference the service image
-    # We look for the service name in the image field
+    # Find all yaml files in platform/claims and replace any image field containing the service name
     local count=0
     local files_found=0
 
@@ -66,20 +61,20 @@ main() {
     while IFS= read -r file; do
         if [[ -f "$file" ]]; then
             files_found=$((files_found + 1))
-            # Check if file actually contains an image definition for this service
-            # Matches: image: something/service-name:something OR image: service-name:something
-            if grep -qE "image:.*[ /]${SERVICE_NAME}:|image: ${SERVICE_NAME}:" "$file"; then
+            # Check if file contains an image definition with the service name (with or without tag)
+            # Matches: image: anything-containing-service-name (with or without tag)
+            if grep -qE "image:.*${SERVICE_NAME}" "$file"; then
                 log_info "Patching file: $file"
                 
                 # Create backup
                 cp "$file" "$file.bak"
                 
-                # Use sed to replace the image line
-                # Pattern handles: "image: repo/service:tag" or "image: service:tag"
+                # Use sed to replace any image line containing the service name
+                # Pattern handles any image reference containing the service name
                 if [[ "$OSTYPE" == "darwin"* ]]; then
-                    sed -i '' "s|image: .*${SERVICE_NAME}:.*|image: ${target_image}|g" "$file"
+                    sed -i '' "s|image: .*${SERVICE_NAME}.*|image: ${target_image}|g" "$file"
                 else
-                    sed -i "s|image: .*${SERVICE_NAME}:.*|image: ${target_image}|g" "$file"
+                    sed -i "s|image: .*${SERVICE_NAME}.*|image: ${target_image}|g" "$file"
                 fi
                 
                 # Remove backup if sed succeeded
