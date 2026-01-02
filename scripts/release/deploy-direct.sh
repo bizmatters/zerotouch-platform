@@ -121,45 +121,30 @@ clone_tenant_repo() {
 update_image() {
     log_info "Updating image configuration for $SERVICE_NAME in $ENVIRONMENT"
     
-    local deployment_file="tenants/${SERVICE_NAME}/overlays/${ENVIRONMENT}/deployment.yaml"
+    local overlay_dir="tenants/${SERVICE_NAME}/overlays/${ENVIRONMENT}"
     
-    if [[ ! -f "$deployment_file" ]]; then
-        log_error "Deployment file not found: $deployment_file"
+    if [[ ! -d "$overlay_dir" ]]; then
+        log_error "Overlay directory not found: $overlay_dir"
         exit 1
     fi
     
-    update_crossplane_image "$deployment_file"
-}
-
-# Update Crossplane CRD image field
-update_crossplane_image() {
-    local crd_file="$1"
+    # Find all YAML files in overlay directory that contain image references
+    local yaml_files
+    yaml_files=$(find "$overlay_dir" -name "*.yaml" -type f)
     
-    if [[ ! -f "$crd_file" ]]; then
-        log_error "Crossplane deployment file not found: $crd_file"
+    if [[ -z "$yaml_files" ]]; then
+        log_error "No YAML files found in: $overlay_dir"
         exit 1
     fi
     
-    log_info "Current Crossplane CRD file:"
-    cat "$crd_file"
-    
-    # Update image field using yq (if available) or sed fallback
-    if command -v yq &> /dev/null; then
-        log_info "Updating Crossplane image using yq"
-        yq eval ".spec.image = \"${IMAGE_TAG}\"" -i "$crd_file"
-    else
-        log_info "Updating Crossplane image using sed (yq not available)"
-        sed -i.bak "s|^\([[:space:]]*\)image: .*|\1image: ${IMAGE_TAG}|" "$crd_file"
-        rm -f "${crd_file}.bak"
-    fi
-    
-    log_info "Updated Crossplane CRD file:"
-    cat "$crd_file"
-    
-    log_success "Crossplane CRD image updated successfully"
+    # Update each YAML file that contains image references
+    while IFS= read -r file; do
+        if grep -q "image:" "$file"; then
+            log_info "Updating image in file: $file"
+            update_crossplane_image "$file"
+        fi
+    done <<< "$yaml_files"
 }
-
-
 
 # Commit and push changes
 commit_and_push() {
