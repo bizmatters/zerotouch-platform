@@ -28,7 +28,7 @@ MODE="${1:-auto}"
 if [ "$MODE" = "preview" ]; then
     ROOT_APP_OVERLAY="bootstrap/argocd/overlays/preview"
 else
-    ROOT_APP_OVERLAY="bootstrap/argocd/overlays/production"
+    ROOT_APP_OVERLAY="bootstrap/argocd/overlays/main"
 fi
 
 # Function to print colored messages
