@@ -21,6 +21,9 @@ on:
       BOT_GITHUB_TOKEN:
         description: 'GitHub token for tenant repository access'
         required: true
+      BOT_GITHUB_USERNAME:
+        description: 'GitHub username for bot account'
+        required: true
       AWS_ACCESS_KEY_ID:
         description: 'AWS Access Key ID for platform operations'
         required: true
@@ -51,6 +54,7 @@ jobs:
           SERVICE_NAME: ${{ env.SERVICE_NAME }}
           IMAGE_TAG: ${{ inputs.image_tag }}
           TENANT_REPO_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
+          BOT_GITHUB_USERNAME: ${{ secrets.BOT_GITHUB_USERNAME }}
           TENANT_REPO_URL: ${{ env.TENANT_REPO_URL }}
 
   deploy-staging:
@@ -70,6 +74,7 @@ jobs:
           SERVICE_NAME: ${{ env.SERVICE_NAME }}
           IMAGE_TAG: ${{ inputs.image_tag }}
           TENANT_REPO_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
+          BOT_GITHUB_USERNAME: ${{ secrets.BOT_GITHUB_USERNAME }}
           TENANT_REPO_URL: ${{ env.TENANT_REPO_URL }}
 
   deploy-production:
@@ -89,4 +94,5 @@ jobs:
           SERVICE_NAME: ${{ env.SERVICE_NAME }}
           IMAGE_TAG: ${{ inputs.image_tag }}
           TENANT_REPO_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
+          BOT_GITHUB_USERNAME: ${{ secrets.BOT_GITHUB_USERNAME }}
           TENANT_REPO_URL: ${{ env.TENANT_REPO_URL }}
