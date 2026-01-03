@@ -116,7 +116,10 @@ check_postgres() {
 
 # Check Dragonfly caches
 check_dragonfly() {
-    local sts_json=$(kubectl_retry get statefulsets --all-namespaces -l app=dragonfly -o json 2>/dev/null || echo '{"items":[]}')
+    # Check for StatefulSets created by Crossplane XDragonflyInstance (label pattern: app=<name>-cache or contains dragonfly image)
+    local sts_json=$(kubectl_retry get statefulsets --all-namespaces -o json 2>/dev/null || echo '{"items":[]}')
+    # Filter to only dragonfly statefulsets (those using dragonfly image)
+    sts_json=$(echo "$sts_json" | jq '{items: [.items[] | select(.spec.template.spec.containers[].image | contains("dragonfly"))]}')
     local total=$(echo "$sts_json" | jq -r '.items | length')
     
     if [ "$total" -eq 0 ]; then
@@ -147,8 +150,8 @@ check_dragonfly() {
         else
             unhealthy_details+=("$namespace/$name: $ready_replicas/$replicas")
             
-            # Check for pending pods
-            local pending_pods=$(kubectl_retry get pods -n "$namespace" -l app=dragonfly --field-selector=status.phase=Pending --no-headers 2>/dev/null | wc -l)
+            # Check for pending pods using the statefulset name as label selector
+            local pending_pods=$(kubectl_retry get pods -n "$namespace" -l app="$name" --field-selector=status.phase=Pending --no-headers 2>/dev/null | wc -l)
             if [ "$pending_pods" -gt 0 ]; then
                 unhealthy_details+=("  └─ $pending_pods pods pending (likely PVC issues)")
             fi
@@ -163,9 +166,9 @@ check_dragonfly() {
             echo -e "       ${RED}✗ $detail${NC}"
         done
         
-        # Use shared diagnostic functions
-        show_pvc_details "" "app=dragonfly"
-        show_pod_details "" "app=dragonfly"
+        # Use shared diagnostic functions - search for dragonfly image containers
+        show_pvc_details "" ""
+        show_pod_details "" ""
         show_recent_events "--all-namespaces" "dragonfly|pvc|volume|provision|schedule" 10
     fi
     
