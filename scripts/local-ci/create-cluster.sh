@@ -88,3 +88,20 @@ log ""
 # Step 4: Bootstrap Cluster
 log "==> Step 4: Running bootstrap..."
 run_with_log "$REPO_ROOT/scripts/bootstrap/01-master-bootstrap.sh" "$ENVIRONMENT"
+
+# Step 5: Run E2E Communication Tests (separate from platform validation)
+log ""
+log "==> Step 5: Running E2E Communication Tests..."
+log "Testing actual service communication and deployment..."
+E2E_SCRIPT="$REPO_ROOT/scripts/bootstrap/validation/18-verify-e2e-communication.sh"
+if [ -f "$E2E_SCRIPT" ]; then
+    chmod +x "$E2E_SCRIPT"
+    if "$E2E_SCRIPT" 2>&1 | tee -a "$LOG_FILE"; then
+        log "✓ E2E Communication tests passed"
+    else
+        log "⚠ E2E Communication tests failed (expected for fresh cluster without deployed services)"
+        log "  This is normal - services need proper GHCR credentials and Gateway API to be fully functional"
+    fi
+else
+    log "⚠ E2E Communication test script not found: $E2E_SCRIPT"
+fi

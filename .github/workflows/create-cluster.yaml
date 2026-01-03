@@ -88,6 +88,19 @@ jobs:
       - name: Bootstrap Cluster
         run: ./scripts/bootstrap/01-master-bootstrap.sh ${{ inputs.environment }}
 
+      - name: Run E2E Communication Tests
+        run: |
+          echo "Running E2E Communication Tests..."
+          echo "Testing actual service communication and deployment..."
+          E2E_SCRIPT="./scripts/bootstrap/validation/18-verify-e2e-communication.sh"
+          if [ -f "$E2E_SCRIPT" ]; then
+            chmod +x "$E2E_SCRIPT"
+            "$E2E_SCRIPT"
+          else
+            echo "❌ E2E Communication test script not found: $E2E_SCRIPT"
+            exit 1
+          fi
+
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v4
