@@ -459,12 +459,12 @@ spec:
                 fmt: "%d"
           policy:
             fromFieldPath: Required
-        # Generate complete backend service URL - this will use the last set namespace value
+        # Generate complete backend service URL - use backendServiceNamespace if provided
         - type: CombineFromComposite
           combine:
             variables:
               - fromFieldPath: spec.backendServiceName
-              - fromFieldPath: spec.claimRef.namespace  # Always use claim namespace for now
+              - fromFieldPath: spec.backendServiceNamespace
               - fromFieldPath: spec.backendServicePort
             strategy: string
             string:
@@ -536,7 +536,7 @@ spec:
           fromFieldPath: spec.sessionAffinity
           toFieldPath: spec.forProvider.manifest.spec.sessionAffinity
           policy:
-            fromFieldPath: Optional
+            fromFieldPath: Required
         # Patch Prometheus port annotation to match service port
         - type: FromCompositeFieldPath
           fromFieldPath: spec.port

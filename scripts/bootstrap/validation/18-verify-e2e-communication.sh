@@ -13,8 +13,9 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-NAMESPACE="intelligence-deepagents"
-DEEPAGENTS_SERVICE="deepagents-runtime-http"
+DEEPAGENTS_NAMESPACE="intelligence-deepagents"
+IDE_ORCHESTRATOR_NAMESPACE="intelligence-orchestrator"
+DEEPAGENTS_SERVICE="deepagents-runtime"
 IDE_ORCHESTRATOR_SERVICE="ide-orchestrator"
 BACKEND_CONFIG_NAME="ide-orchestrator-backend-config"
 
@@ -46,7 +47,8 @@ main() {
     echo "================================================================================"
     echo "                    End-to-End Service Communication Validation"
     echo "================================================================================"
-    echo "Namespace: $NAMESPACE"
+    echo "DeepAgents Namespace: $DEEPAGENTS_NAMESPACE"
+    echo "IDE Orchestrator Namespace: $IDE_ORCHESTRATOR_NAMESPACE"
     echo "DeepAgents Service: $DEEPAGENTS_SERVICE"
     echo "IDE Orchestrator Service: $IDE_ORCHESTRATOR_SERVICE"
     echo "================================================================================"
@@ -82,17 +84,22 @@ main() {
     # Prerequisites check
     log_info "Checking prerequisites..."
     
-    if ! kubectl get namespace $NAMESPACE >/dev/null 2>&1; then
-        log_error "Namespace $NAMESPACE does not exist"
+    if ! kubectl get namespace $DEEPAGENTS_NAMESPACE >/dev/null 2>&1; then
+        log_error "Namespace $DEEPAGENTS_NAMESPACE does not exist"
         exit 1
     fi
     
-    if ! kubectl get service $DEEPAGENTS_SERVICE -n $NAMESPACE >/dev/null 2>&1; then
-        log_error "DeepAgents service $DEEPAGENTS_SERVICE not found in namespace $NAMESPACE"
+    if ! kubectl get namespace $IDE_ORCHESTRATOR_NAMESPACE >/dev/null 2>&1; then
+        log_error "Namespace $IDE_ORCHESTRATOR_NAMESPACE does not exist"
         exit 1
     fi
     
-    if ! kubectl get webservice $IDE_ORCHESTRATOR_SERVICE -n $NAMESPACE >/dev/null 2>&1; then
+    if ! kubectl get service $DEEPAGENTS_SERVICE -n $DEEPAGENTS_NAMESPACE >/dev/null 2>&1; then
+        log_error "DeepAgents service $DEEPAGENTS_SERVICE not found in namespace $DEEPAGENTS_NAMESPACE"
+        exit 1
+    fi
+    
+    if ! kubectl get webservice $IDE_ORCHESTRATOR_SERVICE -n $IDE_ORCHESTRATOR_NAMESPACE >/dev/null 2>&1; then
         log_warning "IDE Orchestrator WebService $IDE_ORCHESTRATOR_SERVICE not found (may not be fully deployed)"
     else
         log_info "IDE Orchestrator WebService found"
@@ -107,33 +114,24 @@ main() {
     
     # Test HTTP service
     set +e
-    kubectl run test-deepagents-http --rm -i --restart=Never --image=curlimages/curl:latest -n $NAMESPACE -- \
-       curl -f -s http://$DEEPAGENTS_SERVICE.$NAMESPACE.svc.cluster.local:8000/health >/dev/null 2>&1
+    kubectl run test-deepagents-http --rm -i --restart=Never --image=curlimages/curl:latest -n $DEEPAGENTS_NAMESPACE -- \
+       curl -f -s http://$DEEPAGENTS_SERVICE.$DEEPAGENTS_NAMESPACE.svc.cluster.local:8000/health >/dev/null 2>&1
     if [[ $? -eq 0 ]]; then
         log_success "DeepAgents HTTP service accessibility test PASSED"
     else
         log_error "DeepAgents HTTP service accessibility test FAILED"
-    fi
-    
-    # Test original NATS service
-    kubectl run test-deepagents-nats --rm -i --restart=Never --image=curlimages/curl:latest -n $NAMESPACE -- \
-       curl -f -s http://deepagents-runtime.$NAMESPACE.svc.cluster.local:8080/health >/dev/null 2>&1
-    if [[ $? -eq 0 ]]; then
-        log_success "DeepAgents NATS service accessibility test PASSED"
-    else
-        log_error "DeepAgents NATS service accessibility test FAILED"
     fi
     set -e
     
     # Test 2: Backend Service URL Resolution
     log_info "Test 2: Testing ide-orchestrator backend service URL resolution..."
     
-    backend_url=$(kubectl get configmap $BACKEND_CONFIG_NAME -n $NAMESPACE -o jsonpath='{.data.BACKEND_SERVICE_URL}' 2>/dev/null || echo "")
+    backend_url=$(kubectl get configmap $BACKEND_CONFIG_NAME -n $IDE_ORCHESTRATOR_NAMESPACE -o jsonpath='{.data.BACKEND_SERVICE_URL}' 2>/dev/null || echo "")
     
     if [[ -z "$backend_url" ]]; then
         log_error "Backend service ConfigMap not found or empty"
     else
-        expected_url="http://$DEEPAGENTS_SERVICE.$NAMESPACE.svc.cluster.local:8000"
+        expected_url="http://$DEEPAGENTS_SERVICE.$DEEPAGENTS_NAMESPACE.svc.cluster.local:8000"
         if [[ "$backend_url" == "$expected_url" ]]; then
             log_success "Backend service URL correctly resolved: $backend_url"
         else
@@ -145,7 +143,7 @@ main() {
     log_info "Test 3: Testing environment variable injection..."
     
     set +e
-    kubectl run test-env-injection --rm -i --restart=Never --image=alpine:latest -n $NAMESPACE \
+    kubectl run test-env-injection --rm -i --restart=Never --image=alpine:latest -n $IDE_ORCHESTRATOR_NAMESPACE \
        --env="TEST=1" \
        --overrides='{"spec":{"containers":[{"name":"test-env-injection","image":"alpine:latest","command":["/bin/sh","-c","echo BACKEND_SERVICE_URL=$BACKEND_SERVICE_URL && test -n \"$BACKEND_SERVICE_URL\""],"envFrom":[{"configMapRef":{"name":"'$BACKEND_CONFIG_NAME'","optional":true}}]}]}}' >/dev/null 2>&1
     if [[ $? -eq 0 ]]; then
@@ -157,7 +155,7 @@ main() {
     # Test 4: HTTP Communication
     log_info "Test 4: Testing HTTP communication from ide-orchestrator to deepagents-runtime..."
     
-    kubectl run test-http-comm --rm -i --restart=Never --image=curlimages/curl:latest -n $NAMESPACE \
+    kubectl run test-http-comm --rm -i --restart=Never --image=curlimages/curl:latest -n $IDE_ORCHESTRATOR_NAMESPACE \
        --overrides='{"spec":{"containers":[{"name":"test-http-comm","image":"curlimages/curl:latest","command":["/bin/sh","-c","curl -f -s $BACKEND_SERVICE_URL/health"],"envFrom":[{"configMapRef":{"name":"'$BACKEND_CONFIG_NAME'","optional":true}}]}]}}' >/dev/null 2>&1
     if [[ $? -eq 0 ]]; then
         log_success "HTTP communication test PASSED"
@@ -169,7 +167,7 @@ main() {
     # Test 5: Session Affinity Configuration
     log_info "Test 5: Testing session affinity configuration..."
     
-    session_affinity=$(kubectl get service $IDE_ORCHESTRATOR_SERVICE -n $NAMESPACE -o jsonpath='{.spec.sessionAffinity}' 2>/dev/null || echo "")
+    session_affinity=$(kubectl get service $IDE_ORCHESTRATOR_SERVICE -n $IDE_ORCHESTRATOR_NAMESPACE -o jsonpath='{.spec.sessionAffinity}' 2>/dev/null || echo "")
     
     if [[ "$session_affinity" == "ClientIP" ]]; then
         log_success "Session affinity correctly configured: $session_affinity"
@@ -180,7 +178,7 @@ main() {
     # Test 6: Load Balancing
     log_info "Test 6: Testing load balancing setup..."
     
-    current_replicas=$(kubectl get deployment deepagents-runtime -n $NAMESPACE -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0")
+    current_replicas=$(kubectl get deployment $DEEPAGENTS_SERVICE -n $DEEPAGENTS_NAMESPACE -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0")
     
     if [[ "$current_replicas" -ge 1 ]]; then
         log_success "Load balancing ready with $current_replicas replica(s)"
