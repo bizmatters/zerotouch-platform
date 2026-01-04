@@ -22,3 +22,4 @@ codebase.md
 scripts/local-ci/logs
 .talos-credentials
 .release-artifacts
+zt-codebase.md
