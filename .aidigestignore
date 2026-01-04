@@ -6,16 +6,19 @@ environments/*/*.secret.yaml
 .age-key
 .sops.yaml
 .claude
-docs
-bootstrap/talos/nodes/cp01-main/config.yaml.*
+bootstrap/talos
+scripts
+services
+platform/intelligence
+bootstrap/argocd/overlays/preview
 
 # Temporary files
 *.log
 .kiro
-services
-zerotouch-platform/scripts/local-ci/logs
-artifacts
-codebase.md
 .talos-credentials
 .tenants-cache
 .release-artifacts
+zerotouch-platform/scripts/local-ci/logs
+artifacts
+codebase.md
+temp-docs

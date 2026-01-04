@@ -1,0 +1,36 @@
+---
+config:
+  theme: dark
+---
+flowchart LR
+
+    User[User UI]
+    User -->|Prompt| IDE[ide-orchestrator]
+    IDE -->|Read Write| PG_SYS[Postgres Workflow Store]
+    IDE -->|Publish Task| NATS[NATS JetStream]
+    NATS -->|Consumer Lag| KEDA[KEDA Autoscaler]
+    KEDA -->|Scale Pods| K8S[Kubernetes Cluster]
+    subgraph Sandbox["Agent Sandbox"]
+        direction TB
+        Runtime[Deepagents Runtime]
+    end
+
+    K8S -->|Provision| Sandbox
+    Runtime -->|Pull Tasks| NATS
+    Runtime -->|Ack Retry Backoff| NATS
+    PG_CP[Postgres Checkpoints]
+    DF[Dragonfly Cache]
+
+    Runtime -->|Persist State| PG_CP
+    Runtime -->|Emit Stream| DF
+    DF -->|Execution Events| IDE
+    IDE -->|WebSocket| User
+    Runtime -->|MCP Requests| AGW[Agentgateway Data Plane]
+    AGW -->|RBAC Policy Check| AGW
+    AGW -->|Inject Credentials| AGW
+    AGW -->|Audited Proxy| Tools[External Tools]
+    Tools -->|Inbound Webhooks| Sandbox
+    Cilium[Cilium Gateway API]
+    Cilium --> IDE
+    Cilium --> Sandbox
+    Cilium --> AGW
