@@ -34,8 +34,6 @@ spec:
                   app.kubernetes.io/name: placeholder
                   app.kubernetes.io/component: agent-sandbox
                   app.kubernetes.io/managed-by: crossplane
-                annotations:
-                  eks.amazonaws.com/role-arn: placeholder
               automountServiceAccountToken: true
       patches:
         - type: FromCompositeFieldPath
@@ -47,23 +45,6 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.namespace
           toFieldPath: spec.forProvider.manifest.metadata.namespace
-        # Pull Role ARN from S3 Connection Secret
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.s3SecretName
-          toFieldPath: spec.references[0].patchesFrom.name
-          policy:
-            fromFieldPath: Optional
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.claimRef.namespace
-          toFieldPath: spec.references[0].patchesFrom.namespace
-          policy:
-            fromFieldPath: Optional
-      references:
-        - patchesFrom:
-            apiVersion: v1
-            kind: Secret
-            fieldPath: data.AWS_ROLE_ARN
-          toFieldPath: spec.forProvider.manifest.metadata.annotations[eks.amazonaws.com/role-arn]
       readinessChecks:
         - type: MatchCondition
           matchCondition:
@@ -90,7 +71,7 @@ spec:
                   app.kubernetes.io/component: agent-sandbox
                   app.kubernetes.io/managed-by: crossplane
               spec:
-                template:
+                podTemplate:
                   metadata:
                     labels:
                       app.kubernetes.io/name: placeholder
@@ -308,20 +289,20 @@ spec:
           toFieldPath: spec.forProvider.manifest.metadata.labels[app.kubernetes.io/name]
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
-          toFieldPath: spec.forProvider.manifest.spec.template.metadata.labels[app.kubernetes.io/name]
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.metadata.labels[app.kubernetes.io/name]
         # Patch ServiceAccount reference
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.serviceAccountName
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.serviceAccountName
         # Patch image
         - type: FromCompositeFieldPath
           fromFieldPath: spec.image
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].image
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].image
         # Patch resource sizing based on size enum
         # CPU requests
         - type: FromCompositeFieldPath
           fromFieldPath: spec.size
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.requests.cpu
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].resources.requests.cpu
           transforms:
             - type: map
               map:
@@ -334,7 +315,7 @@ spec:
         # CPU limits
         - type: FromCompositeFieldPath
           fromFieldPath: spec.size
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.limits.cpu
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].resources.limits.cpu
           transforms:
             - type: map
               map:
@@ -347,7 +328,7 @@ spec:
         # Memory requests
         - type: FromCompositeFieldPath
           fromFieldPath: spec.size
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.requests.memory
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].resources.requests.memory
           transforms:
             - type: map
               map:
@@ -360,7 +341,7 @@ spec:
         # Memory limits
         - type: FromCompositeFieldPath
           fromFieldPath: spec.size
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.limits.memory
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].resources.limits.memory
           transforms:
             - type: map
               map:
@@ -373,20 +354,20 @@ spec:
         # Patch NATS environment variables
         - type: FromCompositeFieldPath
           fromFieldPath: spec.nats.url
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[0].value
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].env[0].value
         - type: FromCompositeFieldPath
           fromFieldPath: spec.nats.stream
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[1].value
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].env[1].value
         - type: FromCompositeFieldPath
           fromFieldPath: spec.nats.consumer
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[2].value
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].env[2].value
         # Patch OpenTelemetry environment variables
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[4].value
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].env[4].value
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[6].value
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].env[6].value
           transforms:
             - type: string
               string:
@@ -395,13 +376,13 @@ spec:
         # Patch HTTP port (optional - defaults to 8080)
         - type: FromCompositeFieldPath
           fromFieldPath: spec.httpPort
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].ports[0].containerPort
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].ports[0].containerPort
           policy:
             fromFieldPath: Optional
         # Patch PORT environment variable to match httpPort
         - type: FromCompositeFieldPath
           fromFieldPath: spec.httpPort
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[3].value
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].env[3].value
           transforms:
             - type: string
               string:
@@ -412,7 +393,7 @@ spec:
         # Patch Prometheus port annotation to match httpPort
         - type: FromCompositeFieldPath
           fromFieldPath: spec.httpPort
-          toFieldPath: spec.forProvider.manifest.spec.template.metadata.annotations[prometheus.io/port]
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.metadata.annotations[prometheus.io/port]
           transforms:
             - type: string
               string:
@@ -423,72 +404,72 @@ spec:
         # Patch health check paths (optional - defaults to /health and /ready)
         - type: FromCompositeFieldPath
           fromFieldPath: spec.healthPath
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].livenessProbe.httpGet.path
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].livenessProbe.httpGet.path
           policy:
             fromFieldPath: Optional
         - type: FromCompositeFieldPath
           fromFieldPath: spec.readyPath
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].readinessProbe.httpGet.path
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].readinessProbe.httpGet.path
           policy:
             fromFieldPath: Optional
         # Patch health check port to match httpPort (optional)
         - type: FromCompositeFieldPath
           fromFieldPath: spec.httpPort
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].livenessProbe.httpGet.port
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].livenessProbe.httpGet.port
           policy:
             fromFieldPath: Optional
         - type: FromCompositeFieldPath
           fromFieldPath: spec.httpPort
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].readinessProbe.httpGet.port
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].readinessProbe.httpGet.port
           policy:
             fromFieldPath: Optional
         # Patch imagePullSecrets
         - type: FromCompositeFieldPath
           fromFieldPath: spec.imagePullSecrets
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.imagePullSecrets
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.imagePullSecrets
           policy:
             fromFieldPath: Optional
         # Patch secret slots (envFrom - bulk mounting) - aws-access-token is at index 0
         - type: FromCompositeFieldPath
           fromFieldPath: spec.secret1Name
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[1].secretRef.name
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].envFrom[1].secretRef.name
           policy:
             fromFieldPath: Optional
         - type: FromCompositeFieldPath
           fromFieldPath: spec.secret2Name
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[2].secretRef.name
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].envFrom[2].secretRef.name
           policy:
             fromFieldPath: Optional
         - type: FromCompositeFieldPath
           fromFieldPath: spec.secret3Name
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[3].secretRef.name
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].envFrom[3].secretRef.name
           policy:
             fromFieldPath: Optional
         - type: FromCompositeFieldPath
           fromFieldPath: spec.s3SecretName
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[4].secretRef.name
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].envFrom[4].secretRef.name
           policy:
             fromFieldPath: Optional
         - type: FromCompositeFieldPath
           fromFieldPath: spec.secret5Name
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[5].secretRef.name
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].envFrom[5].secretRef.name
           policy:
             fromFieldPath: Optional
         # Patch S3 connection secret in all containers
         - type: FromCompositeFieldPath
           fromFieldPath: spec.s3SecretName
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.initContainers[0].envFrom[0].secretRef.name
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.initContainers[0].envFrom[0].secretRef.name
           policy:
             fromFieldPath: Optional
         - type: FromCompositeFieldPath
           fromFieldPath: spec.s3SecretName
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[1].envFrom[0].secretRef.name
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[1].envFrom[0].secretRef.name
           policy:
             fromFieldPath: Optional
         # Patch PVC name for workspace volume
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.volumes[0].persistentVolumeClaim.claimName
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.volumes[0].persistentVolumeClaim.claimName
           transforms:
             - type: string
               string:
@@ -497,15 +478,15 @@ spec:
         # Patch SANDBOX_NAME environment variable in initContainer
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.initContainers[0].env[0].value
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.initContainers[0].env[0].value
         # Patch SANDBOX_NAME environment variable in sidecar
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[1].env[0].value
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[1].env[0].value
         # Patch SANDBOX_NAME environment variable in main container
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[7].value
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].env[7].value
       readinessChecks:
         - type: MatchCondition
           matchCondition:
@@ -592,11 +573,9 @@ spec:
                   app.kubernetes.io/component: agent-sandbox
                   app.kubernetes.io/managed-by: crossplane
               spec:
-                templateRef:
+                replicas: 1
+                sandboxTemplateRef:
                   name: placeholder
-                minReplicas: 1
-                maxReplicas: 10
-                targetUtilization: 80
       patches:
         # Patch name
         - type: FromCompositeFieldPath
@@ -612,7 +591,7 @@ spec:
         # Patch template reference to SandboxTemplate name
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
-          toFieldPath: spec.forProvider.manifest.spec.templateRef.name
+          toFieldPath: spec.forProvider.manifest.spec.sandboxTemplateRef.name
       readinessChecks:
         - type: MatchCondition
           matchCondition:

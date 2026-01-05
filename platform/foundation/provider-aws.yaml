@@ -18,6 +18,6 @@ metadata:
   name: default
 spec:
   credentials:
-    source: InjectedIdentity
-  assume_role_chain:
-    - role_arn: "arn:aws:iam::337832075585:role/zerotouch-crossplane-role-dev"
+    source: WebIdentity
+    webIdentity:
+      roleARN: "arn:aws:iam::337832075585:role/zerotouch-crossplane-role-dev"
