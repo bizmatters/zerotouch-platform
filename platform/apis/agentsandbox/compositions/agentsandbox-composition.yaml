@@ -306,6 +306,18 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.image
           toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].image
+        # Patch command (optional)
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.command
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].command
+          policy:
+            fromFieldPath: Optional
+        # Patch args (optional)
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.args
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].args
+          policy:
+            fromFieldPath: Optional
         # Patch resource sizing based on size enum
         # CPU requests
         - type: FromCompositeFieldPath

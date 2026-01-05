@@ -14,7 +14,12 @@ metadata:
   name: ${claim_name}
   namespace: ${NAMESPACE}
 spec:
-  image: "nginx:1.25-alpine"
+  image: "ghcr.io/arun4infra/deepagents-runtime:sha-9d6cb0e"
+  # Override entrypoint to sleep (bypassing DB checks)
+  command: ["/bin/sh", "-c"]
+  args: ["echo 'Sandbox Persistence Test Started'; python3 -m http.server 8080 --directory /workspace &; sleep infinity"]
+  healthPath: "/"
+  readyPath: "/"
   size: "small"
   storageGB: 25
   httpPort: 8080
@@ -23,6 +28,7 @@ spec:
     stream: "TEST_STREAM"
     consumer: "test-consumer"
   secret1Name: "aws-access-token"
+  s3SecretName: "aws-access-token"
 EOF
     
     if [[ $? -eq 0 ]]; then

@@ -31,6 +31,18 @@ spec:
                   pattern: '^[a-z0-9]+((\.|_|__|-+)[a-z0-9]+)*(\/[a-z0-9]+((\.|_|__|-+)[a-z0-9]+)*)*(:[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}|@sha256:[a-f0-9]{64})?$'
                   example: "ghcr.io/org/my-service:v1.0.0"
 
+                command:
+                  type: array
+                  description: "Optional command override for the main container"
+                  items:
+                    type: string
+
+                args:
+                  type: array
+                  description: "Optional arguments for the main container command"
+                  items:
+                    type: string
+
                 size:
                   type: string
                   description: "Resource size allocation (micro: 100m-500m CPU, 256Mi-1Gi memory; small: 250m-1000m CPU, 512Mi-2Gi memory; medium: 500m-2000m CPU, 1Gi-4Gi memory; large: 1000m-4000m CPU, 2Gi-8Gi memory)"
