@@ -164,8 +164,6 @@ spec:
                             value: placeholder
                         envFrom:
                           - secretRef:
-                              name: aws-access-token
-                          - secretRef:
                               name: placeholder-secret1
                               optional: true
                           - secretRef:
@@ -180,6 +178,8 @@ spec:
                           - secretRef:
                               name: placeholder-secret5
                               optional: true
+                          - secretRef:
+                              name: aws-access-token
                         resources:
                           requests:
                             cpu: "500m"
@@ -449,7 +449,7 @@ spec:
           toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.imagePullSecrets
           policy:
             fromFieldPath: Optional
-        # Patch secret slots (envFrom - bulk mounting) - aws-access-token is at index 0
+        # Patch secret slots (envFrom - bulk mounting) - EventDrivenService parity
         - type: FromCompositeFieldPath
           fromFieldPath: spec.secret1Name
           toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].envFrom[1].secretRef.name
@@ -462,6 +462,27 @@ spec:
             fromFieldPath: Optional
         - type: FromCompositeFieldPath
           fromFieldPath: spec.secret3Name
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].envFrom[3].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        # Patch secret slots (envFrom - bulk mounting) - EventDrivenService parity
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret1Name
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].envFrom[0].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret2Name
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].envFrom[1].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret3Name
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].envFrom[2].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret4Name
           toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].envFrom[3].secretRef.name
           policy:
             fromFieldPath: Optional
@@ -751,6 +772,91 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.nats.consumer
           toFieldPath: spec.forProvider.manifest.spec.triggers[0].metadata.consumer
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
+
+    # Resource 7: Connection Secret Generation
+    - name: connection-secret
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          providerConfigRef:
+            name: kubernetes-provider
+          forProvider:
+            manifest:
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: placeholder-conn
+                namespace: placeholder
+                labels:
+                  app.kubernetes.io/name: placeholder
+                  app.kubernetes.io/component: agent-sandbox
+                  app.kubernetes.io/managed-by: crossplane
+                  app.kubernetes.io/version: v1alpha1
+              type: Opaque
+              data:
+                # Connection details for the AgentSandboxService
+                SANDBOX_SERVICE_NAME: placeholder-base64
+                SANDBOX_HTTP_ENDPOINT: placeholder-base64
+                SANDBOX_NAMESPACE: placeholder-base64
+      patches:
+        # Patch name with -conn suffix (EventDrivenService pattern)
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%s-conn"
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        # Patch labels
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.labels[app.kubernetes.io/name]
+        # Patch connection data - service name (base64 encoded)
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.data.SANDBOX_SERVICE_NAME
+          transforms:
+            - type: string
+              string:
+                type: Convert
+                convert: "ToBase64"
+        # Patch connection data - HTTP endpoint (base64 encoded)
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.data.SANDBOX_HTTP_ENDPOINT
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "http://%s-http:8080"
+            - type: string
+              string:
+                type: Convert
+                convert: "ToBase64"
+        # Patch connection data - namespace (base64 encoded)
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.data.SANDBOX_NAMESPACE
+          transforms:
+            - type: string
+              string:
+                type: Convert
+                convert: "ToBase64"
       readinessChecks:
         - type: MatchCondition
           matchCondition:
