@@ -3,6 +3,7 @@ set -euo pipefail
 
 # 00-create-oidc-bucket.sh - Create S3 bucket for OIDC discovery
 # Run this with admin credentials before running 00-setup-aws-identity.sh
+# AWS_PROFILE=zerotouch-platform-admin ./scripts/bootstrap/infra/00-create-oidc-bucket.sh dev
 
 ENVIRONMENT="${1:-dev}"
 OIDC_BUCKET="zerotouch-oidc-${ENVIRONMENT}"
