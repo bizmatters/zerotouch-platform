@@ -21,7 +21,7 @@ PLATFORM_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 
 # Test configuration
 CLAIM_NAME="deepagents-runtime-sandbox"
-CLAIM_FILE="../zerotouch-tenants/tenants/deepagents-runtime/overlays/dev/agentsandbox-claim.yaml"
+CLAIM_FILE="${PLATFORM_ROOT}/../zerotouch-tenants/tenants/deepagents-runtime/overlays/dev/deployment.yaml"
 TEST_TIMEOUT=300
 LOAD_TEST_DURATION=60
 
