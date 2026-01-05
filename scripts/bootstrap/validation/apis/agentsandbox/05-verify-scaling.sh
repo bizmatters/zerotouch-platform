@@ -4,13 +4,26 @@ set -euo pipefail
 # 05-verify-scaling.sh - KEDA scaling integration validation for AgentSandboxService
 # Tests KEDA ScaledObject targeting SandboxWarmPool with NATS JetStream trigger
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLATFORM_ROOT="$(cd "${SCRIPT_DIR}/../../../../.." && pwd)"
+echo "Starting KEDA scaling validation for AgentSandboxService..."
 
-# Source common utilities
-source "${SCRIPT_DIR}/../../../lib/common.sh"
-source "${SCRIPT_DIR}/../../../lib/config-discovery.sh"
-source "${SCRIPT_DIR}/../../../lib/logging.sh"
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" || {
+    echo "ERROR: Failed to determine script directory" >&2
+    exit 1
+}
+
+# Navigate to repo root from script location
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../../../.." && pwd)" || {
+    echo "ERROR: Failed to navigate to repo root from $SCRIPT_DIR" >&2
+    REPO_ROOT="$(pwd)"
+}
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
 
 # Default values
 TENANT_NAME="${TENANT_NAME:-deepagents-runtime}"
@@ -21,7 +34,7 @@ CLEANUP="${CLEANUP:-true}"
 # Test configuration
 TEST_CLAIM_NAME="test-scaling-sandbox"
 TEST_IMAGE="ghcr.io/bizmatters/deepagents-runtime:latest"
-TEST_STREAM="test-scaling-stream"
+TEST_STREAM="TEST_SCALING_STREAM"
 TEST_CONSUMER="test-scaling-consumer"
 
 usage() {
@@ -51,12 +64,28 @@ VERIFICATION CRITERIA:
 EOF
 }
 
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+log_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1" >&2
+}
+
 log_step() {
-    log_info "STEP: $1"
+    echo -e "${BLUE}[STEP]${NC} $1"
 }
 
 log_substep() {
-    log_info "  → $1"
+    echo -e "  ${BLUE}→${NC} $1"
 }
 
 cleanup_test_resources() {
@@ -103,7 +132,7 @@ validate_prerequisites() {
     log_substep "KEDA is installed"
     
     # Check if agent-sandbox controller is running
-    if ! kubectl get pods -n agent-sandbox-system -l app.kubernetes.io/name=agent-sandbox-controller | grep -q Running; then
+    if ! kubectl get pods -n agent-sandbox-system -l app=agent-sandbox-controller | grep -q Running; then
         log_error "Agent-sandbox controller not running. Run 01-verify-controller.sh first."
         return 1
     fi
