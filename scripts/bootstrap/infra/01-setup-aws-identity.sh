@@ -27,6 +27,20 @@ echo "Setting up AWS OIDC Identity for environment: ${ENVIRONMENT}"
 echo "AWS Account: ${AWS_ACCOUNT_ID}"
 echo "OIDC Bucket: ${OIDC_BUCKET}"
 
+# Prerequisites Check
+if ! command -v aws &> /dev/null; then
+    echo "❌ AWS CLI is not installed. Please install it."
+    exit 1
+fi
+
+# Verify we have credentials and they are valid
+if ! aws sts get-caller-identity &> /dev/null; then
+    echo "❌ No valid AWS Credentials found."
+    echo "   - Local: Run 'aws configure' or export AWS_PROFILE"
+    echo "   - CI: Ensure 'aws-actions/configure-aws-credentials' runs before this step."
+    exit 1
+fi
+
 # Create temporary directory
 TEMP_DIR=$(mktemp -d)
 trap "rm -rf ${TEMP_DIR}" EXIT
