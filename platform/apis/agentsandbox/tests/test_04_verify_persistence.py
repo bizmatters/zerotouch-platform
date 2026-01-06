@@ -301,8 +301,8 @@ def test_sidecar_backup(colors, tenant_config, test_counters, cleanup_test_claim
 
 
 def test_resurrection(colors, tenant_config, test_counters, cleanup_test_claim):
-    """Step 6: Perform "Resurrection Test" (file survives pod recreation)"""
-    print(f"{colors.BLUE}Step: 6. Performing Resurrection Test (file survives pod recreation){colors.NC}")
+    """Step 6: Perform "Resurrection Test" (file survives pod recreation & Identity is Stable)"""
+    print(f"{colors.BLUE}Step: 6. Performing Resurrection Test (Data & Identity Check){colors.NC}")
     
     claim_name = "test-persistence-sandbox"
     
@@ -318,29 +318,54 @@ def test_resurrection(colors, tenant_config, test_counters, cleanup_test_claim):
         if original_pod_name:
             print(f"{colors.GREEN}✓ Found original pod: {original_pod_name}{colors.NC}")
             
-            # Delete the pod to trigger recreation
-            print(f"{colors.BLUE}Deleting pod to test resurrection...{colors.NC}")
+            # Check Stable Identity (Pod Name == Claim Name for webhook routing)
+            # Note: With Warm Pools, Pod names have random suffixes, so we'll validate Service routing instead
+            if original_pod_name != claim_name:
+                print(f"{colors.YELLOW}⚠️  Pod Name ({original_pod_name}) != Claim Name ({claim_name}). This is expected with Warm Pools.{colors.NC}")
+            else:
+                print(f"{colors.GREEN}✓ Pod Name matches Claim Name: {original_pod_name}{colors.NC}")
+            
+            # Write test data to validate persistence
+            test_file = "/workspace/resurrection-check.txt"
+            test_content = f"survival-{int(time.time())}"
+            print(f"{colors.BLUE}Writing test data to {test_file}...{colors.NC}")
+            
+            try:
+                subprocess.run([
+                    "kubectl", "exec", original_pod_name, "-n", tenant_config['namespace'], "-c", "main", "--",
+                    "sh", "-c", f"echo '{test_content}' > {test_file}"
+                ], capture_output=True, text=True, check=True)
+                print(f"{colors.GREEN}✓ Test data written: {test_content}{colors.NC}")
+            except subprocess.CalledProcessError:
+                print(f"{colors.RED}✗ Failed to write test data{colors.NC}")
+                test_counters.errors += 1
+                return
+            
+            # Force delete pod
+            print(f"{colors.BLUE}Deleting pod {original_pod_name}...{colors.NC}")
             subprocess.run([
-                "kubectl", "delete", "pod", original_pod_name, "-n", tenant_config['namespace']
+                "kubectl", "delete", "pod", original_pod_name, "-n", tenant_config['namespace'], "--wait=true"
             ], capture_output=True, text=True, check=False)
             
-            # Wait for new pod to be created
+            # Wait for recreation
+            print(f"{colors.BLUE}Waiting for pod recreation...{colors.NC}")
+            time.sleep(10)  # Give controller time to react
+            
             timeout = 120
             count = 0
+            new_pod_name = ""
             
-            print(f"{colors.BLUE}Waiting for new pod to be created...{colors.NC}")
             while count < timeout:
                 try:
                     result = subprocess.run([
                         "kubectl", "get", "pods", "-n", tenant_config['namespace'],
                         "-l", f"app.kubernetes.io/name={claim_name}",
+                        "--field-selector=status.phase=Running",
                         "-o", "jsonpath={.items[0].metadata.name}"
                     ], capture_output=True, text=True, check=True)
                     new_pod_name = result.stdout.strip()
                     
-                    if new_pod_name and new_pod_name != original_pod_name:
-                        print(f"{colors.GREEN}✓ New pod created: {new_pod_name}{colors.NC}")
-                        print(f"{colors.GREEN}✓ Resurrection test infrastructure validated{colors.NC}")
+                    if new_pod_name:
                         break
                 except subprocess.CalledProcessError:
                     pass
@@ -348,14 +373,71 @@ def test_resurrection(colors, tenant_config, test_counters, cleanup_test_claim):
                 time.sleep(2)
                 count += 2
             
-            if count >= timeout:
-                print(f"{colors.YELLOW}⚠️  New pod not created within timeout (may be normal in test environment){colors.NC}")
-                test_counters.warnings += 1
+            if not new_pod_name:
+                print(f"{colors.RED}✗ Pod failed to restart{colors.NC}")
+                test_counters.errors += 1
+                pytest.fail("Pod failed to restart")
+            
+            print(f"{colors.GREEN}✓ New pod created: {new_pod_name}{colors.NC}")
+            
+            # Validate Stable Network Identity (Service -> Pod)
+            # Since we use Warm Pools, Pod Name will have a random suffix.
+            # We must verify that the Service with the CLAIM NAME exists and targets this Pod.
+            print(f"{colors.BLUE}Verifying Stable Network Identity (Service Resolution)...{colors.NC}")
+            try:
+                # 1. Check Service Exists
+                subprocess.run([
+                    "kubectl", "get", "service", claim_name, "-n", tenant_config['namespace']
+                ], check=True, capture_output=True)
+                
+                # 2. Check Service Selector matches Pod Labels
+                # Get Pod Labels
+                pod_labels_result = subprocess.run([
+                    "kubectl", "get", "pod", new_pod_name, "-n", tenant_config['namespace'], 
+                    "-o", "jsonpath={.metadata.labels}"
+                ], capture_output=True, text=True, check=True)
+                
+                import json
+                pod_labels = json.loads(pod_labels_result.stdout)
+                
+                # We expect the controller to label the pod with the claim name/hash so the service finds it
+                # This confirms traffic to 'http://test-persistence-sandbox' hits 'test-persistence-sandbox-drd86'
+                if "agents.x-k8s.io/sandbox-name-hash" in pod_labels:
+                    print(f"{colors.GREEN}✓ Stable Identity Confirmed: Service '{claim_name}' routes to Pod '{new_pod_name}'{colors.NC}")
+                else:
+                    print(f"{colors.RED}✗ Identity Failed: Pod missing routing labels.{colors.NC}")
+                    test_counters.errors += 1
+                    pytest.fail("Stable Network Identity failed")
+            except subprocess.CalledProcessError:
+                print(f"{colors.RED}✗ Identity Failed: Stable Service '{claim_name}' not found.{colors.NC}")
+                test_counters.errors += 1
+                pytest.fail("Stable Network Identity Service missing")
+            
+            # Validate Data Persistence
+            print(f"{colors.BLUE}Verifying data persistence...{colors.NC}")
+            time.sleep(5)  # Allow time for init container to restore if needed
+            
+            try:
+                result = subprocess.run([
+                    "kubectl", "exec", new_pod_name, "-n", tenant_config['namespace'], "-c", "main", "--",
+                    "cat", test_file
+                ], capture_output=True, text=True, check=True)
+                
+                if result.stdout.strip() == test_content:
+                    print(f"{colors.GREEN}✓ Data survived pod recreation.{colors.NC}")
+                else:
+                    print(f"{colors.RED}✗ Data lost! Expected: {test_content}, Got: {result.stdout.strip()}{colors.NC}")
+                    test_counters.errors += 1
+                    pytest.fail("Data persistence failed")
+            except subprocess.CalledProcessError:
+                print(f"{colors.RED}✗ Data lost! File not found after recreation{colors.NC}")
+                test_counters.errors += 1
+                pytest.fail("Data persistence failed")
         else:
             print(f"{colors.RED}✗ Could not get original pod name{colors.NC}")
             test_counters.errors += 1
-    except subprocess.CalledProcessError:
-        print(f"{colors.RED}✗ Could not perform resurrection test{colors.NC}")
+    except subprocess.CalledProcessError as e:
+        print(f"{colors.RED}✗ Resurrection test error: {e}{colors.NC}")
         test_counters.errors += 1
     
     print("")

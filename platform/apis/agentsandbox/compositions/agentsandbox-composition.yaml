@@ -51,8 +51,8 @@ spec:
             type: Ready
             status: "True"
 
-    # Resource 2: SandboxTemplate
-    - name: sandboxtemplate
+    # Resource 2: Sandbox (Direct provisioning for stable identity)
+    - name: sandbox
       base:
         apiVersion: kubernetes.crossplane.io/v1alpha2
         kind: Object
@@ -61,8 +61,8 @@ spec:
             name: kubernetes-provider
           forProvider:
             manifest:
-              apiVersion: extensions.agents.x-k8s.io/v1alpha1
-              kind: SandboxTemplate
+              apiVersion: agents.x-k8s.io/v1alpha1
+              kind: Sandbox
               metadata:
                 name: placeholder
                 namespace: placeholder
@@ -71,6 +71,7 @@ spec:
                   app.kubernetes.io/component: agent-sandbox
                   app.kubernetes.io/managed-by: crossplane
               spec:
+                replicas: 1
                 podTemplate:
                   metadata:
                     labels:
@@ -562,52 +563,7 @@ spec:
             type: Ready
             status: "True"
 
-    # Resource 4: SandboxWarmPool
-    - name: sandboxwarmpool
-      base:
-        apiVersion: kubernetes.crossplane.io/v1alpha2
-        kind: Object
-        spec:
-          providerConfigRef:
-            name: kubernetes-provider
-          forProvider:
-            manifest:
-              apiVersion: extensions.agents.x-k8s.io/v1alpha1
-              kind: SandboxWarmPool
-              metadata:
-                name: placeholder
-                namespace: placeholder
-                labels:
-                  app.kubernetes.io/name: placeholder
-                  app.kubernetes.io/component: agent-sandbox
-                  app.kubernetes.io/managed-by: crossplane
-              spec:
-                replicas: 1
-                sandboxTemplateRef:
-                  name: placeholder
-      patches:
-        # Patch name
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.claimRef.name
-          toFieldPath: spec.forProvider.manifest.metadata.name
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.claimRef.namespace
-          toFieldPath: spec.forProvider.manifest.metadata.namespace
-        # Patch labels
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.claimRef.name
-          toFieldPath: spec.forProvider.manifest.metadata.labels[app.kubernetes.io/name]
-        # Patch template reference to SandboxTemplate name
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.claimRef.name
-          toFieldPath: spec.forProvider.manifest.spec.sandboxTemplateRef.name
-      readinessChecks:
-        - type: MatchCondition
-          matchCondition:
-            type: Ready
-            status: "True"
-
-    # Resource 5: HTTP Service (conditional - only when httpPort specified)
+    # Resource 4: HTTP Service (conditional - only when httpPort specified)
     - name: http-service
       base:
         apiVersion: kubernetes.crossplane.io/v1alpha2
@@ -690,7 +646,7 @@ spec:
             type: Ready
             status: "True"
 
-    # Resource 6: KEDA ScaledObject
+    # Resource 5: KEDA ScaledObject
     - name: scaledobject
       base:
         apiVersion: kubernetes.crossplane.io/v1alpha2
@@ -711,10 +667,10 @@ spec:
                   app.kubernetes.io/managed-by: crossplane
               spec:
                 scaleTargetRef:
-                  apiVersion: extensions.agents.x-k8s.io/v1alpha1
-                  kind: SandboxWarmPool
+                  apiVersion: agents.x-k8s.io/v1alpha1
+                  kind: Sandbox
                   name: placeholder
-                minReplicaCount: 0
+                minReplicaCount: 0Count: 0
                 maxReplicaCount: 1
                 cooldownPeriod: 30
                 pollingInterval: 5
@@ -762,7 +718,7 @@ spec:
             type: Ready
             status: "True"
 
-    # Resource 7: Connection Secret Generation
+    # Resource 6: Connection Secret Generation
     - name: connection-secret
       base:
         apiVersion: kubernetes.crossplane.io/v1alpha2
