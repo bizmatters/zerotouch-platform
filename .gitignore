@@ -16,6 +16,7 @@ bootstrap/talos/nodes/cp01-main/config.yaml.*
 .env.ssm.bkp
 archived
 **.key
+__pycache__
 
 # Tenant configuration cache
 .tenants-cache/
