@@ -28,13 +28,14 @@ def e2e_test_config():
 @pytest.fixture
 def e2e_claim_yaml(e2e_test_config, tenant_config, temp_dir):
     """Create E2E test claim YAML"""
+    # Use the correct image tag that exists in the registry
     claim_yaml = f"""apiVersion: platform.bizmatters.io/v1alpha1
 kind: AgentSandboxService
 metadata:
   name: {e2e_test_config['claim_name']}
   namespace: {tenant_config['namespace']}
 spec:
-  image: "ghcr.io/bizmatters/deepagents-runtime:latest"
+  image: "ghcr.io/arun4infra/deepagents-runtime:sha-9d6cb0e"
   size: "small"
   nats:
     url: "nats://nats-headless.nats.svc.cluster.local:4222"
@@ -124,7 +125,7 @@ def test_validate_prerequisites(colors, kubectl_helper, tenant_config, test_coun
     print(f"{colors.GREEN}[SUCCESS] Prerequisites validated successfully{colors.NC}")
 
 
-def test_deploy_agentsandbox_claim(colors, e2e_claim_yaml, e2e_test_config, test_counters):
+def test_deploy_agentsandbox_claim(colors, e2e_claim_yaml, e2e_test_config, tenant_config, test_counters):
     """Deploy AgentSandboxService claim"""
     print(f"{colors.BLUE}[INFO] Deploying AgentSandboxService claim...{colors.NC}")
     
@@ -170,17 +171,18 @@ def test_validate_sandbox_readiness(colors, e2e_test_config, tenant_config, test
     """Validate sandbox instances start and become ready"""
     print(f"{colors.BLUE}[INFO] Validating sandbox instances start and become ready...{colors.NC}")
     
-    # Wait for SandboxTemplate to be created
+    # Wait for Sandbox Resource to be created (Direct Provisioning Model)
+    # Note: We no longer check for SandboxTemplate or SandboxWarmPool as we switched to direct Sandbox
     timeout = 120
     elapsed = 0
     
-    print(f"{colors.BLUE}[INFO] Waiting for SandboxTemplate to be created...{colors.NC}")
+    print(f"{colors.BLUE}[INFO] Waiting for Sandbox resource to be created...{colors.NC}")
     while elapsed < timeout:
         try:
             subprocess.run([
-                "kubectl", "get", "sandboxtemplate", e2e_test_config['claim_name'], "-n", tenant_config['namespace']
+                "kubectl", "get", "sandbox", e2e_test_config['claim_name'], "-n", tenant_config['namespace']
             ], capture_output=True, text=True, check=True)
-            print(f"{colors.GREEN}[SUCCESS] SandboxTemplate created{colors.NC}")
+            print(f"{colors.GREEN}[SUCCESS] Sandbox resource created{colors.NC}")
             break
         except subprocess.CalledProcessError:
             pass
@@ -189,30 +191,9 @@ def test_validate_sandbox_readiness(colors, e2e_test_config, tenant_config, test
         elapsed += 5
     
     if elapsed >= timeout:
-        print(f"{colors.RED}[ERROR] SandboxTemplate not created{colors.NC}")
+        print(f"{colors.RED}[ERROR] Sandbox resource not created{colors.NC}")
         test_counters.errors += 1
-        pytest.fail("SandboxTemplate not created")
-    
-    # Wait for SandboxWarmPool to be created
-    elapsed = 0
-    print(f"{colors.BLUE}[INFO] Waiting for SandboxWarmPool to be created...{colors.NC}")
-    while elapsed < timeout:
-        try:
-            subprocess.run([
-                "kubectl", "get", "sandboxwarmpool", e2e_test_config['claim_name'], "-n", tenant_config['namespace']
-            ], capture_output=True, text=True, check=True)
-            print(f"{colors.GREEN}[SUCCESS] SandboxWarmPool created{colors.NC}")
-            break
-        except subprocess.CalledProcessError:
-            pass
-        
-        time.sleep(5)
-        elapsed += 5
-    
-    if elapsed >= timeout:
-        print(f"{colors.RED}[ERROR] SandboxWarmPool not created{colors.NC}")
-        test_counters.errors += 1
-        pytest.fail("SandboxWarmPool not created")
+        pytest.fail("Sandbox resource not created")
     
     # Wait for at least one sandbox pod to be running
     print(f"{colors.BLUE}[INFO] Waiting for sandbox pods to start...{colors.NC}")
@@ -241,9 +222,13 @@ def test_validate_sandbox_readiness(colors, e2e_test_config, tenant_config, test
     
     print(f"{colors.RED}[ERROR] No sandbox pods became ready within timeout{colors.NC}")
     try:
+        # Debug info
         subprocess.run([
             "kubectl", "get", "pods", "-n", tenant_config['namespace'],
             "-l", f"app.kubernetes.io/name={e2e_test_config['claim_name']}"
+        ], check=False)
+        subprocess.run([
+            "kubectl", "describe", "sandbox", e2e_test_config['claim_name'], "-n", tenant_config['namespace']
         ], check=False)
     except:
         pass
@@ -559,6 +544,256 @@ spec:
         print(f"{colors.RED}[ERROR] Failed to create or run HTTP test pod{colors.NC}")
         test_counters.errors += 1
         pytest.fail("Failed to create or run HTTP test pod")
+
+
+def test_headless_service_validation(colors, e2e_test_config, tenant_config, test_counters, cleanup_e2e_claim):
+    """Test Headless Service existence for stable network identity"""
+    print(f"{colors.BLUE}[INFO] Testing Headless Service existence for stable network identity...{colors.NC}")
+    
+    # Check if Headless Service exists
+    # Note: The Sandbox controller creates a service with the same name as the Sandbox
+    headless_service_name = e2e_test_config['claim_name']
+    try:
+        result = subprocess.run([
+            "kubectl", "get", "service", headless_service_name, "-n", tenant_config['namespace'],
+            "-o", "jsonpath={.spec.clusterIP}"
+        ], capture_output=True, text=True, check=True)
+        cluster_ip = result.stdout.strip()
+        
+        if cluster_ip == "None":
+            print(f"{colors.GREEN}[SUCCESS] Headless Service '{headless_service_name}' exists with ClusterIP: None{colors.NC}")
+        else:
+            print(f"{colors.RED}[ERROR] Service '{headless_service_name}' is not headless. ClusterIP: {cluster_ip}{colors.NC}")
+            test_counters.errors += 1
+            pytest.fail(f"Service '{headless_service_name}' is not headless")
+    except subprocess.CalledProcessError:
+        print(f"{colors.RED}[ERROR] Headless service {headless_service_name} not found{colors.NC}")
+        test_counters.errors += 1
+        pytest.fail(f"Headless service {headless_service_name} not found")
+    
+    # Note: The Core Sandbox controller manages the selector using an internal hash.
+    # We skip validating the selector JSON and rely on DNS resolution test instead.
+    print(f"{colors.BLUE}[INFO] Skipping selector validation (managed by controller), proceeding to DNS check.{colors.NC}")
+
+
+def test_dns_resolution_validation(colors, e2e_test_config, tenant_config, test_counters, cleanup_e2e_claim):
+    """Test DNS resolution for stable network identity"""
+    print(f"{colors.BLUE}[INFO] Testing DNS resolution for stable network identity...{colors.NC}")
+    
+    # Construct DNS target
+    dns_target = f"{e2e_test_config['claim_name']}.{tenant_config['namespace']}.svc.cluster.local"
+    print(f"{colors.BLUE}[INFO] Testing DNS resolution for: {dns_target}{colors.NC}")
+    
+    # Create DNS test pod
+    dns_test_pod_name = f"dns-test-{int(time.time())}"
+    dns_test_yaml = f"""apiVersion: v1
+kind: Pod
+metadata:
+  name: {dns_test_pod_name}
+  namespace: {tenant_config['namespace']}
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+  - name: nslookup
+    image: busybox:1.36
+    command: ["sh", "-c"]
+    args: ["nslookup {dns_target} && echo 'DNS_RESOLUTION_SUCCESS'"]
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      seccompProfile:
+        type: RuntimeDefault
+"""
+    
+    try:
+        # Create DNS test pod
+        subprocess.run([
+            "kubectl", "apply", "-f", "-"
+        ], input=dns_test_yaml, text=True, capture_output=True, check=True)
+        
+        # Wait for pod to complete
+        timeout = 60
+        elapsed = 0
+        
+        while elapsed < timeout:
+            try:
+                result = subprocess.run([
+                    "kubectl", "get", "pod", dns_test_pod_name, "-n", tenant_config['namespace'],
+                    "-o", "jsonpath={.status.phase}"
+                ], capture_output=True, text=True, check=True)
+                pod_phase = result.stdout.strip()
+                
+                if pod_phase in ["Succeeded", "Failed"]:
+                    break
+            except subprocess.CalledProcessError:
+                pass
+            
+            time.sleep(2)
+            elapsed += 2
+        
+        # Get DNS test result
+        try:
+            result = subprocess.run([
+                "kubectl", "logs", dns_test_pod_name, "-n", tenant_config['namespace']
+            ], capture_output=True, text=True, check=True)
+            dns_output = result.stdout.strip()
+        except subprocess.CalledProcessError:
+            dns_output = "NO_LOGS"
+        
+        # Clean up DNS test pod
+        subprocess.run([
+            "kubectl", "delete", "pod", dns_test_pod_name, "-n", tenant_config['namespace'], "--ignore-not-found=true"
+        ], capture_output=True, text=True, check=False)
+        
+        # Evaluate DNS resolution result
+        if "DNS_RESOLUTION_SUCCESS" in dns_output:
+            print(f"{colors.GREEN}[SUCCESS] DNS resolution successful for {dns_target}{colors.NC}")
+        else:
+            print(f"{colors.RED}[ERROR] DNS resolution failed for {dns_target}{colors.NC}")
+            print(f"{colors.RED}[ERROR] DNS output: {dns_output}{colors.NC}")
+            test_counters.errors += 1
+            pytest.fail(f"DNS resolution failed for {dns_target}")
+            
+    except subprocess.CalledProcessError:
+        print(f"{colors.RED}[ERROR] Failed to create or run DNS test pod{colors.NC}")
+        test_counters.errors += 1
+        pytest.fail("Failed to create or run DNS test pod")
+
+
+def test_pod_ip_resolution_validation(colors, e2e_test_config, tenant_config, test_counters, cleanup_e2e_claim):
+    """Test that DNS resolves directly to Pod IP"""
+    print(f"{colors.BLUE}[INFO] Testing that DNS resolves directly to Pod IP...{colors.NC}")
+    
+    # Get running sandbox pod IP
+    try:
+        result = subprocess.run([
+            "kubectl", "get", "pods", "-n", tenant_config['namespace'],
+            "-l", f"app.kubernetes.io/name={e2e_test_config['claim_name']}",
+            "--field-selector=status.phase=Running",
+            "-o", "jsonpath={.items[0].status.podIP}"
+        ], capture_output=True, text=True, check=True)
+        pod_ip = result.stdout.strip()
+        
+        if not pod_ip:
+            print(f"{colors.RED}[ERROR] No running sandbox pod IP found{colors.NC}")
+            # Add debugging info
+            print(f"{colors.YELLOW}[DEBUG] Current Pod Status:{colors.NC}")
+            subprocess.run([
+                "kubectl", "get", "pods", "-n", tenant_config['namespace'],
+                "-l", f"app.kubernetes.io/name={e2e_test_config['claim_name']}"
+            ])
+            test_counters.errors += 1
+            pytest.fail("No running sandbox pod IP found")
+        
+        print(f"{colors.BLUE}[INFO] Sandbox pod IP: {pod_ip}{colors.NC}")
+    except subprocess.CalledProcessError:
+        print(f"{colors.RED}[ERROR] Could not get sandbox pod IP{colors.NC}")
+        # Add debugging info
+        print(f"{colors.YELLOW}[DEBUG] Current Pod Status:{colors.NC}")
+        subprocess.run([
+            "kubectl", "get", "pods", "-n", tenant_config['namespace'],
+            "-l", f"app.kubernetes.io/name={e2e_test_config['claim_name']}"
+        ])
+        test_counters.errors += 1
+        pytest.fail("Could not get sandbox pod IP")
+    
+    # Test DNS resolution to Pod IP
+    dns_target = f"{e2e_test_config['claim_name']}.{tenant_config['namespace']}.svc.cluster.local"
+    ip_test_pod_name = f"ip-test-{int(time.time())}"
+    
+    ip_test_yaml = f"""apiVersion: v1
+kind: Pod
+metadata:
+  name: {ip_test_pod_name}
+  namespace: {tenant_config['namespace']}
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+  - name: dig
+    image: busybox:1.36
+    command: ["sh", "-c"]
+    args: ["nslookup {dns_target} | grep 'Address:' | tail -1 | awk '{{print $2}}' > /tmp/resolved_ip && cat /tmp/resolved_ip"]
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      seccompProfile:
+        type: RuntimeDefault
+"""
+    
+    try:
+        # Create IP resolution test pod
+        subprocess.run([
+            "kubectl", "apply", "-f", "-"
+        ], input=ip_test_yaml, text=True, capture_output=True, check=True)
+        
+        # Wait for pod to complete
+        timeout = 60
+        elapsed = 0
+        
+        while elapsed < timeout:
+            try:
+                result = subprocess.run([
+                    "kubectl", "get", "pod", ip_test_pod_name, "-n", tenant_config['namespace'],
+                    "-o", "jsonpath={.status.phase}"
+                ], capture_output=True, text=True, check=True)
+                pod_phase = result.stdout.strip()
+                
+                if pod_phase in ["Succeeded", "Failed"]:
+                    break
+            except subprocess.CalledProcessError:
+                pass
+            
+            time.sleep(2)
+            elapsed += 2
+        
+        # Get resolved IP
+        try:
+            result = subprocess.run([
+                "kubectl", "logs", ip_test_pod_name, "-n", tenant_config['namespace']
+            ], capture_output=True, text=True, check=True)
+            resolved_ip = result.stdout.strip()
+        except subprocess.CalledProcessError:
+            resolved_ip = "NO_LOGS"
+        
+        # Clean up IP test pod
+        subprocess.run([
+            "kubectl", "delete", "pod", ip_test_pod_name, "-n", tenant_config['namespace'], "--ignore-not-found=true"
+        ], capture_output=True, text=True, check=False)
+        
+        # Compare resolved IP with actual pod IP
+        if resolved_ip == pod_ip:
+            print(f"{colors.GREEN}[SUCCESS] DNS resolves directly to Pod IP: {resolved_ip}{colors.NC}")
+        else:
+            print(f"{colors.RED}[ERROR] DNS resolution mismatch. Expected: {pod_ip}, Resolved: {resolved_ip}{colors.NC}")
+            test_counters.errors += 1
+            pytest.fail(f"DNS resolution mismatch. Expected: {pod_ip}, Resolved: {resolved_ip}")
+            
+    except subprocess.CalledProcessError:
+        print(f"{colors.RED}[ERROR] Failed to create or run IP resolution test pod{colors.NC}")
+        test_counters.errors += 1
+        pytest.fail("Failed to create or run IP resolution test pod")
 
 
 def test_validate_api_parity(colors, e2e_test_config, tenant_config, test_counters, cleanup_e2e_claim):
