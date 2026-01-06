@@ -85,10 +85,10 @@ spec:
                   spec:
                     serviceAccountName: placeholder
                     securityContext:
-                      runAsNonRoot: true
-                      runAsUser: 1000
-                      runAsGroup: 1000
-                      fsGroup: 1000
+                      runAsNonRoot: false
+                      runAsUser: 0
+                      runAsGroup: 0
+                      fsGroup: 0
                       seccompProfile:
                         type: RuntimeDefault
                     initContainers:
@@ -129,12 +129,9 @@ spec:
                           - name: workspace
                             mountPath: /workspace
                         securityContext:
-                          runAsNonRoot: true
-                          runAsUser: 1000
-                          allowPrivilegeEscalation: false
-                          capabilities:
-                            drop:
-                              - ALL
+                          runAsNonRoot: false
+                          runAsUser: 0
+                          allowPrivilegeEscalation: true
                           seccompProfile:
                             type: RuntimeDefault
                     containers:
@@ -188,12 +185,9 @@ spec:
                             cpu: "2000m"
                             memory: "4Gi"
                         securityContext:
-                          runAsNonRoot: true
-                          runAsUser: 1000
-                          allowPrivilegeEscalation: false
-                          capabilities:
-                            drop:
-                              - ALL
+                          runAsNonRoot: false
+                          runAsUser: 0
+                          allowPrivilegeEscalation: true
                           seccompProfile:
                             type: RuntimeDefault
                         livenessProbe:
@@ -267,12 +261,9 @@ spec:
                             cpu: "200m"
                             memory: "512Mi"
                         securityContext:
-                          runAsNonRoot: true
-                          runAsUser: 1000
-                          allowPrivilegeEscalation: false
-                          capabilities:
-                            drop:
-                              - ALL
+                          runAsNonRoot: false
+                          runAsUser: 0
+                          allowPrivilegeEscalation: true
                           seccompProfile:
                             type: RuntimeDefault
                         volumeMounts:
@@ -518,6 +509,7 @@ spec:
         spec:
           providerConfigRef:
             name: kubernetes-provider
+          deletionPolicy: Delete
           forProvider:
             manifest:
               apiVersion: v1
@@ -722,8 +714,8 @@ spec:
                   apiVersion: extensions.agents.x-k8s.io/v1alpha1
                   kind: SandboxWarmPool
                   name: placeholder
-                minReplicaCount: 1
-                maxReplicaCount: 10
+                minReplicaCount: 0
+                maxReplicaCount: 1
                 cooldownPeriod: 30
                 pollingInterval: 5
                 triggers:
