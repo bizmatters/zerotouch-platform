@@ -42,9 +42,9 @@ class TestContainerValidation:
         test_data = "sidecar-backup-test-data"
         workspace_manager(test_claim_name, namespace, "backup-test.txt", test_data)
         
-        # Step 2: Wait for sidecar backup cycle (5 minutes)
-        print(f"{colors.YELLOW}⏳ Waiting 5 minutes for sidecar backup cycle...{colors.NC}")
-        time.sleep(300)
+        # Step 2: Wait for sidecar backup cycle (1 minute)
+        print(f"{colors.YELLOW}⏳ Waiting 1 minute for sidecar backup cycle...{colors.NC}")
+        time.sleep(60)
         
         # Step 3: Validate data exists in S3 (sidecar uploaded it)
         s3_data = workspace_manager.read_s3(test_claim_name, namespace, "backup-test.txt")
