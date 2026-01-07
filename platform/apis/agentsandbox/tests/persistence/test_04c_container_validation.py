@@ -11,76 +11,66 @@ import time
 
 class TestContainerValidation:
 
-    def test_initcontainer_s3_hydration(self, ready_claim_manager, k8s, colors):
+    def test_initcontainer_s3_hydration(self, ready_claim_manager, workspace_manager, k8s, colors):
         """Test: InitContainer for S3 workspace hydration"""
-        test_claim_name = "test-container-validation"
+        test_claim_name = "test-s3-hydration"
+        namespace = "intelligence-deepagents"
         print(f"{colors.BLUE}Testing InitContainer S3 Hydration{colors.NC}")
         
-        # Create claim and get pod using fixture
-        pod_name = ready_claim_manager(test_claim_name, "CONTAINER_VALIDATION_STREAM")
+        # Step 1: Pre-populate S3 with test data (simulate existing workspace)
+        test_data = "s3-hydration-test-data"
+        workspace_manager.write_s3(test_claim_name, namespace, "hydration-test.txt", test_data)
         
-        # Validate InitContainer configuration using k8s fixture
-        pod_data = k8s.get_json(["get", "pod", pod_name, "-n", "intelligence-deepagents"])
+        # Step 2: Create claim - InitContainer should download from S3
+        pod_name = ready_claim_manager(test_claim_name, "S3_HYDRATION_STREAM")
         
-        # Check InitContainer exists
-        init_containers = pod_data.get("spec", {}).get("initContainers", [])
-        assert len(init_containers) > 0, "No InitContainers found"
+        # Step 3: Validate InitContainer downloaded S3 data to workspace
+        actual_data = workspace_manager.read(test_claim_name, namespace, "hydration-test.txt")
+        assert actual_data == test_data, f"S3 hydration failed. Expected: {test_data}, Got: {actual_data}"
         
-        # Find workspace-hydrator InitContainer
-        hydrator = next((c for c in init_containers if c["name"] == "workspace-hydrator"), None)
-        assert hydrator is not None, "workspace-hydrator InitContainer not found"
-        
-        # Validate InitContainer image and command
-        assert "aws-cli" in hydrator["image"], f"Expected aws-cli image, got {hydrator['image']}"
-        assert any("aws s3" in str(cmd) for cmd in hydrator.get("command", [])), "No S3 commands found"
-        
-        print(f"{colors.GREEN}✓ InitContainer workspace-hydrator configured correctly{colors.NC}")
+        print(f"{colors.GREEN}✓ InitContainer S3 hydration validated: {test_data}{colors.NC}")
 
-    def test_sidecar_backup_container(self, ready_claim_manager, k8s, colors):
+    def test_sidecar_backup_container(self, ready_claim_manager, workspace_manager, colors):
         """Test: Sidecar container for continuous workspace backup"""
         test_claim_name = "test-sidecar-backup"
+        namespace = "intelligence-deepagents"
         print(f"{colors.BLUE}Testing Sidecar Backup Container{colors.NC}")
         
-        # Create claim and get pod using fixture
+        # Step 1: Create claim and write data to workspace
         pod_name = ready_claim_manager(test_claim_name, "SIDECAR_BACKUP_STREAM")
+        test_data = "sidecar-backup-test-data"
+        workspace_manager(test_claim_name, namespace, "backup-test.txt", test_data)
         
-        # Validate sidecar container using k8s fixture
-        pod_data = k8s.get_json(["get", "pod", pod_name, "-n", "intelligence-deepagents"])
+        # Step 2: Wait for sidecar backup cycle (5 minutes)
+        print(f"{colors.YELLOW}⏳ Waiting 5 minutes for sidecar backup cycle...{colors.NC}")
+        time.sleep(300)
         
-        # Check containers
-        containers = pod_data.get("spec", {}).get("containers", [])
-        assert len(containers) >= 2, "Expected at least 2 containers (main + sidecar)"
+        # Step 3: Validate data exists in S3 (sidecar uploaded it)
+        s3_data = workspace_manager.read_s3(test_claim_name, namespace, "backup-test.txt")
+        assert s3_data == test_data, f"Sidecar backup failed. Expected: {test_data}, Got: {s3_data}"
         
-        # Find backup sidecar
-        backup_sidecar = next((c for c in containers if "backup" in c["name"]), None)
-        assert backup_sidecar is not None, "Backup sidecar container not found"
-        
-        # Validate sidecar configuration
-        assert "aws-cli" in backup_sidecar["image"], f"Expected aws-cli image, got {backup_sidecar['image']}"
-        
-        print(f"{colors.GREEN}✓ Sidecar backup container configured correctly{colors.NC}")
+        print(f"{colors.GREEN}✓ Sidecar backup container validated: {test_data}{colors.NC}")
 
-    def test_prestop_hook_validation(self, ready_claim_manager, k8s, colors):
+    def test_prestop_hook_validation(self, ready_claim_manager, workspace_manager, k8s, colors):
         """Test: PreStop hook for graceful shutdown"""
         test_claim_name = "test-prestop-hook"
+        namespace = "intelligence-deepagents"
         print(f"{colors.BLUE}Testing PreStop Hook Configuration{colors.NC}")
         
-        # Create claim and get pod using fixture
+        # Step 1: Create claim and write data
         pod_name = ready_claim_manager(test_claim_name, "PRESTOP_HOOK_STREAM")
+        test_data = "prestop-final-sync-data"
+        workspace_manager(test_claim_name, namespace, "final-sync.txt", test_data)
         
-        # Validate preStop hook using k8s fixture
-        pod_data = k8s.get_json(["get", "pod", pod_name, "-n", "intelligence-deepagents"])
+        # Step 2: Delete pod to trigger preStop hook
+        print(f"{colors.YELLOW}⚠️ Deleting pod to trigger preStop hook...{colors.NC}")
+        k8s.delete_pod(pod_name, wait=True)
         
-        # Find main container
-        containers = pod_data.get("spec", {}).get("containers", [])
-        main_container = next((c for c in containers if c["name"] == "main"), None)
-        assert main_container is not None, "Main container not found"
+        # Step 3: Wait for preStop hook to complete
+        time.sleep(30)
         
-        # Check preStop hook
-        lifecycle = main_container.get("lifecycle", {})
-        prestop = lifecycle.get("preStop", {})
+        # Step 4: Validate preStop hook synced data to S3
+        s3_data = workspace_manager.read_s3(test_claim_name, namespace, "final-sync.txt")
+        assert s3_data == test_data, f"PreStop hook sync failed. Expected: {test_data}, Got: {s3_data}"
         
-        if prestop:
-            print(f"{colors.GREEN}✓ PreStop hook configured{colors.NC}")
-        else:
-            print(f"{colors.YELLOW}⚠️ PreStop hook not configured (optional){colors.NC}")
+        print(f"{colors.GREEN}✓ PreStop hook validated: {test_data}{colors.NC}")

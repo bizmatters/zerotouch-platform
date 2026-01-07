@@ -78,6 +78,8 @@ spec:
                               echo "No existing workspace backup found, starting with empty workspace"
                             fi
                         env:
+                          - name: S3_BUCKET
+                            value: "zerotouch-workspaces"
                           - name: SANDBOX_NAME
                             value: placeholder
                         envFrom:
@@ -116,6 +118,8 @@ spec:
                             value: "service.name=placeholder,service.version=v1alpha1,deployment.environment=production"
                           - name: SANDBOX_NAME
                             value: placeholder
+                          - name: S3_BUCKET
+                            value: "zerotouch-workspaces"
                         envFrom:
                           - secretRef:
                               name: aws-access-token
@@ -202,6 +206,8 @@ spec:
                               fi
                             done
                         env:
+                          - name: S3_BUCKET
+                            value: "zerotouch-workspaces"
                           - name: SANDBOX_NAME
                             value: placeholder
                         envFrom:
@@ -428,13 +434,13 @@ spec:
         # SANDBOX_NAME Env Var Patches (For S3 Key)
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
-          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.initContainers[0].env[0].value
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.initContainers[0].env[1].value
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
-          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[1].env[0].value
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[1].env[1].value
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
-          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].env[7].value
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].env[8].value
       readinessChecks:
         - type: MatchCondition
           matchCondition:

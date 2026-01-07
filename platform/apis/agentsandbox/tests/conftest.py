@@ -666,8 +666,56 @@ def workspace_manager(k8s):
             print(f"{Colors.YELLOW}⚠️  File /workspace/{filename} not found{Colors.NC}")
             return None
     
+    def _read_s3_data(claim_name: str, namespace: str, filename: str) -> Optional[str]:
+        """Read data directly from S3 bucket to validate backup/restore"""
+        try:
+            s3_key = f"{namespace}/{claim_name}/{filename}"
+            
+            # Get admin AWS credentials from local environment
+            import os
+            admin_access_key = os.getenv('AWS_ADMIN_ACCESS_KEY_ID') or os.getenv('AWS_ACCESS_KEY_ID')
+            admin_secret_key = os.getenv('AWS_ADMIN_SECRET_ACCESS_KEY') or os.getenv('AWS_SECRET_ACCESS_KEY')
+            
+            if not admin_access_key or not admin_secret_key:
+                print(f"{Colors.YELLOW}⚠️  AWS credentials not found in environment{Colors.NC}")
+                return None
+            
+            # Use the sidecar container which has AWS CLI installed, but with admin credentials
+            pod_name = claim_name  # AgentSandboxService pod name matches claim name
+            
+            # Read from S3 using AWS CLI in sidecar container with admin credentials override
+            s3_result = k8s.run([
+                "exec", pod_name, "-n", namespace, "-c", "workspace-backup", "--",
+                "sh", "-c", f"AWS_ACCESS_KEY_ID='{admin_access_key}' AWS_SECRET_ACCESS_KEY='{admin_secret_key}' AWS_DEFAULT_REGION='ap-south-1' aws s3 cp s3://zerotouch-workspaces/{s3_key} -"
+            ])
+            content = s3_result.stdout.strip()
+            print(f"{Colors.GREEN}✓ Read S3 data from s3://zerotouch-workspaces/{s3_key}: {content}{Colors.NC}")
+            return content
+        except subprocess.CalledProcessError:
+            print(f"{Colors.YELLOW}⚠️  S3 file s3://zerotouch-workspaces/{namespace}/{claim_name}/{filename} not found{Colors.NC}")
+            return None
+    
+    def _write_s3_data(claim_name: str, namespace: str, filename: str, content: str):
+        """Write data directly to S3 bucket for test setup"""
+        try:
+            s3_key = f"{namespace}/{claim_name}/{filename}"
+            
+            # Use local AWS CLI directly (uses ~/.aws/credentials)
+            import subprocess
+            result = subprocess.run([
+                "aws", "s3", "cp", "-", f"s3://zerotouch-workspaces/{s3_key}"
+            ], input=content, text=True, capture_output=True, check=True)
+            
+            print(f"{Colors.GREEN}✓ Written S3 data to s3://zerotouch-workspaces/{s3_key}: {content}{Colors.NC}")
+            return content
+        except subprocess.CalledProcessError as e:
+            print(f"{Colors.YELLOW}⚠️  Failed to write S3 data: {e}{Colors.NC}")
+            return None
+    
     # Attach methods
     _write_data.read = _read_data
+    _write_data.read_s3 = _read_s3_data
+    _write_data.write_s3 = _write_s3_data
     
     return _write_data
 
