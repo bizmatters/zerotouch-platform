@@ -620,6 +620,9 @@ def ready_claim_manager(claim_manager, nats_stream, nats_publisher, k8s):
         # Use existing nats_publisher to trigger KEDA scaling FIRST
         nats_publisher(stream_name, "trigger", f"test-message-{name}")
         
+        # Wait for KEDA to process the message and scale up (similar to nats_publisher fixture)
+        time.sleep(10)  # Give KEDA more time to scale up before PVC binding
+        
         # Wait for PVC to be bound (now pod will be scheduled due to KEDA)
         k8s.wait_for_pvc_bound(f"{name}-workspace", namespace)
         print(f"{Colors.GREEN}✓ PVC {name}-workspace bound and ready{Colors.NC}")
