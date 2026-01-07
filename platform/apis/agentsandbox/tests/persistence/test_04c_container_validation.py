@@ -17,9 +17,10 @@ class TestContainerValidation:
         namespace = "intelligence-deepagents"
         print(f"{colors.BLUE}Testing InitContainer S3 Hydration{colors.NC}")
         
-        # Step 1: Pre-populate S3 with test data (simulate existing workspace)
+        # Step 1: Pre-populate S3 with test data in the format InitContainer expects
         test_data = "s3-hydration-test-data"
-        workspace_manager.write_s3(test_claim_name, namespace, "hydration-test.txt", test_data)
+        test_files = {"hydration-test.txt": test_data}
+        workspace_manager.write_s3(test_claim_name, namespace, "workspace.tar.gz", test_files)
         
         # Step 2: Create claim - InitContainer should download from S3
         pod_name = ready_claim_manager(test_claim_name, "S3_HYDRATION_STREAM")

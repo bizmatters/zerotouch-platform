@@ -65,8 +65,8 @@ spec:
                             set -e
                             echo "Starting workspace hydration from S3..."
                             
-                            # Install tar (AWS CLI container is based on Alpine)
-                            apk add --no-cache tar
+                            # Install tar (AWS CLI container is based on Amazon Linux)
+                            yum install -y tar gzip
                             
                             mkdir -p /workspace
                             

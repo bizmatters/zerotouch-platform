@@ -695,19 +695,39 @@ def workspace_manager(k8s):
             print(f"{Colors.YELLOW}⚠️  S3 file s3://zerotouch-workspaces/{namespace}/{claim_name}/{filename} not found{Colors.NC}")
             return None
     
-    def _write_s3_data(claim_name: str, namespace: str, filename: str, content: str):
-        """Write data directly to S3 bucket for test setup"""
+    def _write_s3_data(claim_name: str, namespace: str, filename: str, content):
+        """Write data to S3 as workspace.tar.gz backup for InitContainer hydration"""
         try:
-            s3_key = f"{namespace}/{claim_name}/{filename}"
-            
-            # Use local AWS CLI directly (uses ~/.aws/credentials)
             import subprocess
-            result = subprocess.run([
-                "aws", "s3", "cp", "-", f"s3://zerotouch-workspaces/{s3_key}"
-            ], input=content, text=True, capture_output=True, check=True)
+            import tempfile
+            import tarfile
+            import os
             
-            print(f"{Colors.GREEN}✓ Written S3 data to s3://zerotouch-workspaces/{s3_key}: {content}{Colors.NC}")
-            return content
+            # content should be a dict of files for tar.gz creation
+            if not isinstance(content, dict):
+                raise ValueError("content must be a dict of {filename: file_content}")
+            
+            with tempfile.TemporaryDirectory() as temp_dir:
+                # Create tar.gz with test files
+                tar_path = os.path.join(temp_dir, "workspace.tar.gz")
+                with tarfile.open(tar_path, "w:gz") as tar:
+                    for file_name, file_content in content.items():
+                        # Create temp file with content
+                        temp_file_path = os.path.join(temp_dir, file_name)
+                        with open(temp_file_path, 'w') as f:
+                            f.write(file_content)
+                        # Add to tar with correct arcname
+                        tar.add(temp_file_path, arcname=file_name)
+                
+                # Upload tar.gz to S3 in InitContainer expected format
+                s3_key = f"workspaces/{claim_name}/workspace.tar.gz"
+                result = subprocess.run([
+                    "aws", "s3", "cp", tar_path, f"s3://zerotouch-workspaces/{s3_key}",
+                    "--profile", "zerotouch-platform-admin"
+                ], capture_output=True, text=True, check=True)
+                
+                print(f"{Colors.GREEN}✓ Pre-populated S3 with workspace backup: {s3_key}{Colors.NC}")
+                return s3_key
         except subprocess.CalledProcessError as e:
             print(f"{Colors.YELLOW}⚠️  Failed to write S3 data: {e}{Colors.NC}")
             return None
