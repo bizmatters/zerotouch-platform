@@ -398,10 +398,10 @@ spec:
         start_time = time.time()
         while time.time() - start_time < timeout:
             try:
-                k8s.run(["get", "sandbox", name, "-n", namespace])
+                k8s.run(["get", "agentsandboxservice", name, "-n", namespace])
                 time.sleep(2)
             except subprocess.CalledProcessError:
-                print(f"{Colors.GREEN}✓ Sandbox {name} cleaned up{Colors.NC}")
+                print(f"{Colors.GREEN}✓ Claim {name} cleaned up{Colors.NC}")
                 return True
         return False
     
@@ -411,7 +411,7 @@ spec:
     
     yield _create_claim
     
-    # Cleanup all created claims - COMMENTED OUT FOR DEBUGGING
+    # # Cleanup all created claims (enable after testing complete)
     # for name, namespace in created_claims:
     #     try:
     #         _delete_claim(name, namespace)
@@ -424,6 +424,38 @@ spec:
         shutil.rmtree(temp_dir)
     except:
         pass
+
+
+@pytest.fixture
+def ready_claim_manager(claim_manager, nats_stream, nats_publisher, k8s):
+    """Complete claim setup: create → NATS stream → trigger → pod ready"""
+    def _create_ready_claim(name: str, namespace: str, **kwargs):
+        """Create claim and ensure pod is ready for testing"""
+        # Use existing claim_manager to create claim
+        claim_manager(name, namespace, **kwargs)
+        
+        # Use existing nats_stream fixture to ensure stream exists
+        stream_name = kwargs.get('nats_stream', 'TEST_STREAM')
+        nats_stream(stream_name)
+        
+        # Wait for claim infrastructure to be ready
+        k8s.wait_for_condition("agentsandboxservice", name, namespace, "Ready")
+        print(f"{Colors.GREEN}✓ Claim {name} infrastructure ready{Colors.NC}")
+        
+        # Use existing nats_publisher to trigger KEDA scaling
+        nats_publisher(stream_name, "trigger", f"test-message-{name}")
+        
+        # Use existing k8s.wait_for_pod to wait for pod readiness
+        pod_name = k8s.wait_for_pod(namespace, f"app.kubernetes.io/name={name}")
+        print(f"{Colors.GREEN}✓ Pod {pod_name} ready for testing{Colors.NC}")
+        
+        return pod_name
+    
+    # Reuse claim_manager's delete and cleanup methods
+    _create_ready_claim.delete = claim_manager.delete
+    _create_ready_claim.wait_cleanup = claim_manager.wait_cleanup
+    
+    return _create_ready_claim
 
 
 @pytest.fixture
@@ -555,13 +587,25 @@ def ttl_manager(k8s):
         except subprocess.CalledProcessError:
             pass
         
-        try:
-            # Check PVC is deleted
-            k8s.run(["get", "pvc", f"{claim_name}-workspace", "-n", namespace])
-            return False  # PVC still exists
-        except subprocess.CalledProcessError:
-            print(f"{Colors.GREEN}✓ Cold State verified: Claim deleted, PVC wiped{Colors.NC}")
-            return True
+        # Wait for PVC to be completely deleted (not just Terminating)
+        timeout = 60
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            try:
+                result = k8s.run(["get", "pvc", f"{claim_name}-workspace", "-n", namespace], check=False)
+                if result.returncode != 0:
+                    # PVC not found - fully deleted
+                    print(f"{Colors.GREEN}✓ Cold State verified: Claim deleted, PVC wiped{Colors.NC}")
+                    return True
+                # PVC still exists (might be Terminating), wait more
+                time.sleep(2)
+            except Exception:
+                # PVC not found - fully deleted
+                print(f"{Colors.GREEN}✓ Cold State verified: Claim deleted, PVC wiped{Colors.NC}")
+                return True
+        
+        print(f"{Colors.YELLOW}⚠️  PVC still exists after {timeout}s timeout{Colors.NC}")
+        return False
     
     # Attach methods
     _set_last_active.get = _get_last_active
