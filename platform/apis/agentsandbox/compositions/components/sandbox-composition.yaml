@@ -198,6 +198,10 @@ spec:
                           - |
                             set -e
                             echo "Starting continuous workspace backup sidecar..."
+                            
+                            # Install tar (AWS CLI container is based on Amazon Linux)
+                            yum install -y tar gzip
+                            
                             while true; do
                               sleep 30
                               if [ -d /workspace ] && [ "$(ls -A /workspace 2>/dev/null)" ]; then
