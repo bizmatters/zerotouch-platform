@@ -82,6 +82,9 @@ class TestTTLControllerBehavior:
         # Simulate Gateway detecting missing claim and recreating it
         print(f"{colors.YELLOW}🚗 Simulating Gateway: 'Where's my agent? Let me recreate it...'{colors.NC}")
         
+        # Measure Cold Resume latency for production SLA validation
+        start_time = time.time()
+        
         # Gateway recreates the claim using ready_claim_manager (includes NATS setup)
         pod_name = ready_claim_manager(
             self.test_claim_name,
@@ -90,7 +93,13 @@ class TestTTLControllerBehavior:
             nats_consumer="cold-hibernation-consumer"
         )
         
+        resume_latency = time.time() - start_time
+        
+        # Assert Cold Resume meets production SLA (adjust threshold as needed)
+        assert resume_latency < 120, f"Cold Resume too slow: {resume_latency:.2f}s (SLA: <120s)"
+        
         print(f"{colors.GREEN}✓ Valet successfully recreated agent: {pod_name}{colors.NC}")
+        print(f"{colors.GREEN}✓ Cold Resume Latency: {resume_latency:.2f}s (within SLA){colors.NC}")
         print(f"{colors.GREEN}✓ Cold Resume complete - Agent restored from S3{colors.NC}")
 
     def test_05_cleanup(self, ready_claim_manager, colors):
