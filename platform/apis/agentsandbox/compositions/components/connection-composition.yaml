@@ -1,0 +1,91 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: agent-sandbox-connection
+  labels:
+    provider: kubernetes
+    crossplane.io/xrd: xagentsandboxconnections.platform.bizmatters.io
+spec:
+  compositeTypeRef:
+    apiVersion: platform.bizmatters.io/v1alpha1
+    kind: XAgentSandboxConnection
+
+  mode: Resources
+  publishConnectionDetailsWithStoreConfigRef:
+    name: default
+  resources:
+    # Resource 1: Connection Secret Generation
+    - name: connection-secret
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          providerConfigRef:
+            name: kubernetes-provider
+          forProvider:
+            manifest:
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: placeholder-conn
+                namespace: placeholder
+                labels:
+                  app.kubernetes.io/name: placeholder
+                  app.kubernetes.io/component: agent-sandbox
+                  app.kubernetes.io/managed-by: crossplane
+                  app.kubernetes.io/version: v1alpha1
+              type: Opaque
+              data:
+                SANDBOX_SERVICE_NAME: placeholder-base64
+                SANDBOX_HTTP_ENDPOINT: placeholder-base64
+                SANDBOX_NAMESPACE: placeholder-base64
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%s-conn"
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.labels[app.kubernetes.io/name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.data.SANDBOX_SERVICE_NAME
+          transforms:
+            - type: string
+              string:
+                type: Convert
+                convert: "ToBase64"
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.claimRef.name
+              - fromFieldPath: spec.claimRef.namespace
+            strategy: string
+            string:
+              fmt: "http://%s-http.%s.svc.cluster.local:8080"
+          toFieldPath: spec.forProvider.manifest.data.SANDBOX_HTTP_ENDPOINT
+          transforms:
+            - type: string
+              string:
+                type: Convert
+                convert: "ToBase64"
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.data.SANDBOX_NAMESPACE
+          transforms:
+            - type: string
+              string:
+                type: Convert
+                convert: "ToBase64"
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"

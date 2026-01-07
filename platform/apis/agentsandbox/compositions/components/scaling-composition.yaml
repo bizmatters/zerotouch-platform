@@ -1,0 +1,81 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: agentsandbox-scaling
+  labels:
+    provider: kubernetes
+    component: scaling
+    crossplane.io/xrd: xagentsandboxscalings.platform.bizmatters.io
+spec:
+  compositeTypeRef:
+    apiVersion: platform.bizmatters.io/v1alpha1
+    kind: XAgentSandboxScaling
+
+  mode: Resources
+  resources:
+    # KEDA ScaledObject (Targeting Sandbox directly)
+    - name: scaledobject
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          providerConfigRef:
+            name: kubernetes-provider
+          forProvider:
+            manifest:
+              apiVersion: keda.sh/v1alpha1
+              kind: ScaledObject
+              metadata:
+                name: placeholder-scaler
+                namespace: placeholder
+                labels:
+                  app.kubernetes.io/name: placeholder
+                  app.kubernetes.io/component: agent-sandbox
+                  app.kubernetes.io/managed-by: crossplane
+              spec:
+                scaleTargetRef:
+                  apiVersion: agents.x-k8s.io/v1alpha1
+                  kind: Sandbox
+                  name: placeholder
+                minReplicaCount: 0 # Enable Scale-to-Zero for Warm State
+                maxReplicaCount: 1 # Singleton
+                cooldownPeriod: 30
+                pollingInterval: 5
+                triggers:
+                  - type: nats-jetstream
+                    metadata:
+                      natsServerMonitoringEndpoint: "nats-headless.nats.svc.cluster.local:8222"
+                      account: "$G"
+                      stream: placeholder
+                      consumer: placeholder
+                      lagThreshold: "5"
+                      activationLagThreshold: "0"
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%s-scaler"
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.labels[app.kubernetes.io/name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.scaleTargetRef.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.nats.stream
+          toFieldPath: spec.forProvider.manifest.spec.triggers[0].metadata.stream
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.nats.consumer
+          toFieldPath: spec.forProvider.manifest.spec.triggers[0].metadata.consumer
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"

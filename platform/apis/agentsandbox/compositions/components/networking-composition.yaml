@@ -1,0 +1,97 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: agentsandbox-networking
+  labels:
+    provider: kubernetes
+    component: networking
+    crossplane.io/xrd: xagentsandboxnetworkings.platform.bizmatters.io
+spec:
+  compositeTypeRef:
+    apiVersion: platform.bizmatters.io/v1alpha1
+    kind: XAgentSandboxNetworking
+
+  mode: Resources
+  resources:
+    # HTTP Service (Load Balancer)
+    - name: http-service
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          providerConfigRef:
+            name: kubernetes-provider
+          forProvider:
+            manifest:
+              apiVersion: v1
+              kind: Service
+              metadata:
+                name: placeholder-http
+                namespace: placeholder
+                labels:
+                  app.kubernetes.io/name: placeholder
+                  app.kubernetes.io/component: agent-sandbox
+                  app.kubernetes.io/managed-by: crossplane
+                  app.kubernetes.io/version: v1alpha1
+                annotations:
+                  prometheus.io/scrape: "true"
+                  prometheus.io/port: "8080"
+                  prometheus.io/path: "/metrics"
+              spec:
+                type: ClusterIP
+                sessionAffinity: None
+                selector:
+                  app.kubernetes.io/name: placeholder
+                ports:
+                  - name: http
+                    port: 8080
+                    targetPort: 8080
+                    protocol: TCP
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.httpPort
+          toFieldPath: spec.forProvider.manifest.spec.ports[0].port
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.httpPort
+          toFieldPath: spec.forProvider.manifest.spec.ports[0].targetPort
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%s-http"
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.labels[app.kubernetes.io/name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.selector[app.kubernetes.io/name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.sessionAffinity
+          toFieldPath: spec.forProvider.manifest.spec.sessionAffinity
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.httpPort
+          toFieldPath: spec.forProvider.manifest.metadata.annotations[prometheus.io/port]
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%d"
+          policy:
+            fromFieldPath: Optional
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
