@@ -17,6 +17,7 @@ bootstrap/talos/nodes/cp01-main/config.yaml.*
 archived
 **.key
 __pycache__
+.pytest_cache
 
 # Tenant configuration cache
 .tenants-cache/
