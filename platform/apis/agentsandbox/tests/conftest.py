@@ -107,7 +107,9 @@ class KubectlUtility:
             args.extend(["--force", "--grace-period=0"])
         if wait:
             args.append("--wait=true")
-        KubectlUtility.run(args)
+        # Use longer timeout for pod deletion when waiting
+        timeout = 60 if wait else 15
+        KubectlUtility.run(args, timeout=timeout)
     
     @staticmethod
     def delete_pods_by_label(label: str, namespace: str = "intelligence-deepagents", force: bool = False):

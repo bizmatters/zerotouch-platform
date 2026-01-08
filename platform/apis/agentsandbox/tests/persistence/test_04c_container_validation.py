@@ -71,7 +71,7 @@ class TestContainerValidation:
         time.sleep(30)
         
         # Step 4: Validate preStop hook synced data to S3 (as workspace.tar.gz)
-        s3_data = workspace_manager.read_s3_tar(test_claim_name, namespace, "final-sync.txt")
+        s3_data = workspace_manager.read_s3(test_claim_name, namespace, "final-sync.txt")
         assert s3_data == test_data, f"PreStop hook sync failed. Expected: {test_data}, Got: {s3_data}"
         
         print(f"{colors.GREEN}✓ PreStop hook validated: {test_data}{colors.NC}")
