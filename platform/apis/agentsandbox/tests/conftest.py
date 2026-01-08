@@ -667,32 +667,43 @@ def workspace_manager(k8s):
             return None
     
     def _read_s3_data(claim_name: str, namespace: str, filename: str) -> Optional[str]:
-        """Read data directly from S3 bucket to validate backup/restore"""
+        """Read data from S3 workspace.tar.gz backup (for sidecar/prestop validation)"""
         try:
-            s3_key = f"{namespace}/{claim_name}/{filename}"
-            
-            # Get admin AWS credentials from local environment
+            import subprocess
+            import tempfile
+            import tarfile
             import os
-            admin_access_key = os.getenv('AWS_ADMIN_ACCESS_KEY_ID') or os.getenv('AWS_ACCESS_KEY_ID')
-            admin_secret_key = os.getenv('AWS_ADMIN_SECRET_ACCESS_KEY') or os.getenv('AWS_SECRET_ACCESS_KEY')
             
-            if not admin_access_key or not admin_secret_key:
-                print(f"{Colors.YELLOW}⚠️  AWS credentials not found in environment{Colors.NC}")
-                return None
-            
-            # Use the sidecar container which has AWS CLI installed, but with admin credentials
-            pod_name = claim_name  # AgentSandboxService pod name matches claim name
-            
-            # Read from S3 using AWS CLI in sidecar container with admin credentials override
-            s3_result = k8s.run([
-                "exec", pod_name, "-n", namespace, "-c", "workspace-backup", "--",
-                "sh", "-c", f"AWS_ACCESS_KEY_ID='{admin_access_key}' AWS_SECRET_ACCESS_KEY='{admin_secret_key}' AWS_DEFAULT_REGION='ap-south-1' aws s3 cp s3://zerotouch-workspaces/{s3_key} -"
-            ])
-            content = s3_result.stdout.strip()
-            print(f"{Colors.GREEN}✓ Read S3 data from s3://zerotouch-workspaces/{s3_key}: {content}{Colors.NC}")
-            return content
+            with tempfile.TemporaryDirectory() as temp_dir:
+                # Download workspace.tar.gz from S3
+                tar_path = os.path.join(temp_dir, "workspace.tar.gz")
+                result = subprocess.run([
+                    "aws", "s3", "cp", 
+                    f"s3://zerotouch-workspaces/workspaces/{claim_name}/workspace.tar.gz",
+                    tar_path,
+                    "--profile", "zerotouch-platform-admin"
+                ], capture_output=True, text=True, check=True)
+                
+                # Extract tar.gz and read the test file
+                extract_dir = os.path.join(temp_dir, "extracted")
+                os.makedirs(extract_dir)
+                
+                with tarfile.open(tar_path, "r:gz") as tar:
+                    tar.extractall(extract_dir)
+                
+                # Read the file content
+                test_file_path = os.path.join(extract_dir, filename)
+                if os.path.exists(test_file_path):
+                    with open(test_file_path, 'r') as f:
+                        content = f.read().strip()
+                    print(f"{Colors.GREEN}✓ Read data from S3 tar backup {filename}: {content}{Colors.NC}")
+                    return content
+                else:
+                    print(f"{Colors.YELLOW}⚠️  File {filename} not found in workspace.tar.gz backup{Colors.NC}")
+                    return None
+                    
         except subprocess.CalledProcessError:
-            print(f"{Colors.YELLOW}⚠️  S3 file s3://zerotouch-workspaces/{namespace}/{claim_name}/{filename} not found{Colors.NC}")
+            print(f"{Colors.YELLOW}⚠️  Could not download workspace.tar.gz from S3 for {claim_name}{Colors.NC}")
             return None
     
     def _write_s3_data(claim_name: str, namespace: str, filename: str, content):
