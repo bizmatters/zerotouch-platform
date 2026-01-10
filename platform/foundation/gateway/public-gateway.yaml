@@ -11,6 +11,12 @@ metadata:
     cert-manager.io/cluster-issuer: letsencrypt-production
 spec:
   gatewayClassName: cilium
+  infrastructure:
+    annotations:
+      # Hetzner LoadBalancer configuration for Zero-Touch provisioning
+      load-balancer.hetzner.cloud/location: fsn1
+      load-balancer.hetzner.cloud/use-private-ip: "false"
+      load-balancer.hetzner.cloud/name: "public-gateway"
   listeners:
     - name: http
       port: 80
