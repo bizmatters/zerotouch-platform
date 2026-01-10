@@ -107,6 +107,9 @@ while IFS='=' read -r key value || [ -n "$key" ]; do
             /zerotouch/prod/aws-access-key-id) env_var="AWS_ACCESS_KEY_ID" ;;
             /zerotouch/prod/aws-secret-access-key) env_var="AWS_SECRET_ACCESS_KEY" ;;
             /zerotouch/prod/aws-default-region) env_var="AWS_REGION" ;;
+            # Hetzner Cloud credentials for Public Gateway
+            /zerotouch/prod/hetzner/api-token) env_var="HETZNER_API_TOKEN" ;;
+            /zerotouch/prod/hetzner/dns-token) env_var="HETZNER_DNS_TOKEN" ;;
             # GitHub credentials - use BOT_GITHUB_USERNAME and BOT_GITHUB_TOKEN
             */github/username|*/ghcr/username) env_var="BOT_GITHUB_USERNAME" ;;
             */github/token|*/github/password|*/ghcr/password) env_var="BOT_GITHUB_TOKEN" ;;

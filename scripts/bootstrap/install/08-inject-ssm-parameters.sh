@@ -10,6 +10,7 @@
 #   /zerotouch/prod/service/secret=SecureValue
 #
 # Parameters are created as SecureString by default for security.
+# cd zerotouch-platform && set -a && source .env && set +a && /scripts/bootstrap/install/08-inject-ssm-parameters.sh
 
 set -e
 
