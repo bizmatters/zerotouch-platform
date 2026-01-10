@@ -15,15 +15,13 @@ spec:
       values: |
         provider: webhook
         extraArgs:
-          - --provider=webhook
+          - --source=gateway-httproute
           - --webhook-provider-url=http://localhost:8888
-        sources:
-          - gateway-httproute
         domainFilters:
           - nutgraf.in
         extraContainers:
-          - name: webhook
-            image: registry.k8s.io/external-dns/hetzner-webhook:v0.1.0
+          - name: hetzner-webhook
+            image: ghcr.io/mconfalonieri/external-dns-hetzner-webhook:v0.5.0
             args:
               - --port=8888
             env:
