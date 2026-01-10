@@ -14,20 +14,24 @@ spec:
     helm:
       values: |
         provider: webhook
-        webhook:
-          image:
-            repository: ghcr.io/germanbrew/external-dns-hetzner-webhook
-            tag: v1.0.0
+        extraArgs:
+          - --provider=webhook
+          - --webhook-provider-url=http://localhost:8888
         sources:
           - gateway-httproute
         domainFilters:
           - nutgraf.in
-        env:
-          - name: HETZNER_DNS_TOKEN
-            valueFrom:
-              secretKeyRef:
-                name: external-dns-hetzner
-                key: HETZNER_DNS_TOKEN
+        extraContainers:
+          - name: webhook
+            image: registry.k8s.io/external-dns/hetzner-webhook:v0.1.0
+            args:
+              - --port=8888
+            env:
+              - name: HETZNER_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: external-dns-hetzner
+                    key: HETZNER_DNS_TOKEN
         resources:
           requests:
             cpu: 10m
