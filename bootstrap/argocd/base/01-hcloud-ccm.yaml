@@ -23,10 +23,6 @@ spec:
           enabled: false
         metrics:
           enabled: true
-        networking:
-          enabled: true
-        metrics:
-          enabled: true
         resources:
           requests:
             cpu: 100m
