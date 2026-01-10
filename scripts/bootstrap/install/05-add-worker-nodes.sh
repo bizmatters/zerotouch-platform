@@ -145,23 +145,38 @@ add_single_worker() {
     log_info "Step 3: Waiting 3 minutes for Talos to boot..."
     sleep 180
 
-    # Step 5: Apply worker configuration
+    # Step 5: Apply worker configuration with providerID
     log_info "Step 4: Applying worker configuration..."
     cd "$REPO_ROOT/bootstrap/talos"
 
+    # Source the Hetzner API helper for server ID lookup
+    source "$REPO_ROOT/scripts/bootstrap/helpers/hetzner-api.sh"
+
+    # Get server ID for providerID configuration
+    log_info "Retrieving Hetzner server ID for providerID configuration..."
+    SERVER_ID=$(get_server_id_by_ip "$NODE_IP")
+    if [[ $? -ne 0 ]]; then
+        log_error "Failed to retrieve server ID. Cannot configure providerID."
+        return 1
+    fi
+    log_info "✓ Server ID: $SERVER_ID"
+
+    # Apply configuration with providerID patch
     if ! talosctl apply-config --insecure \
         --nodes "$NODE_IP" \
         --endpoints "$NODE_IP" \
-        --file "nodes/$NODE_NAME/config.yaml"; then
+        --file "nodes/$NODE_NAME/config.yaml" \
+        --config-patch "[{\"op\": \"add\", \"path\": \"/machine/kubelet/extraArgs\", \"value\": {\"provider-id\": \"hcloud://$SERVER_ID\"}}]"; then
         log_warn "Failed to apply config. Waiting 30s and retrying..."
         sleep 30
         talosctl apply-config --insecure \
             --nodes "$NODE_IP" \
             --endpoints "$NODE_IP" \
-            --file "nodes/$NODE_NAME/config.yaml"
+            --file "nodes/$NODE_NAME/config.yaml" \
+            --config-patch "[{\"op\": \"add\", \"path\": \"/machine/kubelet/extraArgs\", \"value\": {\"provider-id\": \"hcloud://$SERVER_ID\"}}]"
     fi
 
-    log_info "✓ Configuration applied"
+    log_info "✓ Configuration applied with providerID: hcloud://$SERVER_ID"
 
     # Step 6: Wait for node to join
     log_info "Step 5: Waiting 120 seconds for node to join cluster..."
