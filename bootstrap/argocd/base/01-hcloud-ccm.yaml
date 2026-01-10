@@ -19,8 +19,17 @@ spec:
               secretKeyRef:
                 name: hcloud
                 key: token
-        # Remove optional environment variables that require additional secret keys
-        envFrom: []
+        networking:
+          enabled: false
+        metrics:
+          enabled: true
+        resources:
+          requests:
+            cpu: 100m
+            memory: 50Mi
+          limits:
+            cpu: 200m
+            memory: 100Mi
         networking:
           enabled: true
         metrics:
