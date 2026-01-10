@@ -13,7 +13,11 @@ spec:
     targetRevision: "1.15.0"
     helm:
       values: |
-        provider: hetzner
+        provider: webhook
+        webhook:
+          image:
+            repository: ghcr.io/germanbrew/external-dns-hetzner-webhook
+            tag: v1.0.0
         sources:
           - gateway-httproute
         domainFilters:

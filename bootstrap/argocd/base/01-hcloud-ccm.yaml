@@ -19,6 +19,8 @@ spec:
               secretKeyRef:
                 name: hcloud
                 key: token
+        # Remove optional environment variables that require additional secret keys
+        envFrom: []
         networking:
           enabled: true
         metrics:
