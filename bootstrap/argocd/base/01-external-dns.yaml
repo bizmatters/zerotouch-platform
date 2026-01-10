@@ -1,0 +1,52 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: external-dns
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  source:
+    repoURL: https://kubernetes-sigs.github.io/external-dns
+    chart: external-dns
+    targetRevision: "1.15.0"
+    helm:
+      values: |
+        provider: hetzner
+        sources:
+          - gateway-httproute
+        domainFilters:
+          - nutgraf.in
+        env:
+          - name: HETZNER_DNS_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: external-dns-hetzner
+                key: HETZNER_DNS_TOKEN
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 50m
+            memory: 64Mi
+        logLevel: info
+        policy: sync
+        registry: txt
+        txtOwnerId: external-dns
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 15
+      backoff:
+        duration: 30s
+        maxDuration: 10m
