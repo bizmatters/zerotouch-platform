@@ -8,6 +8,5 @@ resources:
 - 00-repo-registry-app.yaml
 - argocd-repo-configs.yaml
 - tenant-infrastructure.yaml
-# Gateway and DNS resources (main environment only - Cilium not in preview)
-- gateway
-- dns
+# Gateway and DNS deployed via separate ArgoCD apps (main environment only)
+- 04-gateway-config.yaml
