@@ -55,8 +55,8 @@ spec:
                   description: "PostgreSQL database name to create (optional - if provided, creates dedicated database)"
                   minLength: 1
                   maxLength: 63
-                  pattern: '^[a-z][a-z0-9_]*$'
-                  example: "ide_orchestrator"
+                  pattern: '^[a-z][a-z0-9_-]*$'
+                  example: "ide-orchestrator"
 
                 databaseSize:
                   type: string
