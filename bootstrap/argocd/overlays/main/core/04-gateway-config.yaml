@@ -20,12 +20,9 @@ spec:
   ignoreDifferences:
     - group: gateway.networking.k8s.io
       kind: Gateway
-      jqPathExpressions:
-        # Cilium adds default group/kind to certificateRefs
-        - .spec.listeners[].tls.certificateRefs[].group
-        - .spec.listeners[].tls.certificateRefs[].kind
       jsonPointers:
         - /spec/infrastructure/annotations
+        - /spec/listeners/1/tls/certificateRefs
   syncPolicy:
     automated:
       prune: true
