@@ -1,9 +1,9 @@
 #!/bin/bash
 # Bootstrap Talos Cluster
-# Usage: ./04-bootstrap-talos.sh <server-ip>
+# Usage: ./04-bootstrap-talos.sh <server-ip> [env]
 #
 # This script:
-# 1. Applies Talos configuration
+# 1. Applies Talos configuration with OIDC identity
 # 2. Bootstraps etcd cluster
 # 3. Fetches kubeconfig
 # 4. Verifies cluster is ready
@@ -45,86 +45,109 @@ kubectl_retry() {
 }
 
 # Check arguments
-if [ "$#" -ne 1 ]; then
-    echo -e "${RED}Usage: $0 <server-ip>${NC}"
+SERVER_IP="$1"
+ENV="${2:-dev}"
+
+if [ -z "$SERVER_IP" ]; then
+    echo -e "${RED}Usage: $0 <server-ip> [env]${NC}"
     exit 1
 fi
 
-SERVER_IP="$1"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && while [[ ! -d .git && $(pwd) != "/" ]]; do cd ..; done; pwd))"
+TALOS_DIR="$REPO_ROOT/bootstrap/talos"
+BASE_CONFIG="$TALOS_DIR/nodes/cp01-main/config.yaml"
 
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║   Bootstrapping Talos Cluster                                ║${NC}"
+echo -e "${BLUE}║   Bootstrapping Talos Cluster ($ENV)                         ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
+
+# 1. Prepare Configuration
+echo -e "${BLUE}Preparing Configuration...${NC}"
+
+# Call helper to get OIDC patch
+HELPER_SCRIPT="$REPO_ROOT/scripts/bootstrap/helpers/prepare-oidc-patch.sh"
+if [ ! -x "$HELPER_SCRIPT" ]; then
+    chmod +x "$HELPER_SCRIPT"
+fi
+
+OIDC_PATCH_FILE=$("$HELPER_SCRIPT" "$ENV")
+if [ $? -ne 0 ] || [ -z "$OIDC_PATCH_FILE" ]; then
+    echo -e "${RED}Failed to generate OIDC patch${NC}"
+    exit 1
+fi
+
+# Merge Base Config + OIDC Patch
+FINAL_CONFIG="/tmp/talos-config-final.yaml"
+if command -v yq &> /dev/null; then
+    yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' "$BASE_CONFIG" "$OIDC_PATCH_FILE" > "$FINAL_CONFIG"
+    echo -e "${GREEN}✓ Configuration merged with OIDC Identity${NC}"
+else
+    echo -e "${RED}Error: yq is required for merging configurations${NC}"
+    exit 1
+fi
 
 # Wait for Talos to boot
 echo -e "${BLUE}⏳ Waiting 3 minutes for Talos to boot...${NC}"
 sleep 180
 
-# Change to Talos config directory
-# Find repository root by looking for .git directory
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && while [[ ! -d .git && $(pwd) != "/" ]]; do cd ..; done; pwd))"
-cd "$REPO_ROOT/bootstrap/talos"
+# 2. Apply Configuration
+cd "$TALOS_DIR"
 
-# Source the Hetzner API helper for server ID lookup
+# Source the Hetzner API helper for server ID lookups
 source "$REPO_ROOT/scripts/bootstrap/helpers/hetzner-api.sh"
 
-# Get server ID for providerID configuration
-echo -e "${BLUE}Retrieving Hetzner server ID for providerID configuration...${NC}"
-SERVER_ID=$(get_server_id_by_ip "$SERVER_IP")
-if [[ $? -ne 0 ]]; then
-    echo -e "${RED}Failed to retrieve server ID. Cannot configure providerID.${NC}"
-    exit 1
-fi
-echo -e "${GREEN}✓ Server ID: $SERVER_ID${NC}"
+echo -e "${BLUE}Retrieving Hetzner server ID...${NC}"
+SERVER_ID=$(get_server_id_by_ip "$SERVER_IP") || { echo -e "${YELLOW}Warning: Could not get Server ID, skipping provider-id injection${NC}"; SERVER_ID=""; }
 
-# Apply Talos configuration
-echo -e "${BLUE}Applying Talos configuration (with CNI=none and providerID)...${NC}"
+echo -e "${BLUE}Applying configuration to $SERVER_IP...${NC}"
+
+# Prepare ProviderID patch
+PROVIDER_PATCH=""
+if [ -n "$SERVER_ID" ]; then
+    PROVIDER_PATCH="[{\"op\": \"add\", \"path\": \"/machine/kubelet/extraArgs\", \"value\": {\"provider-id\": \"hcloud://$SERVER_ID\"}}]"
+    echo -e "${GREEN}✓ Injecting ProviderID: hcloud://$SERVER_ID${NC}"
+fi
+
+# Apply Config
 if ! talosctl apply-config --insecure \
   --nodes "$SERVER_IP" \
   --endpoints "$SERVER_IP" \
-  --file nodes/cp01-main/config.yaml \
-  --config-patch "[{\"op\": \"add\", \"path\": \"/cluster/network/cni\", \"value\": {\"name\": \"none\"}}, {\"op\": \"add\", \"path\": \"/machine/kubelet/extraArgs\", \"value\": {\"provider-id\": \"hcloud://$SERVER_ID\"}}]"; then
-    echo -e "${RED}Failed to apply Talos config. Waiting 30s and retrying...${NC}"
-    sleep 30
+  --file "$FINAL_CONFIG" \
+  --config-patch "$PROVIDER_PATCH"; then
+    echo -e "${RED}Failed to apply. Retrying in 10s...${NC}"
+    sleep 10
     talosctl apply-config --insecure \
       --nodes "$SERVER_IP" \
       --endpoints "$SERVER_IP" \
-      --file nodes/cp01-main/config.yaml \
-      --config-patch "[{\"op\": \"add\", \"path\": \"/cluster/network/cni\", \"value\": {\"name\": \"none\"}}, {\"op\": \"add\", \"path\": \"/machine/kubelet/extraArgs\", \"value\": {\"provider-id\": \"hcloud://$SERVER_ID\"}}]"
+      --file "$FINAL_CONFIG" \
+      --config-patch "$PROVIDER_PATCH"
 fi
 
 echo -e "${BLUE}Waiting 30 seconds for config to apply...${NC}"
 sleep 30
 
-# Bootstrap etcd
+# 3. Bootstrap Etcd
 echo -e "${BLUE}Bootstrapping etcd cluster...${NC}"
 talosctl bootstrap \
   --nodes "$SERVER_IP" \
   --endpoints "$SERVER_IP" \
   --talosconfig talosconfig
 
-echo -e "${BLUE}Waiting 180 seconds for cluster to stabilize and API server to start...${NC}"
-sleep 180
+echo -e "${BLUE}Waiting 60 seconds for API server...${NC}"
+sleep 60
 
-# Fetch kubeconfig
-echo -e "${BLUE}Fetching kubeconfig...${NC}"
+# 4. Fetch Kubeconfig
 talosctl kubeconfig \
   --nodes "$SERVER_IP" \
   --endpoints "$SERVER_IP" \
   --talosconfig talosconfig \
   --force
 
-# Verify cluster
-echo -e "${BLUE}Verifying cluster (with retries)...${NC}"
-kubectl_retry get nodes
-
-# Verify providerID configuration
-echo -e "${BLUE}Verifying providerID configuration...${NC}"
-kubectl_retry get nodes -o custom-columns=NAME:.metadata.name,ID:.spec.providerID
+# Cleanup
+rm -f "$OIDC_PATCH_FILE" "$FINAL_CONFIG"
 
 echo ""
 echo -e "${GREEN}✓ Talos cluster bootstrapped successfully${NC}"
-echo -e "${GREEN}✓ ProviderID configured for Zero-Touch LoadBalancer provisioning${NC}"
 echo ""

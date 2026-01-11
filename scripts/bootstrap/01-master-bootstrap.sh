@@ -209,9 +209,9 @@ if [ "$MODE" = "production" ]; then
     step "Installing Talos OS..."
     "$SCRIPT_DIR/install/03-install-talos.sh" --server-ip "$SERVER_IP" --user root --password "$ROOT_PASSWORD" --yes
 
-    # Step 3: Bootstrap Talos cluster
-    step "Bootstrapping Talos cluster..."
-    "$SCRIPT_DIR/install/04-bootstrap-talos.sh" "$SERVER_IP"
+    # Step 3: Bootstrap Talos cluster (with OIDC Identity)
+    step "Bootstrapping Talos cluster (with OIDC Identity)..."
+    "$SCRIPT_DIR/install/04-bootstrap-talos.sh" "$SERVER_IP" "$ENV"
 
     "$SCRIPT_DIR/helpers/add-credentials.sh" "$CREDENTIALS_FILE" "TALOS CREDENTIALS" "Talos Config: bootstrap/talos/talosconfig
 Control Plane Config: bootstrap/talos/nodes/cp01-main/config.yaml

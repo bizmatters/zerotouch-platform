@@ -145,8 +145,8 @@ add_single_worker() {
     log_info "Step 3: Waiting 3 minutes for Talos to boot..."
     sleep 180
 
-    # Step 5: Apply worker configuration with providerID
-    log_info "Step 4: Applying worker configuration..."
+    # Step 5: Apply worker configuration with OIDC and providerID
+    log_info "Step 4: Applying worker configuration with OIDC identity..."
     cd "$REPO_ROOT/bootstrap/talos"
 
     # Source the Hetzner API helper for server ID lookup
@@ -161,22 +161,47 @@ add_single_worker() {
     fi
     log_info "✓ Server ID: $SERVER_ID"
 
+    # Get OIDC patch using the helper script
+    HELPER_SCRIPT="$REPO_ROOT/scripts/bootstrap/helpers/prepare-oidc-patch.sh"
+    if [ ! -x "$HELPER_SCRIPT" ]; then
+        chmod +x "$HELPER_SCRIPT"
+    fi
+
+    OIDC_PATCH_FILE=$("$HELPER_SCRIPT" "${ENV:-dev}")
+    if [ $? -ne 0 ] || [ -z "$OIDC_PATCH_FILE" ]; then
+        log_error "Failed to generate OIDC patch"
+        return 1
+    fi
+
+    # Merge worker config + OIDC patch
+    WORKER_CONFIG_FINAL="/tmp/talos-worker-config-final.yaml"
+    if command -v yq &> /dev/null; then
+        yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' "nodes/$NODE_NAME/config.yaml" "$OIDC_PATCH_FILE" > "$WORKER_CONFIG_FINAL"
+        log_info "✓ Worker configuration merged with OIDC Identity"
+    else
+        log_error "yq is required for merging configurations"
+        return 1
+    fi
+
     # Apply configuration with providerID patch
     if ! talosctl apply-config --insecure \
         --nodes "$NODE_IP" \
         --endpoints "$NODE_IP" \
-        --file "nodes/$NODE_NAME/config.yaml" \
+        --file "$WORKER_CONFIG_FINAL" \
         --config-patch "[{\"op\": \"add\", \"path\": \"/machine/kubelet/extraArgs\", \"value\": {\"provider-id\": \"hcloud://$SERVER_ID\"}}]"; then
         log_warn "Failed to apply config. Waiting 30s and retrying..."
         sleep 30
         talosctl apply-config --insecure \
             --nodes "$NODE_IP" \
             --endpoints "$NODE_IP" \
-            --file "nodes/$NODE_NAME/config.yaml" \
+            --file "$WORKER_CONFIG_FINAL" \
             --config-patch "[{\"op\": \"add\", \"path\": \"/machine/kubelet/extraArgs\", \"value\": {\"provider-id\": \"hcloud://$SERVER_ID\"}}]"
     fi
 
-    log_info "✓ Configuration applied with providerID: hcloud://$SERVER_ID"
+    # Cleanup
+    rm -f "$OIDC_PATCH_FILE" "$WORKER_CONFIG_FINAL"
+
+    log_info "✓ Configuration applied with OIDC identity and providerID: hcloud://$SERVER_ID"
 
     # Step 6: Wait for node to join
     log_info "Step 5: Waiting 120 seconds for node to join cluster..."
