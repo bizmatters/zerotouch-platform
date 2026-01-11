@@ -24,3 +24,10 @@ spec:
     syncOptions:
       - ServerSideApply=true
       - CreateNamespace=true
+  ignoreDifferences:
+    - group: apiextensions.crossplane.io
+      kind: Composition
+      jqPathExpressions:
+        - '.metadata.labels."crossplane.io/composite"'
+        - '.metadata.labels."crossplane.io/claim-name"'
+        - '.metadata.labels."crossplane.io/claim-namespace"'

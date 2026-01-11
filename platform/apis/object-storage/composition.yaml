@@ -38,12 +38,16 @@ spec:
         - type: ToCompositeFieldPath
           fromFieldPath: status.atProvider.arn
           toFieldPath: status.roleArn
+        # FIX: Apply external-name as a label so bucket-versioning can select it
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.annotations[crossplane.io/external-name]
+          toFieldPath: metadata.labels[crossplane.io/external-name]
 
     # 2. Bucket Versioning
     - name: bucket-versioning
       base:
         apiVersion: s3.aws.upbound.io/v1beta1
-        kind: BucketVersioningConfiguration
+        kind: BucketVersioning
         spec:
           forProvider:
             region: ap-south-1
@@ -60,10 +64,13 @@ spec:
           fromFieldPath: spec.versioning
           toFieldPath: spec.forProvider.versioningConfiguration[0].status
           transforms:
+            - type: convert
+              convert:
+                toType: string
             - type: map
               map:
-                true: Enabled
-                false: Suspended
+                "true": Enabled
+                "false": Suspended
 
     # 3. IAM Role for this bucket (OIDC/IRSA)
     - name: iam-role

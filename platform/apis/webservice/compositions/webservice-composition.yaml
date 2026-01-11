@@ -73,6 +73,7 @@ spec:
                 version: "16"
                 storageGB: 20
       patches:
+        # Use claim name (always K8s safe) for resource name
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
           toFieldPath: spec.forProvider.manifest.metadata.name
@@ -84,22 +85,17 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.namespace
           toFieldPath: spec.forProvider.manifest.metadata.namespace
+        # Conditional creation - only create if databaseName is provided
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.databaseName
+          toFieldPath: spec.forProvider.manifest.metadata.annotations[database-name]
+          policy:
+            fromFieldPath: Required
         - type: FromCompositeFieldPath
           fromFieldPath: spec.databaseSize
           toFieldPath: spec.forProvider.manifest.spec.size
           policy:
             fromFieldPath: Optional
-        # Only create if databaseName is provided
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.databaseName
-          toFieldPath: spec.forProvider.manifest.metadata.name
-          transforms:
-            - type: string
-              string:
-                type: Format
-                fmt: "%s-db"
-          policy:
-            fromFieldPath: Required
       readinessChecks:
         - type: MatchCondition
           matchCondition:
