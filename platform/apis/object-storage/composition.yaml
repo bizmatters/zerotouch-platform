@@ -38,10 +38,14 @@ spec:
         - type: ToCompositeFieldPath
           fromFieldPath: status.atProvider.arn
           toFieldPath: status.roleArn
-        # FIX: Apply external-name as a label so bucket-versioning can select it
         - type: FromCompositeFieldPath
           fromFieldPath: metadata.annotations[crossplane.io/external-name]
           toFieldPath: metadata.labels[crossplane.io/external-name]
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
 
     # 2. Bucket Versioning
     - name: bucket-versioning
@@ -71,6 +75,11 @@ spec:
               map:
                 "true": Enabled
                 "false": Suspended
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
 
     # 3. IAM Role for this bucket (OIDC/IRSA)
     - name: iam-role
@@ -84,14 +93,13 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
           toFieldPath: metadata.annotations[crossplane.io/external-name]
-        # Trust Policy - Trust the OIDC provider for this cluster
-        # Using a simplified trust policy that trusts the OIDC provider (placeholder for now)
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.namespace
           toFieldPath: spec.forProvider.assumeRolePolicy
           transforms:
             - type: string
               string:
+                type: Format
                 fmt: |
                   {
                     "Version": "2012-10-17",
@@ -113,8 +121,11 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
           toFieldPath: spec.forProvider.assumeRolePolicy
-          # Requires multiple patches to the same string - better to use a template engine or Multiple ReplacementChunks
-          # For now, I'll use placeholders that the user or a bootstrap script will replace.
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
 
     # 4. IAM Policy for Access
     - name: iam-policy
@@ -131,6 +142,7 @@ spec:
           transforms:
             - type: string
               string:
+                type: Format
                 fmt: |
                   {
                     "Version": "2012-10-17",
@@ -153,6 +165,11 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
           toFieldPath: metadata.annotations[crossplane.io/external-name]
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
 
     # 5. Role Policy Attachment
     - name: role-policy-attachment
@@ -165,6 +182,11 @@ spec:
               matchControllerRef: true
             policyArnSelector:
               matchControllerRef: true
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
               
     # 6. Connection Secret (Kubernetes Secret in target namespace)
     - name: connection-secret
