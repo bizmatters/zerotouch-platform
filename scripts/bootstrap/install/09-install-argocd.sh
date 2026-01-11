@@ -170,6 +170,25 @@ else
     log_info "✓ Repository credentials configured"
 fi
 
+# Create tenant repository credentials
+TENANT_REPO_URL="https://github.com/${BOT_GITHUB_USERNAME}/zerotouch-tenants.git"
+if kubectl get secret tenant-repo-credentials -n "$ARGOCD_NAMESPACE" &>/dev/null; then
+    log_warn "Tenant repository credentials already exist, skipping..."
+else
+    log_info "Creating tenant repository credentials secret..."
+    kubectl create secret generic tenant-repo-credentials -n "$ARGOCD_NAMESPACE" \
+        --from-literal=url="$TENANT_REPO_URL" \
+        --from-literal=username="$GITHUB_USERNAME" \
+        --from-literal=password="$GITHUB_TOKEN" \
+        --from-literal=type=git \
+        --from-literal=project=default
+
+    kubectl label secret tenant-repo-credentials -n "$ARGOCD_NAMESPACE" \
+        argocd.argoproj.io/secret-type=repository
+
+    log_info "✓ Tenant repository credentials configured"
+fi
+
 # Step 4: Get initial admin password
 log_info ""
 log_step "Step 4/7: Retrieving ArgoCD credentials..."
