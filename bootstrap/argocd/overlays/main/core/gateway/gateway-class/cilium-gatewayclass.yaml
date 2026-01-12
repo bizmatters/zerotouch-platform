@@ -12,3 +12,4 @@ spec:
     group: cilium.io
     kind: CiliumGatewayClassConfig
     name: cilium-gateway-config
+    namespace: kube-system
