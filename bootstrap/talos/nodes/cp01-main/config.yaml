@@ -14086,7 +14086,7 @@ cluster:
                       type: Unconfined
                   containers:
                   - name: cilium-envoy
-                    image: "quay.io/cilium/cilium-envoy:v1.29.7-6a93b0bbba8d6dc75b651cbafeedb062b2997716"
+                    image: "quay.io/cilium/cilium-envoy:v1.34.12-1765374555-6a93b0bbba8d6dc75b651cbafeedb062b2997716@sha256:3108521821c6922695ff1f6ef24b09026c94b195283f8bfbfc0fa49356a156e1"
                     imagePullPolicy: IfNotPresent
                     command:
                     - /usr/bin/cilium-envoy-starter
