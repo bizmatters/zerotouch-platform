@@ -37,3 +37,14 @@ spec:
       kind: Provider
       jqPathExpressions:
         - .status
+    # Ignore ServiceAccount metadata managed by Crossplane
+    - group: ""
+      kind: ServiceAccount
+      jqPathExpressions:
+        - .metadata.labels
+        - .metadata.ownerReferences
+    # Ignore ControllerConfig status
+    - group: pkg.crossplane.io
+      kind: ControllerConfig
+      jqPathExpressions:
+        - .status
