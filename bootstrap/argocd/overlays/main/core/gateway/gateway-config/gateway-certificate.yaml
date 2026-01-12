@@ -14,5 +14,5 @@ spec:
     - "nutgraf.in"
     - "*.nutgraf.in"
   issuerRef:
-    name: selfsigned-issuer
+    name: letsencrypt-production
     kind: ClusterIssuer
