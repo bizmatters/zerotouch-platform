@@ -6,8 +6,8 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "2"
 spec:
-  # Using nginx:alpine for testing - it has health endpoints and will stay running
-  image: nginx:alpine
+  # Using nginx-unprivileged for testing - works with non-root security context
+  image: nginxinc/nginx-unprivileged:alpine
   port: 8080
   size: micro
   replicas: 1
