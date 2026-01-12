@@ -1,0 +1,16 @@
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: WebService
+metadata:
+  name: test-ingress
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  # Using nginx:alpine for testing - it has health endpoints and will stay running
+  image: nginx:alpine
+  port: 80
+  size: micro
+  replicas: 1
+  # No hostname specified - should auto-generate test-ingress.kube-system.nutgraf.in
+  healthPath: /
+  readyPath: /
