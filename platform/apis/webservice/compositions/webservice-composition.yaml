@@ -618,6 +618,10 @@ spec:
           toFieldPath: spec.forProvider.manifest.spec.rules[0].matches[0].path.value
           policy:
             fromFieldPath: Optional
+        # Patch backend port to match service port
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.port
+          toFieldPath: spec.forProvider.manifest.spec.rules[0].backendRefs[0].port
         # Patch backend service name
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
