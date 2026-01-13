@@ -120,12 +120,18 @@ main() {
     
     # Test HTTP service
     set +e
+    log_info "Checking if service endpoint is ready..."
+    kubectl get endpoints $DEEPAGENTS_SERVICE -n $DEEPAGENTS_NAMESPACE 2>/dev/null || log_warning "Service endpoints not found"
+    
     kubectl run test-deepagents-http --rm -i --restart=Never --image=curlimages/curl:latest -n $DEEPAGENTS_NAMESPACE \
-       --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"test-deepagents-http","image":"curlimages/curl:latest","command":["curl","-f","-s","http://'$DEEPAGENTS_SERVICE'.'$DEEPAGENTS_NAMESPACE'.svc.cluster.local:8080/health"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' >/dev/null 2>&1
-    if [[ $? -eq 0 ]]; then
+       --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"test-deepagents-http","image":"curlimages/curl:latest","command":["curl","-f","-s","--max-time","10","http://'$DEEPAGENTS_SERVICE'.'$DEEPAGENTS_NAMESPACE'.svc.cluster.local:8080/health"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' 2>&1
+    http_test_result=$?
+    if [[ $http_test_result -eq 0 ]]; then
         log_success "DeepAgents HTTP service accessibility test PASSED"
     else
-        log_error "DeepAgents HTTP service accessibility test FAILED"
+        log_error "DeepAgents HTTP service accessibility test FAILED (exit code: $http_test_result)"
+        log_info "Debugging: Checking pod status..."
+        kubectl get pods -n $DEEPAGENTS_NAMESPACE -l app.kubernetes.io/name=deepagents-runtime-sandbox 2>/dev/null || echo "No sandbox pods found"
     fi
     set -e
     
@@ -160,12 +166,14 @@ main() {
     # Test 4: HTTP Communication
     log_info "Test 4: Testing HTTP communication from ide-orchestrator to deepagents-runtime..."
     
+    set +e
     kubectl run test-http-comm --rm -i --restart=Never --image=curlimages/curl:latest -n $IDE_ORCHESTRATOR_NAMESPACE \
-       --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"test-http-comm","image":"curlimages/curl:latest","command":["/bin/sh","-c","curl -f -s $BACKEND_SERVICE_URL/health"],"envFrom":[{"configMapRef":{"name":"'$BACKEND_CONFIG_NAME'","optional":true}}],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' >/dev/null 2>&1
-    if [[ $? -eq 0 ]]; then
+       --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"test-http-comm","image":"curlimages/curl:latest","command":["/bin/sh","-c","echo Testing: $BACKEND_SERVICE_URL && curl -f -s --max-time 10 $BACKEND_SERVICE_URL/health"],"envFrom":[{"configMapRef":{"name":"'$BACKEND_CONFIG_NAME'","optional":true}}],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' 2>&1
+    http_comm_result=$?
+    if [[ $http_comm_result -eq 0 ]]; then
         log_success "HTTP communication test PASSED"
     else
-        log_error "HTTP communication test FAILED"
+        log_error "HTTP communication test FAILED (exit code: $http_comm_result)"
     fi
     set -e
     
@@ -222,7 +230,8 @@ main() {
             
             while [[ $count -lt $timeout ]]; do
                 # Check if sandbox pods are running
-                running_pods=$(kubectl get pods -n $DEEPAGENTS_NAMESPACE -l app.kubernetes.io/name=deepagents-runtime-sandbox --field-selector=status.phase=Running 2>/dev/null | grep -c Running || echo "0")
+                running_pods=$(kubectl get pods -n $DEEPAGENTS_NAMESPACE -l app.kubernetes.io/name=deepagents-runtime-sandbox --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
+                running_pods=${running_pods:-0}  # Ensure it's a number
                 
                 if [[ "$running_pods" -ge 1 ]]; then
                     log_success "NATS-triggered scaling successful - $running_pods pod(s) running"
@@ -241,11 +250,14 @@ main() {
                 
                 set +e
                 kubectl run test-scaled-http --rm -i --restart=Never --image=curlimages/curl:latest -n $DEEPAGENTS_NAMESPACE \
-                   --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"test-scaled-http","image":"curlimages/curl:latest","command":["curl","-f","-s","http://'$DEEPAGENTS_SERVICE'.'$DEEPAGENTS_NAMESPACE'.svc.cluster.local:8080/health"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' >/dev/null 2>&1
-                if [[ $? -eq 0 ]]; then
+                   --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"test-scaled-http","image":"curlimages/curl:latest","command":["curl","-f","-s","--max-time","10","http://'$DEEPAGENTS_SERVICE'.'$DEEPAGENTS_NAMESPACE'.svc.cluster.local:8080/health"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' 2>&1
+                scaled_http_result=$?
+                if [[ $scaled_http_result -eq 0 ]]; then
                     log_success "Scaled service HTTP accessibility test PASSED"
                 else
-                    log_error "Scaled service HTTP accessibility test FAILED"
+                    log_error "Scaled service HTTP accessibility test FAILED (exit code: $scaled_http_result)"
+                    log_info "Pod readiness check:"
+                    kubectl get pods -n $DEEPAGENTS_NAMESPACE -l app.kubernetes.io/name=deepagents-runtime-sandbox 2>/dev/null || echo "No pods found"
                 fi
                 set -e
                 
