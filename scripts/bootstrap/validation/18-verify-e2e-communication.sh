@@ -180,15 +180,85 @@ main() {
         log_error "Session affinity not configured correctly. Expected: ClientIP, Got: $session_affinity"
     fi
     
-    # Test 6: Load Balancing
-    log_info "Test 6: Testing load balancing setup..."
+    # Test 6: NATS Scaling and Load Balancing
+    log_info "Test 6: Testing NATS-triggered scaling and load balancing..."
     
-    current_replicas=$(kubectl get deployment $DEEPAGENTS_SERVICE -n $DEEPAGENTS_NAMESPACE -o jsonpath='{.spec.replicas}' 2>/dev/null || kubectl get deployment deepagents-runtime -n $DEEPAGENTS_NAMESPACE -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0")
+    # First check if this is a scale-to-zero AgentSandboxService
+    set +e
+    kubectl get agentsandboxservice -n $DEEPAGENTS_NAMESPACE >/dev/null 2>&1
+    is_agent_sandbox=$?
+    set -e
     
-    if [[ "$current_replicas" -ge 1 ]]; then
-        log_success "Load balancing ready with $current_replicas replica(s)"
+    if [[ $is_agent_sandbox -eq 0 ]]; then
+        log_info "Detected AgentSandboxService - testing NATS-triggered scaling..."
+        
+        # Get NATS stream and consumer info from the AgentSandboxService
+        nats_stream=$(kubectl get agentsandboxservice -n $DEEPAGENTS_NAMESPACE -o jsonpath='{.items[0].spec.nats.stream}' 2>/dev/null || echo "AGENT_EXECUTION")
+        nats_consumer=$(kubectl get agentsandboxservice -n $DEEPAGENTS_NAMESPACE -o jsonpath='{.items[0].spec.nats.consumer}' 2>/dev/null || echo "deepagents-runtime-workers")
+        
+        log_info "Publishing test message to NATS stream: $nats_stream"
+        
+        # Publish a test message to trigger scaling
+        set +e
+        kubectl run nats-publisher --rm -i --restart=Never --image=natsio/nats-box:latest -n $DEEPAGENTS_NAMESPACE \
+           --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"nats-publisher","image":"natsio/nats-box:latest","command":["/bin/sh","-c","nats pub --server=nats://nats-headless.nats.svc.cluster.local:4222 '$nats_stream' '{\"test\":\"scaling-message\",\"timestamp\":\"'$(date -Iseconds)'\"}'"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' >/dev/null 2>&1
+        publish_result=$?
+        set -e
+        
+        if [[ $publish_result -eq 0 ]]; then
+            log_info "Test message published successfully"
+            
+            # Wait for scaling to occur (up to 60 seconds)
+            log_info "Waiting for KEDA to scale up sandbox (up to 60 seconds)..."
+            timeout=60
+            count=0
+            scaled_up=false
+            
+            while [[ $count -lt $timeout ]]; do
+                # Check if sandbox pods are running
+                running_pods=$(kubectl get pods -n $DEEPAGENTS_NAMESPACE -l app.kubernetes.io/name=deepagents-runtime-sandbox --field-selector=status.phase=Running 2>/dev/null | grep -c Running || echo "0")
+                
+                if [[ "$running_pods" -ge 1 ]]; then
+                    log_success "NATS-triggered scaling successful - $running_pods pod(s) running"
+                    scaled_up=true
+                    break
+                fi
+                
+                sleep 2
+                count=$((count + 2))
+            done
+            
+            if [[ "$scaled_up" == "true" ]]; then
+                # Now test HTTP communication with the scaled service
+                log_info "Testing HTTP communication with scaled service..."
+                sleep 5  # Give pods time to be fully ready
+                
+                set +e
+                kubectl run test-scaled-http --rm -i --restart=Never --image=curlimages/curl:latest -n $DEEPAGENTS_NAMESPACE \
+                   --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"test-scaled-http","image":"curlimages/curl:latest","command":["curl","-f","-s","http://'$DEEPAGENTS_SERVICE'.'$DEEPAGENTS_NAMESPACE'.svc.cluster.local:8080/health"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' >/dev/null 2>&1
+                if [[ $? -eq 0 ]]; then
+                    log_success "Scaled service HTTP accessibility test PASSED"
+                else
+                    log_error "Scaled service HTTP accessibility test FAILED"
+                fi
+                set -e
+                
+                log_success "NATS-triggered scaling and load balancing test PASSED"
+            else
+                log_error "NATS-triggered scaling failed - no pods scaled up within timeout"
+            fi
+        else
+            log_error "Failed to publish test message to NATS"
+        fi
     else
-        log_error "No replicas available for load balancing"
+        # Traditional deployment scaling test
+        current_replicas=$(kubectl get deployment $DEEPAGENTS_SERVICE -n $DEEPAGENTS_NAMESPACE -o jsonpath='{.spec.replicas}' 2>/dev/null || kubectl get deployment deepagents-runtime -n $DEEPAGENTS_NAMESPACE -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0")
+        
+        if [[ "$current_replicas" -ge 1 ]]; then
+            log_success "Load balancing ready with $current_replicas replica(s)"
+        else
+            log_error "No replicas available for load balancing"
+        fi
     fi
     
     # Summary
@@ -207,7 +277,7 @@ main() {
         echo "✅ ide-orchestrator can resolve backend service URL from environment"
         echo "✅ HTTP requests from ide-orchestrator to deepagents-runtime succeed"
         echo "✅ Session affinity configured for WebSocket connections"
-        echo "✅ Load balancing distributes requests across multiple replicas"
+        echo "✅ NATS-triggered scaling and load balancing working correctly"
         echo ""
         echo "🎉 Complete service-to-service communication is working!"
         return 0
