@@ -13,8 +13,13 @@ spec:
     targetRevision: "v1.19.2"
     helm:
       values: |
-        crds:
-          enabled: true
+        installCRDs: true
+        config:
+          apiVersion: controller.config.cert-manager.io/v1alpha1
+          kind: ControllerConfiguration
+          enableGatewayAPI: true
+          featureGates:
+            ExperimentalGatewayAPISupport: true
         global:
           leaderElection:
             namespace: cert-manager
