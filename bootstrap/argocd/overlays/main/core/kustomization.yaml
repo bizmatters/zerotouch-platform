@@ -10,3 +10,5 @@ resources:
 - tenant-infrastructure.yaml
 # Gateway and DNS deployed via separate ArgoCD apps (main environment only)
 - 04-gateway-config.yaml
+# Hetzner DNS webhook for cert-manager DNS-01 challenges
+- 01-cert-manager-webhook-hetzner.yaml

@@ -13,13 +13,14 @@ spec:
     privateKeySecretRef:
       name: letsencrypt-staging-private-key
     solvers:
-      - http01:
-          gatewayHTTPRoute:
-            parentRefs:
-              - group: gateway.networking.k8s.io
-                kind: Gateway
-                name: public-gateway
-                namespace: kube-system
+      - dns01:
+          webhook:
+            solverName: hetzner
+            groupName: acme.hetzner.com
+            config:
+              tokenSecretKeyRef:
+                name: hetzner
+                key: token
 ---
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
@@ -36,10 +37,11 @@ spec:
     privateKeySecretRef:
       name: letsencrypt-production-private-key
     solvers:
-      - http01:
-          gatewayHTTPRoute:
-            parentRefs:
-              - group: gateway.networking.k8s.io
-                kind: Gateway
-                name: public-gateway
-                namespace: kube-system
+      - dns01:
+          webhook:
+            solverName: hetzner
+            groupName: acme.hetzner.com
+            config:
+              tokenSecretKeyRef:
+                name: hetzner
+                key: token

@@ -5,3 +5,4 @@ resources:
 - gateway-certificate.yaml
 - letsencrypt-issuer.yaml
 - public-gateway.yaml
+- hetzner-cert-manager-secret.yaml
