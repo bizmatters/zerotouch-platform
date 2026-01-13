@@ -115,81 +115,8 @@ main() {
     
     echo "Starting tests..."
     
-    # Test 1: DeepAgents Runtime Accessibility
-    log_info "Test 1: Testing deepagents-runtime accessibility via both NATS and HTTP..."
-    
-    # Test HTTP service
-    set +e
-    log_info "Checking if service endpoint is ready..."
-    kubectl get endpoints $DEEPAGENTS_SERVICE -n $DEEPAGENTS_NAMESPACE 2>/dev/null || log_warning "Service endpoints not found"
-    
-    kubectl run test-deepagents-http --rm -i --restart=Never --image=curlimages/curl:latest -n $DEEPAGENTS_NAMESPACE \
-       --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"test-deepagents-http","image":"curlimages/curl:latest","command":["curl","-f","-s","--max-time","10","http://'$DEEPAGENTS_SERVICE'.'$DEEPAGENTS_NAMESPACE'.svc.cluster.local:8080/health"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' 2>&1
-    http_test_result=$?
-    if [[ $http_test_result -eq 0 ]]; then
-        log_success "DeepAgents HTTP service accessibility test PASSED"
-    else
-        log_error "DeepAgents HTTP service accessibility test FAILED (exit code: $http_test_result)"
-        log_info "Debugging: Checking pod status..."
-        kubectl get pods -n $DEEPAGENTS_NAMESPACE -l app.kubernetes.io/name=deepagents-runtime-sandbox 2>/dev/null || echo "No sandbox pods found"
-    fi
-    set -e
-    
-    # Test 2: Backend Service URL Resolution
-    log_info "Test 2: Testing ide-orchestrator backend service URL resolution..."
-    
-    backend_url=$(kubectl get configmap $BACKEND_CONFIG_NAME -n $IDE_ORCHESTRATOR_NAMESPACE -o jsonpath='{.data.BACKEND_SERVICE_URL}' 2>/dev/null || echo "")
-    
-    if [[ -z "$backend_url" ]]; then
-        log_error "Backend service ConfigMap not found or empty"
-    else
-        expected_url="http://$DEEPAGENTS_SERVICE.$DEEPAGENTS_NAMESPACE.svc.cluster.local:8080"
-        if [[ "$backend_url" == "$expected_url" ]]; then
-            log_success "Backend service URL correctly resolved: $backend_url"
-        else
-            log_error "Backend service URL mismatch. Expected: $expected_url, Got: $backend_url"
-        fi
-    fi
-    
-    # Test 3: Environment Variable Injection
-    log_info "Test 3: Testing environment variable injection..."
-    
-    set +e
-    kubectl run test-env-injection --rm -i --restart=Never --image=alpine:latest -n $IDE_ORCHESTRATOR_NAMESPACE \
-       --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"test-env-injection","image":"alpine:latest","command":["/bin/sh","-c","echo BACKEND_SERVICE_URL=$BACKEND_SERVICE_URL && test -n \"$BACKEND_SERVICE_URL\""],"envFrom":[{"configMapRef":{"name":"'$BACKEND_CONFIG_NAME'","optional":true}}],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' >/dev/null 2>&1
-    if [[ $? -eq 0 ]]; then
-        log_success "Environment variable injection test PASSED"
-    else
-        log_error "Environment variable injection test FAILED"
-    fi
-    
-    # Test 4: HTTP Communication
-    log_info "Test 4: Testing HTTP communication from ide-orchestrator to deepagents-runtime..."
-    
-    set +e
-    kubectl run test-http-comm --rm -i --restart=Never --image=curlimages/curl:latest -n $IDE_ORCHESTRATOR_NAMESPACE \
-       --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"test-http-comm","image":"curlimages/curl:latest","command":["/bin/sh","-c","echo Testing: $BACKEND_SERVICE_URL && curl -f -s --max-time 10 $BACKEND_SERVICE_URL/health"],"envFrom":[{"configMapRef":{"name":"'$BACKEND_CONFIG_NAME'","optional":true}}],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' 2>&1
-    http_comm_result=$?
-    if [[ $http_comm_result -eq 0 ]]; then
-        log_success "HTTP communication test PASSED"
-    else
-        log_error "HTTP communication test FAILED (exit code: $http_comm_result)"
-    fi
-    set -e
-    
-    # Test 5: Session Affinity Configuration
-    log_info "Test 5: Testing session affinity configuration..."
-    
-    session_affinity=$(kubectl get service $IDE_ORCHESTRATOR_SERVICE -n $IDE_ORCHESTRATOR_NAMESPACE -o jsonpath='{.spec.sessionAffinity}' 2>/dev/null || echo "")
-    
-    if [[ "$session_affinity" == "ClientIP" ]]; then
-        log_success "Session affinity correctly configured: $session_affinity"
-    else
-        log_error "Session affinity not configured correctly. Expected: ClientIP, Got: $session_affinity"
-    fi
-    
-    # Test 6: NATS Scaling and Load Balancing
-    log_info "Test 6: Testing NATS-triggered scaling and load balancing..."
+    # Test 1: NATS Scaling and Load Balancing (moved first to ensure pods exist)
+    log_info "Test 1: Testing NATS-triggered scaling and load balancing..."
     
     # First check if this is a scale-to-zero AgentSandboxService
     set +e
@@ -229,11 +156,11 @@ main() {
             scaled_up=false
             
             while [[ $count -lt $timeout ]]; do
-                # Check if sandbox pods are running
-                running_pods=$(kubectl get pods -n $DEEPAGENTS_NAMESPACE -l app.kubernetes.io/name=deepagents-runtime-sandbox --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
+                # Check if sandbox pods are running - fix bash syntax error
+                running_pods=$(kubectl get pods -n $DEEPAGENTS_NAMESPACE -l app.kubernetes.io/name=deepagents-runtime-sandbox --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l | tr -d ' ')
                 running_pods=${running_pods:-0}  # Ensure it's a number
                 
-                if [[ "$running_pods" -ge 1 ]]; then
+                if [[ $running_pods -ge 1 ]]; then
                     log_success "NATS-triggered scaling successful - $running_pods pod(s) running"
                     scaled_up=true
                     break
@@ -244,24 +171,10 @@ main() {
             done
             
             if [[ "$scaled_up" == "true" ]]; then
-                # Now test HTTP communication with the scaled service
-                log_info "Testing HTTP communication with scaled service..."
-                sleep 5  # Give pods time to be fully ready
-                
-                set +e
-                kubectl run test-scaled-http --rm -i --restart=Never --image=curlimages/curl:latest -n $DEEPAGENTS_NAMESPACE \
-                   --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"test-scaled-http","image":"curlimages/curl:latest","command":["curl","-f","-s","--max-time","10","http://'$DEEPAGENTS_SERVICE'.'$DEEPAGENTS_NAMESPACE'.svc.cluster.local:8080/health"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' 2>&1
-                scaled_http_result=$?
-                if [[ $scaled_http_result -eq 0 ]]; then
-                    log_success "Scaled service HTTP accessibility test PASSED"
-                else
-                    log_error "Scaled service HTTP accessibility test FAILED (exit code: $scaled_http_result)"
-                    log_info "Pod readiness check:"
-                    kubectl get pods -n $DEEPAGENTS_NAMESPACE -l app.kubernetes.io/name=deepagents-runtime-sandbox 2>/dev/null || echo "No pods found"
-                fi
-                set -e
-                
                 log_success "NATS-triggered scaling and load balancing test PASSED"
+                # Give pods extra time to be fully ready for HTTP tests
+                log_info "Waiting for pods to be fully ready for HTTP tests..."
+                sleep 10
             else
                 log_error "NATS-triggered scaling failed - no pods scaled up within timeout"
             fi
@@ -272,11 +185,88 @@ main() {
         # Traditional deployment scaling test
         current_replicas=$(kubectl get deployment $DEEPAGENTS_SERVICE -n $DEEPAGENTS_NAMESPACE -o jsonpath='{.spec.replicas}' 2>/dev/null || kubectl get deployment deepagents-runtime -n $DEEPAGENTS_NAMESPACE -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0")
         
-        if [[ "$current_replicas" -ge 1 ]]; then
+        if [[ $current_replicas -ge 1 ]]; then
             log_success "Load balancing ready with $current_replicas replica(s)"
         else
             log_error "No replicas available for load balancing"
         fi
+    fi
+    
+    # Test 2: DeepAgents Runtime HTTP Accessibility (moved after scaling)
+    log_info "Test 2: Testing deepagents-runtime HTTP accessibility..."
+    
+    # Test HTTP service
+    set +e
+    log_info "Checking if service endpoint is ready..."
+    kubectl get endpoints $DEEPAGENTS_SERVICE -n $DEEPAGENTS_NAMESPACE 2>/dev/null || log_warning "Service endpoints not found"
+    
+    kubectl run test-deepagents-http --rm -i --restart=Never --image=curlimages/curl:latest -n $DEEPAGENTS_NAMESPACE \
+       --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"test-deepagents-http","image":"curlimages/curl:latest","command":["curl","-f","-s","--max-time","10","http://'$DEEPAGENTS_SERVICE'.'$DEEPAGENTS_NAMESPACE'.svc.cluster.local:8080/health"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' 2>&1
+    http_test_result=$?
+    if [[ $http_test_result -eq 0 ]]; then
+        log_success "DeepAgents HTTP service accessibility test PASSED"
+    else
+        log_error "DeepAgents HTTP service accessibility test FAILED (exit code: $http_test_result)"
+        log_info "Debugging: Checking pod status..."
+        kubectl get pods -n $DEEPAGENTS_NAMESPACE -l app.kubernetes.io/name=deepagents-runtime-sandbox 2>/dev/null || echo "No sandbox pods found"
+        log_info "Debugging: Checking service endpoints..."
+        kubectl get endpoints $DEEPAGENTS_SERVICE -n $DEEPAGENTS_NAMESPACE 2>/dev/null || echo "No endpoints found"
+    fi
+    set -e
+    
+    # Test 3: Backend Service URL Resolution
+    log_info "Test 3: Testing ide-orchestrator backend service URL resolution..."
+    
+    backend_url=$(kubectl get configmap $BACKEND_CONFIG_NAME -n $IDE_ORCHESTRATOR_NAMESPACE -o jsonpath='{.data.BACKEND_SERVICE_URL}' 2>/dev/null || echo "")
+    
+    if [[ -z "$backend_url" ]]; then
+        log_error "Backend service ConfigMap not found or empty"
+    else
+        expected_url="http://$DEEPAGENTS_SERVICE.$DEEPAGENTS_NAMESPACE.svc.cluster.local:8080"
+        if [[ "$backend_url" == "$expected_url" ]]; then
+            log_success "Backend service URL correctly resolved: $backend_url"
+        else
+            log_error "Backend service URL mismatch. Expected: $expected_url, Got: $backend_url"
+        fi
+    fi
+    
+    # Test 4: Environment Variable Injection
+    log_info "Test 4: Testing environment variable injection..."
+    
+    set +e
+    kubectl run test-env-injection --rm -i --restart=Never --image=alpine:latest -n $IDE_ORCHESTRATOR_NAMESPACE \
+       --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"test-env-injection","image":"alpine:latest","command":["/bin/sh","-c","echo BACKEND_SERVICE_URL=$BACKEND_SERVICE_URL && test -n \"$BACKEND_SERVICE_URL\""],"envFrom":[{"configMapRef":{"name":"'$BACKEND_CONFIG_NAME'","optional":true}}],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' >/dev/null 2>&1
+    if [[ $? -eq 0 ]]; then
+        log_success "Environment variable injection test PASSED"
+    else
+        log_error "Environment variable injection test FAILED"
+    fi
+    
+    # Test 5: HTTP Communication from IDE Orchestrator (moved after scaling)
+    log_info "Test 5: Testing HTTP communication from ide-orchestrator to deepagents-runtime..."
+    
+    set +e
+    kubectl run test-http-comm --rm -i --restart=Never --image=curlimages/curl:latest -n $IDE_ORCHESTRATOR_NAMESPACE \
+       --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"test-http-comm","image":"curlimages/curl:latest","command":["/bin/sh","-c","echo Testing: $BACKEND_SERVICE_URL && curl -f -s --max-time 10 $BACKEND_SERVICE_URL/health"],"envFrom":[{"configMapRef":{"name":"'$BACKEND_CONFIG_NAME'","optional":true}}],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' 2>&1
+    http_comm_result=$?
+    if [[ $http_comm_result -eq 0 ]]; then
+        log_success "HTTP communication test PASSED"
+    else
+        log_error "HTTP communication test FAILED (exit code: $http_comm_result)"
+        log_info "Debugging: Checking service endpoints from orchestrator namespace..."
+        kubectl get endpoints $DEEPAGENTS_SERVICE -n $DEEPAGENTS_NAMESPACE 2>/dev/null || echo "No endpoints found"
+    fi
+    set -e
+    
+    # Test 6: Session Affinity Configuration
+    log_info "Test 6: Testing session affinity configuration..."
+    
+    session_affinity=$(kubectl get service $IDE_ORCHESTRATOR_SERVICE -n $IDE_ORCHESTRATOR_NAMESPACE -o jsonpath='{.spec.sessionAffinity}' 2>/dev/null || echo "")
+    
+    if [[ "$session_affinity" == "ClientIP" ]]; then
+        log_success "Session affinity correctly configured: $session_affinity"
+    else
+        log_error "Session affinity not configured correctly. Expected: ClientIP, Got: $session_affinity"
     fi
     
     # Summary
@@ -291,11 +281,12 @@ main() {
     if [[ $TESTS_FAILED -eq 0 ]]; then
         log_success "All end-to-end communication tests PASSED!"
         echo ""
-        echo "✅ deepagents-runtime accessible via both NATS and HTTP"
+        echo "✅ NATS-triggered scaling and load balancing working correctly"
+        echo "✅ deepagents-runtime accessible via HTTP after scaling"
         echo "✅ ide-orchestrator can resolve backend service URL from environment"
+        echo "✅ Environment variable injection working correctly"
         echo "✅ HTTP requests from ide-orchestrator to deepagents-runtime succeed"
         echo "✅ Session affinity configured for WebSocket connections"
-        echo "✅ NATS-triggered scaling and load balancing working correctly"
         echo ""
         echo "🎉 Complete service-to-service communication is working!"
         return 0
