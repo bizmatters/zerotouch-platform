@@ -36,8 +36,8 @@ spec:
           fromFieldPath: metadata.annotations[crossplane.io/external-name]
           toFieldPath: status.bucketName
         - type: ToCompositeFieldPath
-          fromFieldPath: status.atProvider.arn
-          toFieldPath: status.roleArn
+          fromFieldPath: metadata.name
+          toFieldPath: status.bucketResourceName
         - type: FromCompositeFieldPath
           fromFieldPath: metadata.annotations[crossplane.io/external-name]
           toFieldPath: metadata.labels[crossplane.io/external-name]
@@ -55,6 +55,7 @@ spec:
         spec:
           forProvider:
             region: ap-south-1
+            bucket: ""
             versioningConfiguration:
               - status: Enabled
       patches:
@@ -62,8 +63,10 @@ spec:
           fromFieldPath: spec.region
           toFieldPath: spec.forProvider.region
         - type: FromCompositeFieldPath
-          fromFieldPath: metadata.annotations[crossplane.io/external-name]
-          toFieldPath: spec.forProvider.bucketSelector.matchLabels[crossplane.io/external-name]
+          fromFieldPath: status.bucketName
+          toFieldPath: spec.forProvider.bucket
+          policy:
+            fromFieldPath: Required
         - type: FromCompositeFieldPath
           fromFieldPath: spec.versioning
           toFieldPath: spec.forProvider.versioningConfiguration[0].status
@@ -75,161 +78,6 @@ spec:
               map:
                 "true": Enabled
                 "false": Suspended
-      readinessChecks:
-        - type: MatchCondition
-          matchCondition:
-            type: Ready
-            status: "True"
-
-    # 3. IAM Role for this bucket (OIDC/IRSA)
-    - name: iam-role
-      base:
-        apiVersion: iam.aws.upbound.io/v1beta1
-        kind: Role
-        spec:
-          forProvider:
-            assumeRolePolicy: ""
-      patches:
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.claimRef.name
-          toFieldPath: metadata.annotations[crossplane.io/external-name]
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.claimRef.namespace
-          toFieldPath: spec.forProvider.assumeRolePolicy
-          transforms:
-            - type: string
-              string:
-                type: Format
-                fmt: |
-                  {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                      {
-                        "Effect": "Allow",
-                        "Principal": {
-                          "Federated": "arn:aws:iam::${AWS_ACCOUNT_ID}:oidc-provider/${OIDC_PROVIDER}"
-                        },
-                        "Action": "sts:AssumeRoleWithWebIdentity",
-                        "Condition": {
-                          "StringEquals": {
-                            "${OIDC_PROVIDER}:sub": "system:serviceaccount:%s:%s"
-                          }
-                        }
-                      }
-                    ]
-                  }
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.claimRef.name
-          toFieldPath: spec.forProvider.assumeRolePolicy
-      readinessChecks:
-        - type: MatchCondition
-          matchCondition:
-            type: Ready
-            status: "True"
-
-    # 4. IAM Policy for Access
-    - name: iam-policy
-      base:
-        apiVersion: iam.aws.upbound.io/v1beta1
-        kind: Policy
-        spec:
-          forProvider:
-            policy: ""
-      patches:
-        - type: FromCompositeFieldPath
-          fromFieldPath: status.bucketName
-          toFieldPath: spec.forProvider.policy
-          transforms:
-            - type: string
-              string:
-                type: Format
-                fmt: |
-                  {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                      {
-                        "Effect": "Allow",
-                        "Action": [
-                          "s3:PutObject",
-                          "s3:GetObject",
-                          "s3:ListBucket",
-                          "s3:DeleteObject"
-                        ],
-                        "Resource": [
-                          "arn:aws:s3:::%s",
-                          "arn:aws:s3:::%s/*"
-                        ]
-                      }
-                    ]
-                  }
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.claimRef.name
-          toFieldPath: metadata.annotations[crossplane.io/external-name]
-      readinessChecks:
-        - type: MatchCondition
-          matchCondition:
-            type: Ready
-            status: "True"
-
-    # 5. Role Policy Attachment
-    - name: role-policy-attachment
-      base:
-        apiVersion: iam.aws.upbound.io/v1beta1
-        kind: RolePolicyAttachment
-        spec:
-          forProvider:
-            roleSelector:
-              matchControllerRef: true
-            policyArnSelector:
-              matchControllerRef: true
-      readinessChecks:
-        - type: MatchCondition
-          matchCondition:
-            type: Ready
-            status: "True"
-              
-    # 6. Connection Secret (Kubernetes Secret in target namespace)
-    - name: connection-secret
-      base:
-        apiVersion: kubernetes.crossplane.io/v1alpha2
-        kind: Object
-        spec:
-          forProvider:
-            manifest:
-              apiVersion: v1
-              kind: Secret
-              metadata:
-                name: placeholder
-                namespace: placeholder
-              type: Opaque
-              stringData:
-                AWS_DEFAULT_REGION: ap-south-1
-          references:
-            - patchesFrom:
-                apiVersion: iam.aws.upbound.io/v1beta1
-                kind: Role
-                fieldPath: status.atProvider.arn
-              toFieldPath: data.AWS_ROLE_ARN
-          providerConfigRef:
-            name: kubernetes-provider
-      patches:
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.claimRef.name
-          toFieldPath: spec.forProvider.manifest.metadata.name
-          transforms:
-            - type: string
-              string:
-                type: Format
-                fmt: "%s-conn"
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.claimRef.namespace
-          toFieldPath: spec.forProvider.manifest.metadata.namespace
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.region
-          toFieldPath: spec.forProvider.manifest.stringData.AWS_DEFAULT_REGION
-        - type: FromCompositeFieldPath
-          fromFieldPath: status.bucketName
-          toFieldPath: spec.forProvider.manifest.stringData.S3_BUCKET
       readinessChecks:
         - type: MatchCondition
           matchCondition:

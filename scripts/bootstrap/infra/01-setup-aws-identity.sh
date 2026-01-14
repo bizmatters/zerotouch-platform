@@ -216,14 +216,7 @@ cat > crossplane-s3-policy.json << EOF
     {
       "Effect": "Allow",
       "Action": [
-        "iam:CreateRole",
-        "iam:DeleteRole",
-        "iam:GetRole",
-        "iam:AttachRolePolicy",
-        "iam:DetachRolePolicy",
-        "iam:CreatePolicy",
-        "iam:DeletePolicy",
-        "iam:GetPolicy"
+        "iam:*"
       ],
       "Resource": [
         "arn:aws:iam::${AWS_ACCOUNT_ID}:role/deepagents-*",
