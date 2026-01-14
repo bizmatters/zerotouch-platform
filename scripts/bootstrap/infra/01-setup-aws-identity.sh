@@ -74,6 +74,9 @@ openssl rsa -in sa-signer.key -pubout -out sa-signer.pub
 MODULUS=$(openssl rsa -in sa-signer.key -noout -modulus | sed 's/Modulus=//' | xxd -r -p | base64 | tr -d '=' | tr '/+' '_-')
 EXPONENT=$(openssl rsa -in sa-signer.key -noout -text | grep publicExponent | awk '{print $2}' | sed 's/(//' | sed 's/)//' | printf "%08x" $(cat) | xxd -r -p | base64 | tr -d '=' | tr '/+' '_-')
 
+# Calculate KID as SHA256 hash of public key (matches Kubernetes token generation)
+KID=$(openssl rsa -in sa-signer.key -pubout -outform DER 2>/dev/null | openssl dgst -sha256 -binary | base64 | tr -d '=' | tr '/+' '_-')
+
 # Create OIDC discovery document
 mkdir -p .well-known
 cat > .well-known/openid-configuration << EOF
@@ -95,7 +98,7 @@ cat > keys.json << EOF
     {
       "use": "sig",
       "kty": "RSA",
-      "kid": "zerotouch-${ENVIRONMENT}",
+      "kid": "${KID}",
       "alg": "RS256",
       "n": "${MODULUS}",
       "e": "${EXPONENT}"
@@ -211,6 +214,11 @@ cat > crossplane-s3-policy.json << EOF
         "s3:GetBucketPolicy",
         "s3:PutBucketPolicy",
         "s3:DeleteBucketPolicy",
+        "s3:GetBucketAcl",
+        "s3:PutBucketAcl",
+        "s3:GetBucketTagging",
+        "s3:PutBucketTagging",
+        "s3:DeleteBucketTagging",
         "s3:ListBucket",
         "s3:GetObject",
         "s3:PutObject",
