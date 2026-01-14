@@ -233,6 +233,23 @@ def main():
     """Main validation function"""
     print("=== Checkpoint 4: End-to-End Automation Working Validation ===\n")
     
+    # Apply test WebService claim
+    print("Applying test WebService claim...")
+    apply_result = subprocess.run(
+        "kubectl apply -f $(dirname $0)/test-ingress-claim.yaml",
+        shell=True,
+        capture_output=True,
+        text=True
+    )
+    if apply_result.returncode != 0:
+        print(f"❌ Failed to apply test claim: {apply_result.stderr}")
+        sys.exit(1)
+    print("✅ Test claim applied\n")
+    
+    # Wait for resources to be ready
+    print("Waiting 30s for resources to initialize...")
+    time.sleep(30)
+    
     success = True
     
     # Check test WebService
@@ -275,9 +292,24 @@ def main():
         print("✅ CHECKPOINT 4 PASSED: End-to-End automation working")
         if not dns_ok:
             print("⚠️  Note: DNS record creation failed - check external-dns configuration")
+        
+        # Clean up test resources on success
+        print("\nCleaning up test resources...")
+        cleanup_result = subprocess.run(
+            "kubectl delete -f $(dirname $0)/test-ingress-claim.yaml --ignore-not-found=true",
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+        if cleanup_result.returncode == 0:
+            print("✅ Test resources cleaned up")
+        else:
+            print(f"⚠️  Cleanup warning: {cleanup_result.stderr}")
+        
         sys.exit(0)
     else:
         print("❌ CHECKPOINT 4 FAILED: End-to-End automation validation failed")
+        print("⚠️  Test resources left in place for debugging")
         sys.exit(1)
 
 if __name__ == "__main__":

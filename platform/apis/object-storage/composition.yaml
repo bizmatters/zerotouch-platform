@@ -45,9 +45,6 @@ spec:
         - type: ToCompositeFieldPath
           fromFieldPath: metadata.annotations[crossplane.io/external-name]
           toFieldPath: status.bucketName
-        - type: ToCompositeFieldPath
-          fromFieldPath: status.atProvider.arn
-          toFieldPath: status.roleArn
         - type: FromCompositeFieldPath
           fromFieldPath: metadata.annotations[crossplane.io/external-name]
           toFieldPath: metadata.labels[crossplane.io/external-name]
@@ -131,6 +128,9 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
           toFieldPath: spec.forProvider.assumeRolePolicy
+        - type: ToCompositeFieldPath
+          fromFieldPath: status.atProvider.arn
+          toFieldPath: status.roleArn
       readinessChecks:
         - type: MatchCondition
           matchCondition:
@@ -214,12 +214,8 @@ spec:
               type: Opaque
               stringData:
                 AWS_DEFAULT_REGION: ap-south-1
-          references:
-            - patchesFrom:
-                apiVersion: iam.aws.upbound.io/v1beta1
-                kind: Role
-                fieldPath: status.atProvider.arn
-              toFieldPath: data.AWS_ROLE_ARN
+                AWS_ROLE_ARN: ""
+                S3_BUCKET: ""
           providerConfigRef:
             name: kubernetes-provider
       patches:
@@ -240,6 +236,11 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: status.bucketName
           toFieldPath: spec.forProvider.manifest.stringData.S3_BUCKET
+        - type: FromCompositeFieldPath
+          fromFieldPath: status.roleArn
+          toFieldPath: spec.forProvider.manifest.stringData.AWS_ROLE_ARN
+          policy:
+            fromFieldPath: Optional
       readinessChecks:
         - type: MatchCondition
           matchCondition:

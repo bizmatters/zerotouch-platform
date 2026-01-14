@@ -411,6 +411,13 @@ spec:
                 BACKEND_SERVICE_NAMESPACE: ""
                 BACKEND_SERVICE_PORT: ""
       patches:
+        # CRITICAL: This patch makes the entire resource conditional
+        # If backendServiceName is not provided, this resource won't be created
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.backendServiceName
+          toFieldPath: spec.forProvider.manifest.metadata.annotations[backend-service-name]
+          policy:
+            fromFieldPath: Required
         # Patch name and namespace
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
@@ -427,13 +434,10 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
           toFieldPath: spec.forProvider.manifest.metadata.labels[app.kubernetes.io/name]
-        # Store individual components and generate backend service URL
+        # Store individual components
         - type: FromCompositeFieldPath
           fromFieldPath: spec.backendServiceName
           toFieldPath: spec.forProvider.manifest.data.BACKEND_SERVICE_NAME
-          policy:
-            fromFieldPath: Required
-        # Use explicit namespace or default to claim namespace
         - type: FromCompositeFieldPath
           fromFieldPath: spec.backendServiceNamespace
           toFieldPath: spec.forProvider.manifest.data.BACKEND_SERVICE_NAMESPACE
@@ -453,9 +457,7 @@ spec:
               string:
                 type: Format
                 fmt: "%d"
-          policy:
-            fromFieldPath: Required
-        # Generate complete backend service URL - use backendServiceNamespace if provided
+        # Generate complete backend service URL
         - type: CombineFromComposite
           combine:
             variables:
@@ -466,8 +468,6 @@ spec:
             string:
               fmt: "http://%s.%s.svc.cluster.local:%d"
           toFieldPath: spec.forProvider.manifest.data.BACKEND_SERVICE_URL
-          policy:
-            fromFieldPath: Required
       readinessChecks:
         - type: MatchCondition
           matchCondition:
