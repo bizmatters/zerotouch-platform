@@ -97,6 +97,32 @@ config_enabled() {
     [[ "$value" == "true" ]]
 }
 
+# Environment detection using separate script
+detect_environment() {
+    local detect_script="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/detect-environment.sh"
+    if [[ -f "$detect_script" ]]; then
+        chmod +x "$detect_script"
+        "$detect_script" | tail -1  # Get last line which contains the environment
+    else
+        log_error "Environment detection script not found: $detect_script"
+        exit 1
+    fi
+}
+
+# Checkout PR claims using separate script
+checkout_pr_claims() {
+    local environment="$1"
+    local checkout_script="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/checkout-pr-claims.sh"
+    
+    if [[ -f "$checkout_script" ]]; then
+        chmod +x "$checkout_script"
+        "$checkout_script" "$environment" "$NAMESPACE" "$SERVICE_ROOT"
+    else
+        log_error "PR claims checkout script not found: $checkout_script"
+        exit 1
+    fi
+}
+
 # Helper function to get dependencies by type
 get_platform_dependencies() {
     yq eval '.dependencies.platform[]' ci/config.yaml 2>/dev/null | tr '\n' ' ' || echo ""
@@ -231,21 +257,27 @@ main() {
         load_environment_variables
     fi
     
+    # Step 3: Detect environment (PR vs main)
+    ENVIRONMENT=$(detect_environment)
+    log_info "Detected environment: $ENVIRONMENT"
+    
     echo "================================================================================"
     echo "Centralized In-Cluster Test Script (Filesystem Contract)"
     echo "================================================================================"
-    echo "  Service:    ${SERVICE_NAME}"
-    echo "  Namespace:  ${NAMESPACE}"
-    echo "  Test Path:  ${TEST_PATH:-auto-discovered}"
-    echo "  Test Name:  ${TEST_NAME:-auto-discovered}"
-    echo "  Timeout:    ${TIMEOUT}s"
-    echo "  Image Tag:  ${IMAGE_TAG}"
+    echo "  Service:     ${SERVICE_NAME}"
+    echo "  Namespace:   ${NAMESPACE}"
+    echo "  Environment: ${ENVIRONMENT}"
+    echo "  Test Path:   ${TEST_PATH:-auto-discovered}"
+    echo "  Test Name:   ${TEST_NAME:-auto-discovered}"
+    echo "  Timeout:     ${TIMEOUT}s"
+    echo "  Image Tag:   ${IMAGE_TAG}"
     echo "================================================================================"
     
     # Export environment variables for scripts
     export SERVICE_NAME="${SERVICE_NAME}"
     export IMAGE_TAG="${IMAGE_TAG}"
     export NAMESPACE="${NAMESPACE}"
+    export ENVIRONMENT="${ENVIRONMENT}"
     export TEST_PATH="${TEST_PATH}"
     export TEST_NAME="${TEST_NAME}"
     export TIMEOUT="${TIMEOUT}"
@@ -376,7 +408,10 @@ trap cleanup EXIT
         fi
     fi
 
-    # Step 3c: Patch service deployment manifests
+    # Step 3c: Checkout PR claims (if in PR environment)
+    checkout_pr_claims "$ENVIRONMENT"
+    
+    # Step 3d: Patch service deployment manifests
     log_info "Patching service deployment manifests..."
     PATCH_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/patch-service-images.sh"
     if [[ -f "$PATCH_SCRIPT" ]]; then
