@@ -51,13 +51,18 @@ echo -e "${BLUE}║   Generate .env.ssm from Environment Variables              
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-# Check if template exists, if not use hardcoded mappings
-if [ ! -f "$TEMPLATE_FILE" ]; then
-    echo -e "${YELLOW}⚠️ Template file not found, using hardcoded mappings${NC}"
-    
-    # Create temporary template from hardcoded mappings
-    cat > /tmp/env-ssm-template << 'EOF'
-/zerotouch/prod/openai_api_key=
+echo -e "${GREEN}✓ Output: $OUTPUT_FILE${NC}"
+echo ""
+
+# Generate .env.ssm from environment variables using hardcoded mappings
+echo "# Generated from environment variables on $(date)" > "$OUTPUT_FILE"
+echo "" >> "$OUTPUT_FILE"
+
+MAPPED_COUNT=0
+MISSING_COUNT=0
+
+# Hardcoded parameter list for CI/CD approach
+PARAM_LIST="/zerotouch/prod/openai_api_key=
 /zerotouch/prod/anthropic_api_key=
 /zerotouch/prod/aws-access-key-id=
 /zerotouch/prod/aws-secret-access-key=
@@ -69,22 +74,21 @@ if [ ! -f "$TEMPLATE_FILE" ]; then
 /zerotouch/prod/argocd/repos/zerotouch-tenants/password=
 /zerotouch/prod/ide-orchestrator/jwt-secret=
 /zerotouch/prod/ide-orchestrator/spec-engine-url=
-EOF
-    TEMPLATE_FILE="/tmp/env-ssm-template"
-fi
+/zerotouch/prod/identity-service/oidc_issuer=
+/zerotouch/prod/identity-service/oidc_client_id=
+/zerotouch/prod/identity-service/oidc_client_secret=
+/zerotouch/prod/identity-service/oidc_redirect_uri=
+/zerotouch/prod/identity-service/allowed_redirect_uris=
+/zerotouch/prod/identity-service/database_url=
+/zerotouch/prod/identity-service/jwt_private_key=
+/zerotouch/prod/identity-service/jwt_public_key=
+/zerotouch/prod/identity-service/jwt_key_id=
+/zerotouch/prod/identity-service/jwt_previous_private_key=
+/zerotouch/prod/identity-service/jwt_previous_public_key=
+/zerotouch/prod/identity-service/jwt_previous_key_id=
+/zerotouch/prod/identity-service/token_pepper="
 
-echo -e "${GREEN}✓ Template: $TEMPLATE_FILE${NC}"
-echo -e "${GREEN}✓ Output: $OUTPUT_FILE${NC}"
-echo ""
-
-# Generate .env.ssm from environment variables
-echo "# Generated from environment variables on $(date)" > "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-
-MAPPED_COUNT=0
-MISSING_COUNT=0
-
-# Extract parameter paths from template (lines starting with /)
+# Process hardcoded parameter list
 while IFS='=' read -r key value || [ -n "$key" ]; do
     # Skip empty lines and comments
     [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
@@ -94,8 +98,6 @@ while IFS='=' read -r key value || [ -n "$key" ]; do
         key=$(echo "$key" | xargs)  # Trim whitespace
         
         # Convert SSM path to environment variable name
-        # /zerotouch/prod/openai_api_key -> OPENAI_API_KEY
-        # Extract the last part of the path as the base env var name
         env_var=$(basename "$key" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
         
         # Special mappings for common variables
@@ -120,6 +122,20 @@ while IFS='=' read -r key value || [ -n "$key" ]; do
             # IDE Orchestrator service secrets
             /zerotouch/prod/ide-orchestrator/jwt-secret) env_var="IDEO_JWT_SECRET" ;;
             /zerotouch/prod/ide-orchestrator/spec-engine-url) env_var="IDEO_SPEC_ENGINE_URL" ;;
+            # Identity Service secrets
+            /zerotouch/prod/identity-service/oidc_issuer) env_var="IDENTITY_OIDC_ISSUER" ;;
+            /zerotouch/prod/identity-service/oidc_client_id) env_var="IDENTITY_OIDC_CLIENT_ID" ;;
+            /zerotouch/prod/identity-service/oidc_client_secret) env_var="IDENTITY_OIDC_CLIENT_SECRET" ;;
+            /zerotouch/prod/identity-service/oidc_redirect_uri) env_var="IDENTITY_OIDC_REDIRECT_URI" ;;
+            /zerotouch/prod/identity-service/allowed_redirect_uris) env_var="IDENTITY_ALLOWED_REDIRECT_URIS" ;;
+            /zerotouch/prod/identity-service/database_url) env_var="IDENTITY_DATABASE_URL" ;;
+            /zerotouch/prod/identity-service/jwt_private_key) env_var="IDENTITY_JWT_PRIVATE_KEY" ;;
+            /zerotouch/prod/identity-service/jwt_public_key) env_var="IDENTITY_JWT_PUBLIC_KEY" ;;
+            /zerotouch/prod/identity-service/jwt_key_id) env_var="IDENTITY_JWT_KEY_ID" ;;
+            /zerotouch/prod/identity-service/jwt_previous_private_key) env_var="IDENTITY_JWT_PREVIOUS_PRIVATE_KEY" ;;
+            /zerotouch/prod/identity-service/jwt_previous_public_key) env_var="IDENTITY_JWT_PREVIOUS_PUBLIC_KEY" ;;
+            /zerotouch/prod/identity-service/jwt_previous_key_id) env_var="IDENTITY_JWT_PREVIOUS_KEY_ID" ;;
+            /zerotouch/prod/identity-service/token_pepper) env_var="IDENTITY_TOKEN_PEPPER" ;;
             # Other repos - use REPOS_<NAME>_<FIELD> pattern
             */argocd/repos/*/url)
                 repo_name=$(echo "$key" | sed 's|.*/argocd/repos/\([^/]*\)/url|\1|' | tr '[:lower:]' '[:upper:]' | tr '-' '_')
@@ -149,7 +165,7 @@ while IFS='=' read -r key value || [ -n "$key" ]; do
             MISSING_COUNT=$((MISSING_COUNT + 1))
         fi
     fi
-done < "$TEMPLATE_FILE"
+done <<< "$PARAM_LIST"
 
 echo ""
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
