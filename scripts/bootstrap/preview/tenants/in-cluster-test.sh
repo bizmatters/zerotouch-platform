@@ -257,6 +257,17 @@ main() {
         load_environment_variables
     fi
     
+    # Step 2.5: Set platform root path early (needed for detect_environment)
+    if [[ -d "../zerotouch-platform" ]]; then
+        PLATFORM_ROOT="$(cd ../zerotouch-platform && pwd)"
+    elif [[ -d "./zerotouch-platform" ]]; then
+        PLATFORM_ROOT="$(cd ./zerotouch-platform && pwd)"
+    else
+        log_error "Platform directory not found. Expected ../zerotouch-platform or ./zerotouch-platform"
+        exit 1
+    fi
+    export PLATFORM_ROOT
+    
     # Step 3: Detect environment (PR vs main)
     ENVIRONMENT=$(detect_environment)
     log_info "Detected environment: $ENVIRONMENT"
