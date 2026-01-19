@@ -464,7 +464,7 @@ ANTHROPIC_API_KEY=12345567
 AWS_ROLE_ARN=
 ```
 
-## Run below command
+## Run below command only if cluster is not running in local machine
 
 ```bash
 export CLEANUP_CLUSTER=false && export $(grep -v '^#' .env | grep -v '^$' | xargs) && ./scripts/ci/in-cluster-test.sh

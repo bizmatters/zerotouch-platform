@@ -58,7 +58,17 @@ Since the Platform does not *host* the data, it acts as a **Connectivity Engine*
 
 ## 5. The Three Resource Models
 
-### Type 1: Bring Your Own Connection (MVP Scope)
+### Type 1: Internal Platform Provisioned (MVP Scope)
+**"The Self-Hosted Cloud"**
+*   **Workflow:** The user selects "Internal Postgres" and pays the Platform directly.
+*   **Platform Role:** Hoster & DBA.
+*   **Mechanism:**
+    1.  Platform triggers Crossplane to spin up a **CloudNativePG** cluster on local Kubernetes nodes.
+    2.  Data lives on local NVMe/SSD via OpenEBS/Longhorn.
+*   **Pros:** Cheapest for the user (no AWS markup). High margins for the Platform. Good for dev/preview environments.
+*   **Cons:** High operational risk for the solo founder (backups, disk resizing, HA are your problem).
+
+### Type 2: Bring Your Own Connection (Future Scope)
 **"The Connectivity Vault"**
 *   **Workflow:** The user provisions a database externally (e.g., AWS Console, Neon UI), copies the connection string, and pastes it into our Platform Dashboard.
 *   **Platform Role:** Secure Storage & Injection.
@@ -69,7 +79,7 @@ Since the Platform does not *host* the data, it acts as a **Connectivity Engine*
 *   **Pros:** Lowest engineering effort for MVP. Zero liability for data persistence (user owns the backup).
 *   **Cons:** Higher friction for the user (context switching).
 
-### Type 2: Bring Your Own Credentials (BYO-Key) (Future Scope)
+### Type 3: Bring Your Own Credentials (BYO-Key) (Future Scope)
 **"The Automated Operator"**
 *   **Workflow:** The user provides a high-privilege API Key (e.g., AWS IAM User, Neon API Key) to the Platform.
 *   **Platform Role:** Lifecycle Manager (Provision, Deprovision).
@@ -79,16 +89,6 @@ Since the Platform does not *host* the data, it acts as a **Connectivity Engine*
     3.  Platform captures the resulting connection string automatically.
 *   **Pros:** "Magical" UX. No financial liability (bills go to user).
 *   **Cons:** Complex state reconciliation (Drift Detection) required.
-
-### Type 3: Internal Platform Provisioned (Future Scope)
-**"The Self-Hosted Cloud"**
-*   **Workflow:** The user selects "Internal Postgres" and pays the Platform directly.
-*   **Platform Role:** Hoster & DBA.
-*   **Mechanism:**
-    1.  Platform triggers Crossplane to spin up a **CloudNativePG** cluster on local Kubernetes nodes.
-    2.  Data lives on local NVMe/SSD via OpenEBS/Longhorn.
-*   **Pros:** Cheapest for the user (no AWS markup). High margins for the Platform. Good for dev/preview environments.
-*   **Cons:** High operational risk for the solo founder (backups, disk resizing, HA are your problem).
 
 ## 3. MVP Implementation Strategy
 
