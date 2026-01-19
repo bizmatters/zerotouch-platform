@@ -92,20 +92,20 @@ echo "✅ Mock landing zone '${NAMESPACE}' created"
 
 # Apply platform claims and manifests
 echo "📋 Applying platform claims..."
-echo "🔍 Checking for platform claims in: ${PROJECT_ROOT}/platform/claims/${NAMESPACE}"
+echo "🔍 Checking for platform claims in: ${PROJECT_ROOT}/platform/${SERVICE_NAME}/base/claims/"
 
-if [[ ! -d "${PROJECT_ROOT}/platform/claims/${NAMESPACE}" ]]; then
-    echo "❌ No platform claims found in ${PROJECT_ROOT}/platform/claims/${NAMESPACE}"
+if [[ ! -d "${PROJECT_ROOT}/platform/${SERVICE_NAME}/base/claims/" ]]; then
+    echo "❌ No platform claims found in ${PROJECT_ROOT}/platform/${SERVICE_NAME}/base/claims/"
     echo "🔍 Debug: Current directory: $(pwd)"
     echo "🔍 Debug: PROJECT_ROOT: ${PROJECT_ROOT}"
-    echo "🔍 Debug: Listing ${PROJECT_ROOT}/platform/claims/:"
-    ls -la "${PROJECT_ROOT}/platform/claims/" || echo "Directory not found"
+    echo "🔍 Debug: Listing ${PROJECT_ROOT}/platform/${SERVICE_NAME}/:"
+    ls -la "${PROJECT_ROOT}/platform/${SERVICE_NAME}/" || echo "Directory not found"
     exit 1
 fi
 
 echo "✅ Found platform claims directory"
 # Apply platform claims for the namespace (recursive to include subdirectories)
-kubectl apply -f "${PROJECT_ROOT}/platform/claims/${NAMESPACE}/" -n "${NAMESPACE}" --recursive
+kubectl apply -f "${PROJECT_ROOT}/platform/${SERVICE_NAME}/base/claims/" -n "${NAMESPACE}" --recursive
 echo "✅ Platform claims applied"
 
 # Wait for infrastructure dependencies using dedicated script
