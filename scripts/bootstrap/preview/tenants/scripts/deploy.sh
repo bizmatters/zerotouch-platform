@@ -108,6 +108,31 @@ echo "✅ Found platform claims directory"
 kubectl apply -f "${PROJECT_ROOT}/platform/${SERVICE_NAME}/base/claims/" -n "${NAMESPACE}" --recursive
 echo "✅ Platform claims applied"
 
+# Apply external secrets if they exist
+EXTERNAL_SECRETS_DIR="${PROJECT_ROOT}/platform/${SERVICE_NAME}/base/external-secrets"
+if [[ -d "$EXTERNAL_SECRETS_DIR" ]]; then
+    echo "📋 Applying external secrets..."
+    kubectl apply -f "$EXTERNAL_SECRETS_DIR/" -n "${NAMESPACE}" --recursive
+    echo "✅ External secrets applied"
+fi
+
+# Apply overlay claims if they exist (for PR environment)
+OVERLAY_CLAIMS_DIR="${PROJECT_ROOT}/platform/${SERVICE_NAME}/overlays/pr"
+if [[ -d "$OVERLAY_CLAIMS_DIR" ]]; then
+    echo "📋 Applying PR overlay claims..."
+    # Skip certain files that shouldn't be applied directly
+    for claim_file in "$OVERLAY_CLAIMS_DIR"/*.yaml; do
+        if [[ -f "$claim_file" ]]; then
+            filename=$(basename "$claim_file")
+            if [[ "$filename" != "config.yaml" && "$filename" != kustomization* && "$filename" != *-job.yaml ]]; then
+                echo "Applying: $filename"
+                kubectl apply -f "$claim_file" -n "${NAMESPACE}"
+            fi
+        fi
+    done
+    echo "✅ PR overlay claims applied"
+fi
+
 # Wait for infrastructure dependencies using dedicated script
 INFRA_WAIT_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/wait-for-database-and-secrets.sh"
 if [[ -f "$INFRA_WAIT_SCRIPT" ]]; then

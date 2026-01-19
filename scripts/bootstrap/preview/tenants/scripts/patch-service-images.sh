@@ -47,17 +47,24 @@ main() {
     local target_image="${IMAGE_TAG}"
     log_info "  Target:  ${target_image}"
 
-    # Find all yaml files in platform/claims and replace any image field containing the service name
+    # Find all yaml files in platform/SERVICE_NAME/overlays/BUILD_MODE and replace any image field containing the service name
     local count=0
     local files_found=0
 
-    # Check if platform/claims directory exists
-    if [[ ! -d "platform/claims" ]]; then
-        log_warn "platform/claims directory not found, skipping image patching"
+    # Map build mode to overlay directory
+    local overlay_env="$BUILD_MODE"
+    if [[ "$BUILD_MODE" == "test" ]]; then
+        overlay_env="pr"
+    fi
+    
+    # Check if platform/SERVICE_NAME/overlays/overlay_env directory exists
+    local claims_dir="platform/${SERVICE_NAME}/overlays/${overlay_env}"
+    if [[ ! -d "$claims_dir" ]]; then
+        log_warn "$claims_dir directory not found, skipping image patching"
         return 0
     fi
 
-    # Using find to get files, then processing
+    # Using find to get files from the correct claims directory, then processing
     while IFS= read -r file; do
         if [[ -f "$file" ]]; then
             files_found=$((files_found + 1))
@@ -88,7 +95,7 @@ main() {
                 fi
             fi
         fi
-    done < <(find platform/claims -name "*.yaml" -type f 2>/dev/null || true)
+    done < <(find "$claims_dir" -name "*.yaml" -type f 2>/dev/null || true)
 
     if [[ $files_found -eq 0 ]]; then
         log_warn "No YAML files found in platform/claims directory"

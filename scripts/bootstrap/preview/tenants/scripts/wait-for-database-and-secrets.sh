@@ -18,6 +18,18 @@ if [[ -z "${PLATFORM_ROOT:-}" ]]; then
     PLATFORM_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 fi
 
+# Color codes
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+log_info() { echo -e "${BLUE}[DB-SECRETS-WAIT]${NC} $*"; }
+log_success() { echo -e "${GREEN}[DB-SECRETS-WAIT]${NC} $*"; }
+log_warn() { echo -e "${YELLOW}[DB-SECRETS-WAIT]${NC} $*"; }
+log_error() { echo -e "${RED}[DB-SECRETS-WAIT]${NC} $*"; }
+
 # PROJECT_ROOT should be set by calling script (deploy.sh)
 # If not set, try to determine from current context
 if [[ -z "${PROJECT_ROOT:-}" ]]; then
@@ -92,7 +104,7 @@ wait_for_external_secret() {
 
 # Function to discover required secrets from ExternalSecret manifests
 discover_required_secrets() {
-    local secrets_dir="${PROJECT_ROOT}/platform/claims/${NAMESPACE}/external-secrets"
+    local secrets_dir="${PROJECT_ROOT}/platform/${SERVICE_NAME}/base/external-secrets"
     local required_secrets=()
     
     if [[ -d "$secrets_dir" ]]; then
@@ -121,7 +133,7 @@ discover_required_secrets() {
         log_info "Service may not require ExternalSecrets" >&2
     fi
     
-    echo "${required_secrets[@]}"
+    echo "${required_secrets[@]:-}"
 }
 
 # Function to wait for all required external secrets
@@ -134,7 +146,11 @@ wait_for_external_secrets() {
     local required_secrets=($required_secrets_output)
     
     log_info "Debug - Raw output: '$required_secrets_output'"
-    log_info "Debug - Parsed secrets: ${required_secrets[*]}"
+    if [[ ${#required_secrets[@]} -gt 0 ]]; then
+        log_info "Debug - Parsed secrets: ${required_secrets[*]}"
+    else
+        log_info "Debug - No secrets found"
+    fi
     
     local failed_secrets=()
     
@@ -143,7 +159,11 @@ wait_for_external_secrets() {
         return 0
     fi
     
-    log_info "Waiting for ${#required_secrets[@]} ExternalSecrets: ${required_secrets[*]}"
+    if [[ ${#required_secrets[@]} -gt 0 ]]; then
+        log_info "Waiting for ${#required_secrets[@]} ExternalSecrets: ${required_secrets[*]}"
+    else
+        log_info "No ExternalSecrets to wait for"
+    fi
     
     for secret in "${required_secrets[@]}"; do
         if ! wait_for_external_secret "$secret" 300; then
