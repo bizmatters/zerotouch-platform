@@ -23,7 +23,7 @@ checkout_pr_claims() {
     local namespace="$2"
     local service_name="$3"
     
-    if [[ "$environment" == "pr" ]]; then
+    if [[ "$environment" == "pr" || "$environment" == "preview" ]]; then
         log_info "Checking out PR claims for service: $service_name, namespace: $namespace"
         
         # Checkout zerotouch-tenants repository
