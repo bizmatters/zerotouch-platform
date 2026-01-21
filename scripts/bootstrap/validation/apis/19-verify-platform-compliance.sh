@@ -6,28 +6,21 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+# Source shared diagnostics library first so we can override helpers if needed
 HELPERS_DIR="$(cd "$SCRIPT_DIR/../../helpers" && pwd)"
-
-# Source shared diagnostics library
 if [ -f "$HELPERS_DIR/diagnostics.sh" ]; then
     source "$HELPERS_DIR/diagnostics.sh"
 fi
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-# Kubectl retry function
+# Override kubectl_retry with a more robust version for this compliance script
+# since we deal with potentially many resources and API latency
 kubectl_retry() {
     local max_attempts=20
-    local timeout=15
     local attempt=1
     local exitCode=0
 
     while [ $attempt -le $max_attempts ]; do
+        # Do NOT silence stderr here, we want to see connection issues in CI logs
         if kubectl "$@"; then
             return 0
         fi
@@ -190,40 +183,53 @@ if kubectl apply -f /tmp/test-eds.yaml &>/dev/null; then
     
     # Wait for deployment to be ready and patched
     echo -n "Waiting for EventDrivenService to reconcile... "
-    if ! kubectl wait --for=condition=available deployment/compliance-test-eds -n platform-compliance-test --timeout=60s &>/dev/null; then
+    if ! kubectl wait --for=condition=available deployment/compliance-test-eds -n platform-compliance-test --timeout=60s; then
         echo -e "${YELLOW}Timeout reached${NC}"
-        echo -e "${BLUE}Running diagnostics for EventDrivenService...${NC}"
-        # Check pod status for memory/scheduling issues
-        show_pod_details "platform-compliance-test" "app.kubernetes.io/name=compliance-test-eds"
-        show_recent_events "platform-compliance-test" "FailedScheduling|Insufficient"
+        echo -e "${BLUE}=== Aggressive Diagnostics for EventDrivenService ===${NC}"
+        
+        echo -e "${YELLOW}1. Claim Status:${NC}"
+        kubectl get eventdrivenservice compliance-test-eds -n platform-compliance-test -o yaml || echo "Claim not found"
+        
+        echo -e "\n${YELLOW}2. Managed Resources:${NC}"
+        # We look for Object resources created by this claim
+        kubectl get object -l crossplane.io/claim-name=compliance-test-eds -n platform-compliance-test || echo "No managed objects found"
+        
+        echo -e "\n${YELLOW}3. Pod Status:${NC}"
+        kubectl get pods -n platform-compliance-test -l app.kubernetes.io/name=compliance-test-eds -o wide || echo "No pods found"
+        
+        echo -e "\n${YELLOW}4. Namespace Events (All):${NC}"
+        kubectl get events -n platform-compliance-test --sort-by='.lastTimestamp' | tail -20
+        
+        echo -e "\n${YELLOW}5. Provider Health:${NC}"
+        kubectl get pods -n crossplane-system -l pkg.crossplane.io/provider=provider-kubernetes || echo "Provider pods not found"
     else
         echo "Done."
     fi
     sleep 5 # Small buffer for Crossplane provider-kubernetes to finish patching final fields
     
     # Check if deployment has correct security contexts
-    if kubectl_retry get deployment compliance-test-eds -n platform-compliance-test -o json 2>/dev/null | jq -e '.spec.template.spec.securityContext.runAsNonRoot == true' &>/dev/null; then
+    if kubectl_retry get deployment compliance-test-eds -n platform-compliance-test -o json | jq -e '.spec.template.spec.securityContext.runAsNonRoot == true'; then
         log_success "EventDrivenService deployment has runAsNonRoot security context"
     else
         log_error "EventDrivenService deployment missing runAsNonRoot security context"
     fi
     
     # Check container security context
-    if kubectl_retry get deployment compliance-test-eds -n platform-compliance-test -o json 2>/dev/null | jq -e '.spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation == false' &>/dev/null; then
+    if kubectl_retry get deployment compliance-test-eds -n platform-compliance-test -o json | jq -e '.spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation == false'; then
         log_success "EventDrivenService container has allowPrivilegeEscalation: false"
     else
         log_error "EventDrivenService container missing allowPrivilegeEscalation: false"
     fi
     
     # Check observability annotations
-    if kubectl_retry get deployment compliance-test-eds -n platform-compliance-test -o json 2>/dev/null | jq -e '.spec.template.metadata.annotations."prometheus.io/scrape" == "true"' &>/dev/null; then
+    if kubectl_retry get deployment compliance-test-eds -n platform-compliance-test -o json | jq -e '.spec.template.metadata.annotations."prometheus.io/scrape" == "true"'; then
         log_success "EventDrivenService has Prometheus scrape annotation"
     else
         log_error "EventDrivenService missing Prometheus scrape annotation"
     fi
     
     # Check resource allocation
-    CPU_REQUEST=$(kubectl_retry get deployment compliance-test-eds -n platform-compliance-test -o json 2>/dev/null | jq -r '.spec.template.spec.containers[0].resources.requests.cpu' 2>/dev/null)
+    CPU_REQUEST=$(kubectl_retry get deployment compliance-test-eds -n platform-compliance-test -o json | jq -r '.spec.template.spec.containers[0].resources.requests.cpu // ""')
     if [ "$CPU_REQUEST" = "100m" ]; then
         log_success "EventDrivenService micro size has correct CPU request: $CPU_REQUEST"
     else
@@ -254,26 +260,38 @@ if kubectl apply -f /tmp/test-ws.yaml &>/dev/null; then
     
     # Wait for deployment to be ready and patched
     echo -n "Waiting for WebService to reconcile... "
-    if ! kubectl wait --for=condition=available deployment/compliance-test-ws -n platform-compliance-test --timeout=60s &>/dev/null; then
+    if ! kubectl wait --for=condition=available deployment/compliance-test-ws -n platform-compliance-test --timeout=60s; then
         echo -e "${YELLOW}Timeout reached${NC}"
-        echo -e "${BLUE}Running diagnostics for WebService...${NC}"
-        # Check pod status for memory/scheduling issues
-        show_pod_details "platform-compliance-test" "app.kubernetes.io/name=compliance-test-ws"
-        show_recent_events "platform-compliance-test" "FailedScheduling|Insufficient"
+        echo -e "${BLUE}=== Aggressive Diagnostics for WebService ===${NC}"
+        
+        echo -e "${YELLOW}1. Claim Status:${NC}"
+        kubectl get webservice compliance-test-ws -n platform-compliance-test -o yaml || echo "Claim not found"
+        
+        echo -e "\n${YELLOW}2. Managed Resources:${NC}"
+        kubectl get object -l crossplane.io/claim-name=compliance-test-ws -n platform-compliance-test || echo "No managed objects found"
+        
+        echo -e "\n${YELLOW}3. Pod Status:${NC}"
+        kubectl get pods -n platform-compliance-test -l app.kubernetes.io/name=compliance-test-ws -o wide || echo "No pods found"
+        
+        echo -e "\n${YELLOW}4. Namespace Events (All):${NC}"
+        kubectl get events -n platform-compliance-test --sort-by='.lastTimestamp' | tail -20
+
+        echo -e "\n${YELLOW}5. Provider Health:${NC}"
+        kubectl get pods -n crossplane-system -l pkg.crossplane.io/provider=provider-kubernetes || echo "Provider pods not found"
     else
         echo "Done."
     fi
     sleep 5 # Small buffer for Crossplane provider-kubernetes to finish patching final fields
     
     # Check if deployment has correct security contexts
-    if kubectl_retry get deployment compliance-test-ws -n platform-compliance-test -o json 2>/dev/null | jq -e '.spec.template.spec.securityContext.runAsNonRoot == true' &>/dev/null; then
+    if kubectl_retry get deployment compliance-test-ws -n platform-compliance-test -o json | jq -e '.spec.template.spec.securityContext.runAsNonRoot == true'; then
         log_success "WebService deployment has runAsNonRoot security context"
     else
         log_error "WebService deployment missing runAsNonRoot security context"
     fi
     
     # Check resource allocation consistency
-    CPU_REQUEST=$(kubectl_retry get deployment compliance-test-ws -n platform-compliance-test -o json 2>/dev/null | jq -r '.spec.template.spec.containers[0].resources.requests.cpu' 2>/dev/null)
+    CPU_REQUEST=$(kubectl_retry get deployment compliance-test-ws -n platform-compliance-test -o json | jq -r '.spec.template.spec.containers[0].resources.requests.cpu // ""')
     if [ "$CPU_REQUEST" = "100m" ]; then
         log_success "WebService micro size has correct CPU request: $CPU_REQUEST (consistent with EventDrivenService)"
     else
@@ -281,11 +299,11 @@ if kubectl apply -f /tmp/test-ws.yaml &>/dev/null; then
     fi
     
     # Check Service creation
-    if kubectl_retry get service compliance-test-ws -n platform-compliance-test &>/dev/null; then
+    if kubectl_retry get service compliance-test-ws -n platform-compliance-test; then
         log_success "WebService Service resource created"
         
         # Check Service has observability annotations
-        if kubectl_retry get service compliance-test-ws -n platform-compliance-test -o json 2>/dev/null | jq -e '.metadata.annotations."prometheus.io/scrape" == "true"' &>/dev/null; then
+        if kubectl_retry get service compliance-test-ws -n platform-compliance-test -o json | jq -e '.metadata.annotations."prometheus.io/scrape" == "true"'; then
             log_success "WebService Service has Prometheus scrape annotation"
         else
             log_error "WebService Service missing Prometheus scrape annotation"
