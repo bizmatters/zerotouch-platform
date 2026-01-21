@@ -22,7 +22,7 @@ kubectl_retry() {
     local exitCode=0
 
     while [ $attempt -le $max_attempts ]; do
-        if timeout $timeout kubectl "$@"; then
+        if kubectl "$@"; then
             return 0
         fi
 
@@ -182,8 +182,11 @@ EOF
 if kubectl apply -f /tmp/test-eds.yaml &>/dev/null; then
     log_success "EventDrivenService test deployment created"
     
-    # Wait for deployment to be ready
-    sleep 10
+    # Wait for deployment to be ready and patched
+    echo -n "Waiting for EventDrivenService to reconcile... "
+    kubectl wait --for=condition=available deployment/compliance-test-eds -n platform-compliance-test --timeout=60s &>/dev/null || true
+    sleep 5 # Small buffer for Crossplane provider-kubernetes to finish patching final fields
+    echo "Done."
     
     # Check if deployment has correct security contexts
     if kubectl_retry get deployment compliance-test-eds -n platform-compliance-test -o json 2>/dev/null | jq -e '.spec.template.spec.securityContext.runAsNonRoot == true' &>/dev/null; then
@@ -236,8 +239,11 @@ EOF
 if kubectl apply -f /tmp/test-ws.yaml &>/dev/null; then
     log_success "WebService test deployment created"
     
-    # Wait for deployment to be ready
-    sleep 10
+    # Wait for deployment to be ready and patched
+    echo -n "Waiting for WebService to reconcile... "
+    kubectl wait --for=condition=available deployment/compliance-test-ws -n platform-compliance-test --timeout=60s &>/dev/null || true
+    sleep 5 # Small buffer for Crossplane provider-kubernetes to finish patching final fields
+    echo "Done."
     
     # Check if deployment has correct security contexts
     if kubectl_retry get deployment compliance-test-ws -n platform-compliance-test -o json 2>/dev/null | jq -e '.spec.template.spec.securityContext.runAsNonRoot == true' &>/dev/null; then
