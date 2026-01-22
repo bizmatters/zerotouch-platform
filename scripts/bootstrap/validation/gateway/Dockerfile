@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y curl && \
 RUN pip install requests pytest
 
 # Copy validation script
-COPY validate-test-endpoint.py /app/
+COPY 02-validate-test-endpoint.py /app/
 
 # Run validation
-CMD ["python", "-m", "pytest", "validate-test-endpoint.py", "-v"]
+CMD ["python", "-m", "pytest", "02-validate-test-endpoint.py", "-v"]
