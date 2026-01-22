@@ -11,8 +11,12 @@ RUN apt-get update && apt-get install -y curl && \
 # Install Python dependencies
 RUN pip install requests pytest
 
-# Copy validation script
+# Copy validation scripts
 COPY 02-validate-test-endpoint.py /app/
+COPY 03-validate-gateway-config.py /app/
+
+# Install additional dependencies for gateway config validation
+RUN pip install pyyaml
 
 # Run validation
 CMD ["python", "-m", "pytest", "02-validate-test-endpoint.py", "-v"]

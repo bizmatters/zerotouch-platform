@@ -252,7 +252,42 @@ fi
 
 echo ""
 
-# 7. Check for OutOfSync applications
+# 7. Gateway Validation
+echo "🌐 Gateway Validation:"
+echo "------------------------------------------"
+
+GATEWAY_VALIDATION_SCRIPT="$SCRIPT_DIR/agent-gateway/00-validate-agent-gateway.sh"
+echo -e "${BLUE}Running comprehensive Gateway validation...${NC}"
+
+if [[ -f "$GATEWAY_VALIDATION_SCRIPT" ]]; then
+    # Make executable and run
+    chmod +x "$GATEWAY_VALIDATION_SCRIPT"
+    
+    # Capture both stdout and stderr, preserve exit code
+    set +e
+    "$GATEWAY_VALIDATION_SCRIPT" 2>&1
+    gateway_exit_code=$?
+    set -e
+    
+    if [ $gateway_exit_code -eq 0 ]; then
+        echo -e "  ✅ ${GREEN}All Gateway validations passed${NC}"
+    else
+        echo -e "  ❌ ${RED}Gateway validation failed (exit code: $gateway_exit_code)${NC}"
+        echo ""
+        echo -e "  ${YELLOW}For detailed debugging, run:${NC}"
+        echo -e "    ./scripts/bootstrap/validation/gateway/00-validate-all-gateway.sh"
+        echo ""
+        
+        ((FAILED++)) || true
+    fi
+else
+    echo -e "  ❌ ${RED}Gateway validation script not found${NC}"
+    ((FAILED++)) || true
+fi
+
+echo ""
+
+# 8. Check for OutOfSync applications
 echo "🔄 Checking for Configuration Drift:"
 echo "------------------------------------------"
 
@@ -297,7 +332,7 @@ fi
 
 echo ""
 
-# 8. Final Summary
+# 9. Final Summary
 echo "=========================================="
 if [[ $FAILED -eq 0 ]]; then
     echo -e "✅ ${GREEN}VALIDATION PASSED${NC}"
