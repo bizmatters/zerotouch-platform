@@ -363,6 +363,19 @@ def test_include_headers_configuration():
         session_cookie = f"__Host-platform_session={cookie_parts}"
         print(f"🔍 Headers test session cookie: {session_cookie[:50]}...")
         
+        # Verify session is valid before testing gateway (prevent race condition)
+        print("🔍 Verifying session validity before gateway test...")
+        validate_headers = {"Cookie": session_cookie}
+        validate_response = make_request("POST", "/internal/validate", identity_host, headers=validate_headers)
+        print(f"🔍 Session validation response: {validate_response.status_code}")
+        
+        if validate_response.status_code != 200:
+            print(f"❌ Session validation failed: {validate_response.status_code}")
+            print(f"❌ Validation response: {validate_response.text}")
+            return False
+        
+        print("✅ Session validated successfully")
+        
         # Test request with Cookie header only (not Authorization)
         # The Authorization header will be added by extAuthz after validation
         headers = {

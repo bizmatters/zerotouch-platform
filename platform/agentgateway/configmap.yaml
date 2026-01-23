@@ -45,7 +45,7 @@ data:
                     protocol:
                       http:
                         path: '"/internal/validate"'
-                        includeResponseHeaders: ["Authorization", "X-Auth-User-Id", "X-Auth-Org-Id"]
+                        includeResponseHeaders: ["Authorization", "X-Auth-User-Id", "X-Auth-Org-Id", "X-Auth-Role"]
                   
                   # Step B: Strip the session cookie to ensure downstream only sees the JWT
                   requestHeaderModifier:
