@@ -363,13 +363,18 @@ fi
 # Final cluster validation
 if [ "$MODE" = "production" ]; then
     echo -e "${YELLOW}Running final cluster validation...${NC}"
+    "$SCRIPT_DIR/validation/99-validate-cluster.sh" || {
+        echo -e "${YELLOW}⚠️  Cluster validation found issues${NC}"
+        echo -e "${BLUE}ℹ  Check ArgoCD applications: kubectl get applications -n argocd${NC}"
+    }
+    
+    echo -e "${YELLOW}Running external gateway validation...${NC}"
+    "$SCRIPT_DIR/validation/external-dns/00-validate-external-gateway.sh" || {
+        echo -e "${YELLOW}⚠️  External gateway validation found issues${NC}"
+    }
 else
     echo -e "${BLUE}Skipping final cluster validation (preview mode)${NC}"
 fi
-"$SCRIPT_DIR/validation/99-validate-cluster.sh" || {
-    echo -e "${YELLOW}⚠️  Cluster validation found issues${NC}"
-    echo -e "${BLUE}ℹ  Check ArgoCD applications: kubectl get applications -n argocd${NC}"
-}
 
 # ============================================================================
 # BOOTSTRAP COMPLETE

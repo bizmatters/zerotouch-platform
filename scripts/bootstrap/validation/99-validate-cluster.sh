@@ -275,7 +275,7 @@ if [[ -f "$GATEWAY_VALIDATION_SCRIPT" ]]; then
         echo -e "  ❌ ${RED}Gateway validation failed (exit code: $gateway_exit_code)${NC}"
         echo ""
         echo -e "  ${YELLOW}For detailed debugging, run:${NC}"
-        echo -e "    ./scripts/bootstrap/validation/gateway/00-validate-all-gateway.sh"
+        echo -e "    ./scripts/bootstrap/validation/agent-gateway/00-validate-all-gateway.sh"
         echo ""
         
         ((FAILED++)) || true
