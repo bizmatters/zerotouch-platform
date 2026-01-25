@@ -182,14 +182,4 @@ patches:
                 ExperimentalGatewayAPISupport: false
 
 # 6. Configure agentgateway for preview mode (no HTTPRoute dependency)
-- target:
-    kind: Application
-    name: agentgateway
-  patch: |-
-    apiVersion: argoproj.io/v1alpha1
-    kind: Application
-    metadata:
-      name: agentgateway
-    spec:
-      syncPolicy:
-        automated: null
+# Note: HTTPRoute is now handled separately in main/core, no special config needed for preview
