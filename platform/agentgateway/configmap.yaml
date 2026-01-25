@@ -57,4 +57,4 @@ data:
                   requestHeaderModifier:
                     remove: ["Cookie"]
                 backends:
-                  - host: "identity-service.platform-identity.svc.cluster.local:3000"
+                  - host: "ide-orchestrator.intelligence-orchestrator.svc.cluster.local:8080"
