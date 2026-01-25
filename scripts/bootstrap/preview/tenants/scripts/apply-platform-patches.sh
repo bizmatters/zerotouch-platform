@@ -62,8 +62,8 @@ main() {
     log_info "Step 3: Applying conditional service patches based on service configuration..."
     
     # Call the conditional services patch script
-    PATCHES_DIR="$(dirname "$0")/../../patches"
-    CONDITIONAL_PATCH_SCRIPT="$PATCHES_DIR/02-disable-undeclared-services.sh"
+    # PATCHES_DIR="$(dirname "$0")/../../patches"
+    # CONDITIONAL_PATCH_SCRIPT="$PATCHES_DIR/02-disable-undeclared-services.sh"
     
     if [[ -f "$CONDITIONAL_PATCH_SCRIPT" ]]; then
         log_info "Running conditional services patch: $CONDITIONAL_PATCH_SCRIPT"
