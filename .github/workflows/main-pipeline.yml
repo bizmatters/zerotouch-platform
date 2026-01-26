@@ -21,22 +21,11 @@ jobs:
   deploy-dev:
     needs: platform-test
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Trigger Dev Cluster Creation
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.BOT_GITHUB_TOKEN }}
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'create-cluster.yaml',
-              ref: 'main',
-              inputs: {
-                environment: 'dev'
-              }
-            });
+    uses: ./.github/workflows/create-cluster.yaml
+    with:
+      environment: 'dev'
+      skip_rescue_mode: false
+    secrets: inherit
 
   # STAGE 3: Deploy to Staging (Manual Approval)
   deploy-staging:

@@ -17,6 +17,17 @@ on:
         required: false
         type: boolean
         default: false
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Environment to bootstrap'
+        required: true
+        type: string
+      skip_rescue_mode:
+        description: 'Skip rescue mode (if already enabled)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   id-token: write      # Required for OIDC

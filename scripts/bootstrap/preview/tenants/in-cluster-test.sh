@@ -116,7 +116,10 @@ checkout_pr_claims() {
     
     if [[ -f "$checkout_script" ]]; then
         chmod +x "$checkout_script"
-        "$checkout_script" "$environment" "$NAMESPACE" "$SERVICE_ROOT"
+        # Extract service name from SERVICE_ROOT path
+        local service_name=$(basename "$SERVICE_ROOT")
+        log_info "Calling checkout script with args: environment='$environment', namespace='$NAMESPACE', service_name='$service_name'"
+        "$checkout_script" "$environment" "$NAMESPACE" "$service_name"
     else
         log_error "PR claims checkout script not found: $checkout_script"
         exit 1
