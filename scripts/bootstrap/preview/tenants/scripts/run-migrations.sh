@@ -58,37 +58,22 @@ spec:
       - name: migrate
         image: postgres:15
         env:
-        - name: POSTGRES_HOST
+        - name: POSTGRES_URI
           valueFrom:
             secretKeyRef:
               name: ${SERVICE_NAME}-db-conn
-              key: POSTGRES_HOST
-        - name: POSTGRES_PORT
-          valueFrom:
-            secretKeyRef:
-              name: ${SERVICE_NAME}-db-conn
-              key: POSTGRES_PORT
-        - name: POSTGRES_DB
-          valueFrom:
-            secretKeyRef:
-              name: ${SERVICE_NAME}-db-conn
-              key: POSTGRES_DB
-        - name: POSTGRES_USER
-          valueFrom:
-            secretKeyRef:
-              name: ${SERVICE_NAME}-db-conn
-              key: POSTGRES_USER
-        - name: POSTGRES_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: ${SERVICE_NAME}-db-conn
-              key: POSTGRES_PASSWORD
+              key: POSTGRES_URI
         command: ["/bin/bash"]
         args:
         - -c
         - |
           echo "Waiting for PostgreSQL to be ready..."
-          until pg_isready -h \$POSTGRES_HOST -p \$POSTGRES_PORT -U \$POSTGRES_USER; do
+          # Extract connection details from POSTGRES_URI
+          POSTGRES_USER=\$(echo "\$POSTGRES_URI" | sed -n 's|.*://\([^:]*\):.*|\1|p')
+          POSTGRES_HOST=\$(echo "\$POSTGRES_URI" | sed -n 's|.*@\([^:/]*\).*|\1|p')
+          POSTGRES_PORT=\$(echo "\$POSTGRES_URI" | sed -n 's|.*:\([0-9]*\)/.*|\1|p')
+          
+          until pg_isready -h "\$POSTGRES_HOST" -p "\$POSTGRES_PORT" -U "\$POSTGRES_USER"; do
             echo "PostgreSQL not ready, waiting..."
             sleep 2
           done
@@ -98,7 +83,7 @@ spec:
           for migration in /migrations/*.up.sql; do
             if [ -f "\$migration" ]; then
               echo "Running migration: \$(basename \$migration)"
-              PGPASSWORD=\$POSTGRES_PASSWORD psql -h \$POSTGRES_HOST -p \$POSTGRES_PORT -U \$POSTGRES_USER -d \$POSTGRES_DB -f "\$migration"
+              psql "\$POSTGRES_URI" -f "\$migration"
             fi
           done
           
