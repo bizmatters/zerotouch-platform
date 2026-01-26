@@ -5,6 +5,7 @@
 # This script generates .env.ssm from environment variables using
 # .env.ssm.example as a template. Used in CI/CD environments where
 # secrets are passed as environment variables.
+# rm -f .env.ssm && export $(grep -v '^#' .env | xargs) && ./zerotouch-platform/scripts/bootstrap/install/08-inject-ssm-parameters.sh
 
 set -e
 
@@ -88,7 +89,10 @@ PARAM_LIST="/zerotouch/prod/openai_api_key=
 /zerotouch/prod/identity-service/jwt_previous_private_key=
 /zerotouch/prod/identity-service/jwt_previous_public_key=
 /zerotouch/prod/identity-service/jwt_previous_key_id=
-/zerotouch/prod/identity-service/token_pepper="
+/zerotouch/prod/identity-service/token_pepper=
+/zerotouch/prod/deepagents-runtime/postgres_uri=
+/zerotouch/prod/deepagents-runtime/openai_api_key=
+/zerotouch/prod/deepagents-runtime/anthropic_api_key="
 
 # Process hardcoded parameter list
 while IFS='=' read -r key value || [ -n "$key" ]; do
@@ -146,6 +150,10 @@ while IFS='=' read -r key value || [ -n "$key" ]; do
             /zerotouch/prod/identity-service/jwt_previous_public_key) env_var="IDENTITY_JWT_PREVIOUS_PUBLIC_KEY" ;;
             /zerotouch/prod/identity-service/jwt_previous_key_id) env_var="IDENTITY_JWT_PREVIOUS_KEY_ID" ;;
             /zerotouch/prod/identity-service/token_pepper) env_var="IDENTITY_TOKEN_PEPPER" ;;
+            # DeepAgents Runtime secrets
+            /zerotouch/prod/deepagents-runtime/postgres_uri) env_var="POSTGRES_URI" ;;
+            /zerotouch/prod/deepagents-runtime/openai_api_key) env_var="OPENAI_API_KEY" ;;
+            /zerotouch/prod/deepagents-runtime/anthropic_api_key) env_var="ANTHROPIC_API_KEY" ;;
             # Other repos - use REPOS_<NAME>_<FIELD> pattern
             */argocd/repos/*/url)
                 repo_name=$(echo "$key" | sed 's|.*/argocd/repos/\([^/]*\)/url|\1|' | tr '[:lower:]' '[:upper:]' | tr '-' '_')
