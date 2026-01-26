@@ -91,7 +91,7 @@ PARAM_LIST="/zerotouch/prod/openai_api_key=
 /zerotouch/prod/identity-service/jwt_previous_public_key=
 /zerotouch/prod/identity-service/jwt_previous_key_id=
 /zerotouch/prod/identity-service/token_pepper=
-/zerotouch/prod/deepagents-runtime/postgres_uri=
+/zerotouch/prod/deepagents-runtime/database_url=
 /zerotouch/prod/deepagents-runtime/openai_api_key=
 /zerotouch/prod/deepagents-runtime/anthropic_api_key="
 
