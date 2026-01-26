@@ -24,15 +24,18 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
 fi
 
 INTERNAL_DEPS=$(yq eval '.dependencies.internal[]' "$CONFIG_FILE" 2>/dev/null | tr '\n' ' ' || echo "")
+EXTERNAL_DEPS=$(yq eval '.dependencies.external[]' "$CONFIG_FILE" 2>/dev/null | tr '\n' ' ' || echo "")
+ALL_DEPS="$INTERNAL_DEPS $EXTERNAL_DEPS"
 
 generate_env_vars() {
     local env_vars=""
     
-    if [[ -n "$INTERNAL_DEPS" ]]; then
-        # PostgreSQL environment variables
-        if echo "$INTERNAL_DEPS" | grep -q "postgres"; then
+    if [[ -n "$ALL_DEPS" ]]; then
+        # PostgreSQL environment variables (check both internal and external deps)
+        if echo "$ALL_DEPS" | grep -qE "(postgres|neon-db)"; then
             # Check if secret has POSTGRES_URI or individual keys
-            if kubectl get secret "$SERVICE_NAME-db-conn" -n "$NAMESPACE" -o jsonpath='{.data.POSTGRES_URI}' &>/dev/null 2>&1; then
+            POSTGRES_URI_CHECK=$(kubectl get secret "$SERVICE_NAME-db-conn" -n "$NAMESPACE" -o jsonpath='{.data.POSTGRES_URI}' 2>/dev/null || echo "")
+            if [[ -n "$POSTGRES_URI_CHECK" ]]; then
                 # Use POSTGRES_URI (for services like deepagents-runtime)
                 env_vars+="        - name: POSTGRES_URI
           valueFrom:
