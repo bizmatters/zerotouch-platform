@@ -19,7 +19,9 @@ PROJECT_ROOT="$(pwd)"
 
 # Set PLATFORM_ROOT if not already set
 if [[ -z "${PLATFORM_ROOT:-}" ]]; then
-    PLATFORM_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+    # PLATFORM_ROOT should point to zerotouch-platform directory
+    # When called from service directory, it's at ./zerotouch-platform
+    PLATFORM_ROOT="$(cd "${PROJECT_ROOT}/zerotouch-platform" && pwd)"
 fi
 
 # Load service configuration from ci/config.yaml
