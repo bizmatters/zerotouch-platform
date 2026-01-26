@@ -17,18 +17,6 @@ on:
         required: false
         type: string
         default: 'https://github.com/arun4infra/zerotouch-tenants.git'
-      dev_secrets:
-        description: 'Dev environment secrets as KEY=VALUE newline-separated'
-        required: false
-        type: string
-      staging_secrets:
-        description: 'Staging environment secrets as KEY=VALUE newline-separated'
-        required: false
-        type: string
-      prod_secrets:
-        description: 'Production environment secrets as KEY=VALUE newline-separated'
-        required: false
-        type: string
     secrets:
       BOT_GITHUB_TOKEN:
         description: 'GitHub token for tenant repository access'
@@ -39,6 +27,15 @@ on:
       AWS_ROLE_ARN:
         description: 'AWS IAM Role ARN for OIDC authentication'
         required: true
+      DEV_SECRETS_BLOB:
+        description: 'Dev environment secrets as KEY=VALUE newline-separated'
+        required: false
+      STAGING_SECRETS_BLOB:
+        description: 'Staging environment secrets as KEY=VALUE newline-separated'
+        required: false
+      PROD_SECRETS_BLOB:
+        description: 'Production environment secrets as KEY=VALUE newline-separated'
+        required: false
 
 env:
   SERVICE_NAME: ${{ inputs.service_name }}
@@ -64,13 +61,14 @@ jobs:
           aws-region: ap-south-1
 
       - name: Sync Dev Secrets to SSM
-        if: inputs.dev_secrets != ''
+        env:
+          SECRETS_DATA: ${{ secrets.DEV_SECRETS_BLOB }}
         run: |
           chmod +x ./scripts/release/template/sync-secrets-to-ssm.sh
           ./scripts/release/template/sync-secrets-to-ssm.sh \
             "${{ inputs.service_name }}" \
             "dev" \
-            "${{ inputs.dev_secrets }}"
+            "$SECRETS_DATA"
 
       - name: Deploy to Dev (Automatic)
         run: ./scripts/release/deploy-direct.sh dev
@@ -102,13 +100,14 @@ jobs:
           aws-region: ap-south-1
 
       - name: Sync Staging Secrets to SSM
-        if: inputs.staging_secrets != ''
+        env:
+          SECRETS_DATA: ${{ secrets.STAGING_SECRETS_BLOB }}
         run: |
           chmod +x ./scripts/release/template/sync-secrets-to-ssm.sh
           ./scripts/release/template/sync-secrets-to-ssm.sh \
             "${{ inputs.service_name }}" \
             "staging" \
-            "${{ inputs.staging_secrets }}"
+            "$SECRETS_DATA"
 
       - name: Deploy to Staging (Manual Approval Required)
         run: ./scripts/release/deploy-direct.sh staging
@@ -140,13 +139,14 @@ jobs:
           aws-region: ap-south-1
 
       - name: Sync Production Secrets to SSM
-        if: inputs.prod_secrets != ''
+        env:
+          SECRETS_DATA: ${{ secrets.PROD_SECRETS_BLOB }}
         run: |
           chmod +x ./scripts/release/template/sync-secrets-to-ssm.sh
           ./scripts/release/template/sync-secrets-to-ssm.sh \
             "${{ inputs.service_name }}" \
-            "production" \
-            "${{ inputs.prod_secrets }}"
+            "prod" \
+            "$SECRETS_DATA"
 
       - name: Deploy to Production (Manual Approval Required)
         run: ./scripts/release/deploy-direct.sh production
