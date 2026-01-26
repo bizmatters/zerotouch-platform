@@ -6,14 +6,6 @@ on:
       - 'platform/**'
       - 'bootstrap/**'
       - 'scripts/**'
-  push:
-    branches:
-      - main
-    paths:
-      - 'platform/**'
-      - 'bootstrap/**'
-      - 'scripts/**'
-  workflow_dispatch:
   workflow_call:
 
 permissions:
