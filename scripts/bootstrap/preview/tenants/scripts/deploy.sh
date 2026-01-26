@@ -97,18 +97,19 @@ echo "📋 Applying platform claims..."
 echo "🔍 Checking for platform claims in: ${PROJECT_ROOT}/platform/${SERVICE_NAME}/base/claims/"
 
 if [[ ! -d "${PROJECT_ROOT}/platform/${SERVICE_NAME}/base/claims/" ]]; then
-    echo "❌ No platform claims found in ${PROJECT_ROOT}/platform/${SERVICE_NAME}/base/claims/"
-    echo "🔍 Debug: Current directory: $(pwd)"
-    echo "🔍 Debug: PROJECT_ROOT: ${PROJECT_ROOT}"
-    echo "🔍 Debug: Listing ${PROJECT_ROOT}/platform/${SERVICE_NAME}/:"
-    ls -la "${PROJECT_ROOT}/platform/${SERVICE_NAME}/" || echo "Directory not found"
+    echo "❌ No platform claims directory found"
     exit 1
 fi
 
-echo "✅ Found platform claims directory"
-# Apply platform claims for the namespace (recursive to include subdirectories)
-kubectl apply -f "${PROJECT_ROOT}/platform/${SERVICE_NAME}/base/claims/" -n "${NAMESPACE}" --recursive
-echo "✅ Platform claims applied"
+# Check if directory has any YAML files
+if ! ls "${PROJECT_ROOT}/platform/${SERVICE_NAME}/base/claims/"*.{yaml,yml} 1> /dev/null 2>&1; then
+    echo "ℹ️  No platform claims files found (directory is empty), skipping..."
+else
+    echo "✅ Found platform claims directory"
+    # Apply platform claims for the namespace (recursive to include subdirectories)
+    kubectl apply -f "${PROJECT_ROOT}/platform/${SERVICE_NAME}/base/claims/" -n "${NAMESPACE}" --recursive
+    echo "✅ Platform claims applied"
+fi
 
 # Apply external secrets if they exist
 EXTERNAL_SECRETS_DIR="${PROJECT_ROOT}/platform/${SERVICE_NAME}/base/external-secrets"
