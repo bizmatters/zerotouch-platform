@@ -45,6 +45,9 @@ load_service_config() {
         HEALTH_ENDPOINT=$(yq eval '.deployment.health_endpoint // "/ready"' "$config_file")
         LIVENESS_ENDPOINT=$(yq eval '.deployment.liveness_endpoint // "/health"' "$config_file")
         WAIT_TIMEOUT=$(yq eval '.deployment.wait_timeout // 300' "$config_file")
+        PLATFORM_SERVICE_TYPE=$(yq eval '.platform.service.type // ""' "$config_file")
+        PLATFORM_SERVICE_NAME=$(yq eval '.platform.service.name // ""' "$config_file")
+        K8S_SERVICE_NAME=$(yq eval '.platform.service.k8s_service_name // .service.name' "$config_file")
     else
         log_error "yq is required but not installed"
         exit 1
@@ -55,6 +58,10 @@ load_service_config() {
     
     log_info "Service config loaded: ${SERVICE_NAME} in ${NAMESPACE}"
     log_info "Health endpoints: ${HEALTH_ENDPOINT}, ${LIVENESS_ENDPOINT}"
+    if [[ -n "$PLATFORM_SERVICE_TYPE" ]]; then
+        log_info "Platform service: ${PLATFORM_SERVICE_TYPE}/${PLATFORM_SERVICE_NAME}"
+        log_info "K8s service: ${K8S_SERVICE_NAME}"
+    fi
 }
 
 # Helper function to check if a diagnostic is enabled
@@ -80,25 +87,45 @@ echo "  Namespace:  ${NAMESPACE}"
 echo "  Deployment: ${DEPLOYMENT_NAME}"
 echo "================================================================================"
 
-# Check deployment status
-log_info "Checking deployment status..."
-if ! kubectl get deployment "${DEPLOYMENT_NAME}" -n "${NAMESPACE}" &>/dev/null; then
-    log_error "Deployment ${DEPLOYMENT_NAME} not found"
-    exit 1
+# Check deployment or platform service status
+log_info "Checking service status..."
+
+if [[ -n "$PLATFORM_SERVICE_TYPE" && "$PLATFORM_SERVICE_TYPE" == "agentsandboxservices" ]]; then
+    # Check AgentSandboxService status
+    if ! kubectl get "$PLATFORM_SERVICE_TYPE" "$PLATFORM_SERVICE_NAME" -n "${NAMESPACE}" &>/dev/null; then
+        log_error "Platform service ${PLATFORM_SERVICE_TYPE}/${PLATFORM_SERVICE_NAME} not found"
+        exit 1
+    fi
+    
+    ready_status=$(kubectl get "$PLATFORM_SERVICE_TYPE" "$PLATFORM_SERVICE_NAME" -n "${NAMESPACE}" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' || echo "Unknown")
+    log_info "Platform service status: Ready=${ready_status}"
+    
+    if [[ "$ready_status" != "True" ]]; then
+        log_error "Platform service is not ready"
+        exit 1
+    fi
+    
+    log_success "Platform service is ready"
+else
+    # Check Deployment status
+    if ! kubectl get deployment "${DEPLOYMENT_NAME}" -n "${NAMESPACE}" &>/dev/null; then
+        log_error "Deployment ${DEPLOYMENT_NAME} not found"
+        exit 1
+    fi
+
+    ready_replicas=$(kubectl get deployment "${DEPLOYMENT_NAME}" -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' || echo "0")
+    desired_replicas=$(kubectl get deployment "${DEPLOYMENT_NAME}" -n "${NAMESPACE}" -o jsonpath='{.spec.replicas}' || echo "1")
+    available_replicas=$(kubectl get deployment "${DEPLOYMENT_NAME}" -n "${NAMESPACE}" -o jsonpath='{.status.availableReplicas}' || echo "0")
+
+    log_info "Deployment status: Ready ${ready_replicas}/${desired_replicas}, Available ${available_replicas}/${desired_replicas}"
+
+    if [[ "${ready_replicas}" != "${desired_replicas}" ]]; then
+        log_error "Deployment is not fully ready"
+        exit 1
+    fi
+
+    log_success "Deployment is ready"
 fi
-
-ready_replicas=$(kubectl get deployment "${DEPLOYMENT_NAME}" -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' || echo "0")
-desired_replicas=$(kubectl get deployment "${DEPLOYMENT_NAME}" -n "${NAMESPACE}" -o jsonpath='{.spec.replicas}' || echo "1")
-available_replicas=$(kubectl get deployment "${DEPLOYMENT_NAME}" -n "${NAMESPACE}" -o jsonpath='{.status.availableReplicas}' || echo "0")
-
-log_info "Deployment status: Ready ${ready_replicas}/${desired_replicas}, Available ${available_replicas}/${desired_replicas}"
-
-if [[ "${ready_replicas}" != "${desired_replicas}" ]]; then
-    log_error "Deployment is not fully ready"
-    exit 1
-fi
-
-log_success "Deployment is ready"
 
 # Check pod status
 log_info "Checking pod status..."
@@ -115,31 +142,37 @@ log_success "All pods are running"
 
 # Check service
 log_info "Checking service..."
-if kubectl get service "${SERVICE_NAME}" -n "${NAMESPACE}" &>/dev/null; then
-    log_success "Service ${SERVICE_NAME} exists"
-    kubectl get service "${SERVICE_NAME}" -n "${NAMESPACE}" -o wide
+if kubectl get service "${K8S_SERVICE_NAME}" -n "${NAMESPACE}" &>/dev/null; then
+    log_success "Service ${K8S_SERVICE_NAME} exists"
+    kubectl get service "${K8S_SERVICE_NAME}" -n "${NAMESPACE}" -o wide
 else
-    log_error "Service ${SERVICE_NAME} not found"
+    log_error "Service ${K8S_SERVICE_NAME} not found"
     exit 1
 fi
 
 # Test service connectivity (if enabled)
 if diagnostic_enabled "test_service_connectivity"; then
     log_info "Testing service connectivity..."
-    service_ip=$(kubectl get service "${SERVICE_NAME}" -n "${NAMESPACE}" -o jsonpath='{.spec.clusterIP}')
-    service_port=$(kubectl get service "${SERVICE_NAME}" -n "${NAMESPACE}" -o jsonpath='{.spec.ports[0].port}')
+    service_ip=$(kubectl get service "${K8S_SERVICE_NAME}" -n "${NAMESPACE}" -o jsonpath='{.spec.clusterIP}')
+    service_port=$(kubectl get service "${K8S_SERVICE_NAME}" -n "${NAMESPACE}" -o jsonpath='{.spec.ports[0].port}')
 
     if [[ -n "${service_ip}" && -n "${service_port}" ]]; then
         log_info "Testing connection to ${service_ip}:${service_port}..."
         
-        if kubectl run connectivity-test-$(date +%s) \
-            --image=curlimages/curl:latest \
-            --rm -i --restart=Never \
-            --timeout=30s \
-            -- curl -s --connect-timeout 10 "http://${service_ip}:${service_port}" >/dev/null 2>&1; then
-            log_success "Service connectivity test passed"
+        # Skip connectivity test for AgentSandboxService (scaled to zero when idle)
+        if [[ -n "$PLATFORM_SERVICE_TYPE" && "$PLATFORM_SERVICE_TYPE" == "agentsandboxservices" ]]; then
+            log_info "Skipping connectivity test for AgentSandboxService (event-driven, scaled to zero when idle)"
         else
-            log_warn "Service connectivity test failed (service may still be starting)"
+            if kubectl run connectivity-test-$(date +%s) \
+                --image=curlimages/curl:latest \
+                --rm -i --restart=Never \
+                --timeout=30s \
+                -- curl -s --connect-timeout 10 "http://${service_ip}:${service_port}" >/dev/null 2>&1; then
+                log_success "Service connectivity test passed"
+            else
+                log_error "Service connectivity test failed"
+                exit 1
+            fi
         fi
     else
         log_warn "Could not determine service IP or port"
@@ -151,30 +184,37 @@ fi
 # Test health endpoints (if enabled)
 if diagnostic_enabled "test_health_endpoint"; then
     log_info "Testing health endpoints..."
-    service_ip=$(kubectl get service "${SERVICE_NAME}" -n "${NAMESPACE}" -o jsonpath='{.spec.clusterIP}')
-    service_port=$(kubectl get service "${SERVICE_NAME}" -n "${NAMESPACE}" -o jsonpath='{.spec.ports[0].port}')
+    service_ip=$(kubectl get service "${K8S_SERVICE_NAME}" -n "${NAMESPACE}" -o jsonpath='{.spec.clusterIP}')
+    service_port=$(kubectl get service "${K8S_SERVICE_NAME}" -n "${NAMESPACE}" -o jsonpath='{.spec.ports[0].port}')
 
     if [[ -n "${service_ip}" && -n "${service_port}" ]]; then
-        # Test readiness endpoint
-        if kubectl run readiness-test-$(date +%s) \
-            --image=curlimages/curl:latest \
-            --rm -i --restart=Never \
-            --timeout=30s \
-            -- curl -s -f "http://${service_ip}:${service_port}${HEALTH_ENDPOINT}" >/dev/null 2>&1; then
-            log_success "Readiness endpoint ${HEALTH_ENDPOINT} is responding"
+        # Skip health endpoint test for AgentSandboxService (scaled to zero when idle)
+        if [[ -n "$PLATFORM_SERVICE_TYPE" && "$PLATFORM_SERVICE_TYPE" == "agentsandboxservices" ]]; then
+            log_info "Skipping health endpoint test for AgentSandboxService (event-driven, scaled to zero when idle)"
         else
-            log_warn "Readiness endpoint ${HEALTH_ENDPOINT} not responding"
-        fi
-        
-        # Test liveness endpoint
-        if kubectl run liveness-test-$(date +%s) \
-            --image=curlimages/curl:latest \
-            --rm -i --restart=Never \
-            --timeout=30s \
-            -- curl -s -f "http://${service_ip}:${service_port}${LIVENESS_ENDPOINT}" >/dev/null 2>&1; then
-            log_success "Liveness endpoint ${LIVENESS_ENDPOINT} is responding"
-        else
-            log_warn "Liveness endpoint ${LIVENESS_ENDPOINT} not responding"
+            # Test readiness endpoint
+            if kubectl run readiness-test-$(date +%s) \
+                --image=curlimages/curl:latest \
+                --rm -i --restart=Never \
+                --timeout=30s \
+                -- curl -s -f "http://${service_ip}:${service_port}${HEALTH_ENDPOINT}" >/dev/null 2>&1; then
+                log_success "Readiness endpoint ${HEALTH_ENDPOINT} is responding"
+            else
+                log_error "Readiness endpoint ${HEALTH_ENDPOINT} not responding"
+                exit 1
+            fi
+            
+            # Test liveness endpoint
+            if kubectl run liveness-test-$(date +%s) \
+                --image=curlimages/curl:latest \
+                --rm -i --restart=Never \
+                --timeout=30s \
+                -- curl -s -f "http://${service_ip}:${service_port}${LIVENESS_ENDPOINT}" >/dev/null 2>&1; then
+                log_success "Liveness endpoint ${LIVENESS_ENDPOINT} is responding"
+            else
+                log_error "Liveness endpoint ${LIVENESS_ENDPOINT} not responding"
+                exit 1
+            fi
         fi
     else
         log_warn "Could not determine service IP/port for health checks"

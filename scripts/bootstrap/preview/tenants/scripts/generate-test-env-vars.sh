@@ -31,7 +31,18 @@ generate_env_vars() {
     if [[ -n "$INTERNAL_DEPS" ]]; then
         # PostgreSQL environment variables
         if echo "$INTERNAL_DEPS" | grep -q "postgres"; then
-            env_vars+="        - name: POSTGRES_USER
+            # Check if secret has POSTGRES_URI or individual keys
+            if kubectl get secret "$SERVICE_NAME-db-conn" -n "$NAMESPACE" -o jsonpath='{.data.POSTGRES_URI}' &>/dev/null 2>&1; then
+                # Use POSTGRES_URI (for services like deepagents-runtime)
+                env_vars+="        - name: POSTGRES_URI
+          valueFrom:
+            secretKeyRef:
+              name: \"$SERVICE_NAME-db-conn\"
+              key: POSTGRES_URI
+"
+            else
+                # Use individual keys (for services like identity-service, ide-orchestrator)
+                env_vars+="        - name: POSTGRES_USER
           valueFrom:
             secretKeyRef:
               name: \"$SERVICE_NAME-db-conn\"
@@ -57,6 +68,7 @@ generate_env_vars() {
               name: \"$SERVICE_NAME-db-conn\"
               key: POSTGRES_PORT
 "
+            fi
         fi
         
         # Redis/Dragonfly environment variables
