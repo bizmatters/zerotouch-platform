@@ -1,5 +1,5 @@
 #!/bin/bash
-# Wait for Platform Service (EventDrivenService or WebService) to be processed and deployment to be created
+# Wait for Platform Service to be processed and deployment to be created
 # Usage: ./wait-for-platform-service.sh <service-name> <namespace> [timeout]
 
 set -euo pipefail
@@ -20,49 +20,89 @@ NC='\033[0m'
 
 echo -e "${BLUE}Waiting for Platform Service $SERVICE_NAME to be processed...${NC}"
 
-# Detect service type by checking what platform claims exist
+# Load platform service configuration from ci/config.yaml
+load_platform_service_config() {
+    local config_file="${SERVICE_ROOT:-$(pwd)}/ci/config.yaml"
+    
+    if [[ ! -f "$config_file" ]]; then
+        echo "❌ Service config not found: $config_file"
+        return 1
+    fi
+    
+    if command -v yq &> /dev/null; then
+        PLATFORM_SERVICE_TYPE=$(yq eval '.platform.service.type // ""' "$config_file")
+        PLATFORM_SERVICE_NAME=$(yq eval '.platform.service.name // ""' "$config_file")
+    else
+        echo "❌ yq is required but not installed"
+        return 1
+    fi
+}
+
+# Dynamically discover platform services in the namespace
+discover_platform_service() {
+    # First try to use config if available
+    if load_platform_service_config && [[ -n "$PLATFORM_SERVICE_TYPE" ]] && [[ -n "$PLATFORM_SERVICE_NAME" ]]; then
+        if kubectl get "$PLATFORM_SERVICE_TYPE" "$PLATFORM_SERVICE_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
+            echo "$PLATFORM_SERVICE_TYPE:$PLATFORM_SERVICE_NAME"
+            return 0
+        fi
+    fi
+    
+    # Fallback to discovery
+    local platform_services=$(kubectl api-resources --api-group=platform.bizmatters.io --no-headers 2>/dev/null | awk '{print $1}' || echo "")
+    
+    for resource_type in $platform_services; do
+        local resources=$(kubectl get "$resource_type" -n "$NAMESPACE" --no-headers 2>/dev/null | awk '{print $1}' || echo "")
+        for resource_name in $resources; do
+            if [[ "$resource_name" == *"$SERVICE_NAME"* ]]; then
+                echo "$resource_type:$resource_name"
+                return 0
+            fi
+        done
+    done
+    return 1
+}
+
 SERVICE_TYPE=""
-EDS_EXISTS=false
-WS_EXISTS=false
+PLATFORM_SERVICE_NAME=""
 
 while [ $ELAPSED -lt $TIMEOUT ]; do
-    # Check if EventDrivenService exists
-    if kubectl get eventdrivenservice "$SERVICE_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
-        EDS_EXISTS=true
-        SERVICE_TYPE="EventDrivenService"
-    fi
+    # Discover platform service dynamically
+    PLATFORM_SERVICE_INFO=$(discover_platform_service)
     
-    # Check if WebService exists
-    if kubectl get webservice "$SERVICE_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
-        WS_EXISTS=true
-        SERVICE_TYPE="WebService"
-    fi
-    
-    # If neither exists yet, wait
-    if [ "$EDS_EXISTS" = false ] && [ "$WS_EXISTS" = false ]; then
-        echo -e "  ${YELLOW}Platform service $SERVICE_NAME not found yet... (${ELAPSED}s elapsed)${NC}"
+    if [ -z "$PLATFORM_SERVICE_INFO" ]; then
+        echo -e "  ${YELLOW}Platform service for $SERVICE_NAME not found yet... (${ELAPSED}s elapsed)${NC}"
         sleep $INTERVAL
         ELAPSED=$((ELAPSED + INTERVAL))
         continue
     fi
     
-    echo -e "  ${BLUE}Found $SERVICE_TYPE: $SERVICE_NAME${NC}"
+    SERVICE_TYPE=$(echo "$PLATFORM_SERVICE_INFO" | cut -d: -f1)
+    PLATFORM_SERVICE_NAME=$(echo "$PLATFORM_SERVICE_INFO" | cut -d: -f2)
     
-    # Check if Deployment exists (created by Crossplane composition)
+    echo -e "  ${BLUE}Found $SERVICE_TYPE: $PLATFORM_SERVICE_NAME${NC}"
+    
+    # Check platform service status
+    PLATFORM_STATUS=$(kubectl get "$SERVICE_TYPE" "$PLATFORM_SERVICE_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[0].reason}' 2>/dev/null || echo "Unknown")
+    echo -e "    ${BLUE}$SERVICE_TYPE status: $PLATFORM_STATUS${NC}"
+    
+    # For AgentSandboxService, check if it's ready (no deployment expected)
+    if [[ "$SERVICE_TYPE" == "agentsandboxservices" ]]; then
+        READY_STATUS=$(kubectl get "$SERVICE_TYPE" "$PLATFORM_SERVICE_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "Unknown")
+        if [ "$READY_STATUS" = "True" ]; then
+            echo -e "  ${GREEN}✓ $SERVICE_TYPE $PLATFORM_SERVICE_NAME is ready${NC}"
+            exit 0
+        else
+            echo -e "  ${YELLOW}$SERVICE_TYPE not ready yet... (${ELAPSED}s elapsed)${NC}"
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+            continue
+        fi
+    fi
+    
+    # For other platform services, check if Deployment exists (created by Crossplane composition)
     if ! kubectl get deployment "$SERVICE_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
         echo -e "  ${YELLOW}Waiting for Deployment to be created by platform... (${ELAPSED}s elapsed)${NC}"
-        
-        # Show service status for debugging
-        if [ "$EDS_EXISTS" = true ]; then
-            EDS_STATUS=$(kubectl get eventdrivenservice "$SERVICE_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[0].reason}' 2>/dev/null || echo "Unknown")
-            echo -e "    ${BLUE}EventDrivenService status: $EDS_STATUS${NC}"
-        fi
-        
-        if [ "$WS_EXISTS" = true ]; then
-            WS_STATUS=$(kubectl get webservice "$SERVICE_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[0].reason}' 2>/dev/null || echo "Unknown")
-            echo -e "    ${BLUE}WebService status: $WS_STATUS${NC}"
-        fi
-        
         sleep $INTERVAL
         ELAPSED=$((ELAPSED + INTERVAL))
         continue
@@ -83,7 +123,7 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
     fi
     
     if [ "$READY_REPLICAS" = "$TOTAL_REPLICAS" ] && [ "$READY_REPLICAS" != "0" ]; then
-        echo -e "  ${GREEN}✓ $SERVICE_TYPE $SERVICE_NAME is ready${NC}"
+        echo -e "  ${GREEN}✓ $SERVICE_TYPE $PLATFORM_SERVICE_NAME is ready${NC}"
         exit 0
     fi
     
@@ -95,15 +135,9 @@ echo -e "${RED}✗ Timeout waiting for Platform Service after ${TIMEOUT}s${NC}"
 echo ""
 echo -e "${YELLOW}=== Debugging Information ===${NC}"
 
-if [ "$EDS_EXISTS" = true ]; then
-    echo "EventDrivenService details:"
-    kubectl describe eventdrivenservice "$SERVICE_NAME" -n "$NAMESPACE" 2>/dev/null || echo "Not found"
-    echo ""
-fi
-
-if [ "$WS_EXISTS" = true ]; then
-    echo "WebService details:"
-    kubectl describe webservice "$SERVICE_NAME" -n "$NAMESPACE" 2>/dev/null || echo "Not found"
+if [ -n "$PLATFORM_SERVICE_NAME" ] && [ -n "$SERVICE_TYPE" ]; then
+    echo "$SERVICE_TYPE details:"
+    kubectl describe "$SERVICE_TYPE" "$PLATFORM_SERVICE_NAME" -n "$NAMESPACE" 2>/dev/null || echo "Not found"
     echo ""
 fi
 

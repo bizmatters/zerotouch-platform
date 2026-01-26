@@ -135,18 +135,42 @@ if [[ -d "$OVERLAY_CLAIMS_DIR" ]]; then
     echo "✅ PR overlay claims applied"
 fi
 
-# Wait for infrastructure dependencies using dedicated script
-INFRA_WAIT_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/wait-for-database-and-secrets.sh"
-if [[ -f "$INFRA_WAIT_SCRIPT" ]]; then
-    chmod +x "$INFRA_WAIT_SCRIPT"
-    # Ensure we exit if the wait script fails
-    if ! "$INFRA_WAIT_SCRIPT" "${SERVICE_NAME}" "${NAMESPACE}"; then
-        echo "❌ ERROR: Infrastructure dependencies failed to become ready"
+# Check if service has internal database dependencies
+has_internal_database_dependency() {
+    local config_file="${PROJECT_ROOT}/ci/config.yaml"
+    
+    if [[ ! -f "$config_file" ]]; then
+        return 1
+    fi
+    
+    # Check if service has postgres in internal dependencies
+    if command -v yq &> /dev/null; then
+        local internal_deps=$(yq eval '.dependencies.internal[]?' "$config_file" 2>/dev/null | grep -E "postgres|database" || echo "")
+        if [[ -n "$internal_deps" ]]; then
+            return 0  # Has internal database dependency
+        fi
+    fi
+    
+    return 1  # No internal database dependency
+}
+
+# Wait for infrastructure dependencies using dedicated script (only if needed)
+if has_internal_database_dependency; then
+    echo "📋 Service has internal database dependencies, waiting for infrastructure..."
+    INFRA_WAIT_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/wait-for-database-and-secrets.sh"
+    if [[ -f "$INFRA_WAIT_SCRIPT" ]]; then
+        chmod +x "$INFRA_WAIT_SCRIPT"
+        # Ensure we exit if the wait script fails
+        if ! "$INFRA_WAIT_SCRIPT" "${SERVICE_NAME}" "${NAMESPACE}"; then
+            echo "❌ ERROR: Infrastructure dependencies failed to become ready"
+            exit 1
+        fi
+    else
+        echo "❌ Database and secrets wait script not found: $INFRA_WAIT_SCRIPT"
         exit 1
     fi
 else
-    echo "❌ Database and secrets wait script not found: $INFRA_WAIT_SCRIPT"
-    exit 1
+    echo "📋 Service has no internal database dependencies, skipping infrastructure wait"
 fi
 
 # Use platform's generalized wait script for Platform Services (EventDrivenService or WebService)
