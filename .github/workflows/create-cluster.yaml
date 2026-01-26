@@ -109,6 +109,19 @@ jobs:
       - name: Bootstrap Cluster
         run: ./scripts/bootstrap/01-master-bootstrap.sh ${{ inputs.environment }}
 
+      - name: Run Gateway Validation
+        run: |
+          echo "Running Gateway Validation..."
+          echo "Validating agent gateway deployment and configuration..."
+          GATEWAY_SCRIPT="./scripts/bootstrap/validation/agent-gateway/00-validate-agent-gateway.sh"
+          if [ -f "$GATEWAY_SCRIPT" ]; then
+            chmod +x "$GATEWAY_SCRIPT"
+            "$GATEWAY_SCRIPT"
+          else
+            echo "❌ Gateway validation script not found: $GATEWAY_SCRIPT"
+            exit 1
+          fi
+
       - name: Run E2E Communication Tests
         run: |
           echo "Running E2E Communication Tests..."
