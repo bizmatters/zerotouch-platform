@@ -145,6 +145,20 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
                                     if [[ -n "$OBJ_MESSAGE" ]]; then
                                         echo -e "        Message: $OBJ_MESSAGE"
                                     fi
+                                    # Show actual PVC status if this is a PVC object
+                                    PVC_PHASE=$(kubectl get object "$obj" -o jsonpath='{.status.atProvider.manifest.status.phase}' 2>/dev/null || echo "")
+                                    if [[ -n "$PVC_PHASE" ]]; then
+                                        echo -e "        PVC Phase: $PVC_PHASE"
+                                    else
+                                        echo -e "        PVC Phase: Not available (status not synced)"
+                                    fi
+                                    # Show if PVC actually exists
+                                    PVC_NAME=$(kubectl get object "$obj" -o jsonpath='{.spec.forProvider.manifest.metadata.name}' 2>/dev/null || echo "")
+                                    PVC_NS=$(kubectl get object "$obj" -o jsonpath='{.spec.forProvider.manifest.metadata.namespace}' 2>/dev/null || echo "")
+                                    if [[ -n "$PVC_NAME" && -n "$PVC_NS" ]]; then
+                                        ACTUAL_PVC_PHASE=$(kubectl get pvc "$PVC_NAME" -n "$PVC_NS" -o jsonpath='{.status.phase}' 2>/dev/null || echo "Not found")
+                                        echo -e "        Actual PVC Status: $ACTUAL_PVC_PHASE"
+                                    fi
                                 fi
                             fi
                         done
