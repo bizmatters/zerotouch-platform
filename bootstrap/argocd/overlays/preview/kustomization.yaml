@@ -6,9 +6,6 @@ resources:
 - 06-postgres.yaml
 - gateway-api-crds.yaml
 
-patchesStrategicMerge:
-- storage-composition-patch.yaml
-
 # URL patching is handled by 01-patch-urls.sh script (applied before ArgoCD sync)
 
 patches:
@@ -183,3 +180,22 @@ patches:
               enableGatewayAPI: false
               featureGates:
                 ExperimentalGatewayAPISupport: false
+
+# 6. Allow preview patches to modify Composition readiness checks
+- target:
+    kind: Application
+    name: apis
+  patch: |-
+    apiVersion: argoproj.io/v1alpha1
+    kind: Application
+    metadata:
+      name: apis
+    spec:
+      ignoreDifferences:
+      - group: apiextensions.crossplane.io
+        kind: Composition
+        jqPathExpressions:
+        - '.metadata.labels."crossplane.io/composite"'
+        - '.metadata.labels."crossplane.io/claim-name"'
+        - '.metadata.labels."crossplane.io/claim-namespace"'
+        - '.spec.resources[].readinessChecks'
