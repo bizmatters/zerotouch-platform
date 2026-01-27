@@ -89,11 +89,38 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
     # For AgentSandboxService, check if it's ready (no deployment expected)
     if [[ "$SERVICE_TYPE" == "agentsandboxservices" ]]; then
         READY_STATUS=$(kubectl get "$SERVICE_TYPE" "$PLATFORM_SERVICE_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "Unknown")
+        READY_MESSAGE=$(kubectl get "$SERVICE_TYPE" "$PLATFORM_SERVICE_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}' 2>/dev/null || echo "")
+        
         if [ "$READY_STATUS" = "True" ]; then
             echo -e "  ${GREEN}✓ $SERVICE_TYPE $PLATFORM_SERVICE_NAME is ready${NC}"
             exit 0
         else
             echo -e "  ${YELLOW}$SERVICE_TYPE not ready yet... (${ELAPSED}s elapsed)${NC}"
+            if [[ -n "$READY_MESSAGE" ]]; then
+                echo -e "    ${YELLOW}Reason: $READY_MESSAGE${NC}"
+            fi
+            
+            # Show composite resource status for debugging
+            COMPOSITE_NAME=$(kubectl get "$SERVICE_TYPE" "$PLATFORM_SERVICE_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.resourceRef.name}' 2>/dev/null || echo "")
+            if [[ -n "$COMPOSITE_NAME" ]]; then
+                echo -e "    ${BLUE}Checking composite resource: $COMPOSITE_NAME${NC}"
+                COMPOSITE_READY=$(kubectl get xagentsandboxservice "$COMPOSITE_NAME" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "Unknown")
+                COMPOSITE_MESSAGE=$(kubectl get xagentsandboxservice "$COMPOSITE_NAME" -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}' 2>/dev/null || echo "")
+                echo -e "    ${BLUE}Composite Ready: $COMPOSITE_READY${NC}"
+                if [[ -n "$COMPOSITE_MESSAGE" ]]; then
+                    echo -e "    ${BLUE}Composite Message: $COMPOSITE_MESSAGE${NC}"
+                fi
+                
+                # Show child resources status
+                echo -e "    ${BLUE}Child resources:${NC}"
+                kubectl get xagentsandboxservice "$COMPOSITE_NAME" -o jsonpath='{.spec.resourceRefs[*].name}' 2>/dev/null | tr ' ' '\n' | while read -r child; do
+                    if [[ -n "$child" ]]; then
+                        CHILD_KIND=$(kubectl get xagentsandboxservice "$COMPOSITE_NAME" -o jsonpath="{.spec.resourceRefs[?(@.name=='$child')].kind}" 2>/dev/null || echo "Unknown")
+                        echo -e "      - $CHILD_KIND: $child"
+                    fi
+                done
+            fi
+            
             sleep $INTERVAL
             ELAPSED=$((ELAPSED + INTERVAL))
             continue
