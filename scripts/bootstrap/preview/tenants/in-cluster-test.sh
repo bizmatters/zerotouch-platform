@@ -114,16 +114,54 @@ checkout_pr_claims() {
     local environment="$1"
     local checkout_script="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/checkout-pr-claims.sh"
     
+    log_info "=== PR CLAIMS CHECKOUT DEBUG ==="
+    log_info "Environment parameter: '$environment'"
+    log_info "Checkout script path: $checkout_script"
+    log_info "Script exists: $(test -f "$checkout_script" && echo "YES" || echo "NO")"
+    
     if [[ -f "$checkout_script" ]]; then
         chmod +x "$checkout_script"
         # Extract service name from SERVICE_ROOT path
         local service_name=$(basename "$SERVICE_ROOT")
+        log_info "Service name extracted: '$service_name'"
+        log_info "SERVICE_ROOT: $SERVICE_ROOT"
+        log_info "NAMESPACE: $NAMESPACE"
         log_info "Calling checkout script with args: environment='$environment', namespace='$NAMESPACE', service_name='$service_name'"
-        "$checkout_script" "$environment" "$NAMESPACE" "$service_name"
+        
+        # Add detailed logging for checkout script execution
+        log_info "Executing: $checkout_script $environment $NAMESPACE $service_name"
+        if "$checkout_script" "$environment" "$NAMESPACE" "$service_name"; then
+            log_info "✅ PR claims checkout completed successfully"
+            
+            # Verify what was checked out
+            log_info "=== POST-CHECKOUT VERIFICATION ==="
+            local platform_dir="${SERVICE_ROOT}/platform"
+            if [[ -d "$platform_dir" ]]; then
+                log_info "Platform directory exists: $platform_dir"
+                log_info "Platform directory contents:"
+                ls -la "$platform_dir" || log_info "Failed to list platform directory"
+                
+                local service_platform_dir="${platform_dir}/${service_name}"
+                if [[ -d "$service_platform_dir" ]]; then
+                    log_info "Service platform directory exists: $service_platform_dir"
+                    find "$service_platform_dir" -name "*.yaml" -o -name "*.yml" | head -10 | while read -r file; do
+                        log_info "Found manifest: $file"
+                    done
+                else
+                    log_info "❌ Service platform directory NOT found: $service_platform_dir"
+                fi
+            else
+                log_info "❌ Platform directory NOT found: $platform_dir"
+            fi
+        else
+            log_error "❌ PR claims checkout failed with exit code: $?"
+            exit 1
+        fi
     else
         log_error "PR claims checkout script not found: $checkout_script"
         exit 1
     fi
+    log_info "=== PR CLAIMS CHECKOUT DEBUG END ==="
 }
 
 # Helper function to get dependencies by type
@@ -423,7 +461,8 @@ trap cleanup EXIT
     fi
 
     # Step 3c: Checkout PR claims (if in PR environment)
-    checkout_pr_claims "$ENVIRONMENT"
+    log_info "Forcing PR claims checkout for CI testing (environment: $ENVIRONMENT -> pr)"
+    checkout_pr_claims "pr"
     
     # Step 3d: Patch service deployment manifests
     log_info "Patching service deployment manifests..."
