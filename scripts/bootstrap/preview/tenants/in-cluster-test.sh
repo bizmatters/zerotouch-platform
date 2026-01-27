@@ -350,12 +350,6 @@ run_ci_workflow() {
 
 # Cleanup function (matches workflow cleanup step)
 cleanup() {
-    # Clear cache on failure
-    if [[ $? -ne 0 ]]; then
-        log_warn "Clearing stage cache due to failure"
-        clear_stage_cache
-    fi
-    
     # Use dedicated cleanup script for better modularity
     CLEANUP_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/cleanup-failed-pods.sh"
     if [[ -f "$CLEANUP_SCRIPT" ]]; then
@@ -368,6 +362,7 @@ cleanup() {
         if [[ "${CLEANUP_CLUSTER:-true}" == "true" ]]; then
             log_info "Cleaning up Kind cluster..."
             kind delete cluster --name zerotouch-preview || true
+            # Only clear cache when cluster is deleted
             clear_stage_cache
         fi
     fi
