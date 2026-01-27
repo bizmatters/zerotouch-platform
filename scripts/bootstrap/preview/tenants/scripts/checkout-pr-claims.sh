@@ -136,14 +136,15 @@ checkout_pr_claims() {
             mkdir -p "${service_root}/platform"
             log_info "Created service platform directory: ${service_root}/platform"
             
-            # Copy only the service directory to platform/
-            if [[ -d "$target_path" ]]; then
-                log_info "Removing existing target directory: $target_path"
-                rm -rf "$target_path"
+            # Copy only the service directory to platform/ (ensure we're in service root)
+            cd "$service_root"
+            if [[ -d "platform/${service_name}" ]]; then
+                log_info "Removing existing target directory: platform/${service_name}"
+                rm -rf "platform/${service_name}"
             fi
             
-            cp -r "$service_path" "$target_path"
-            log_success "Service directory copied to: $target_path"
+            cp -r "$service_path" "platform/${service_name}"
+            log_success "Service directory copied to: ${service_root}/platform/${service_name}"
             
             # Remove the temp directory
             rm -rf "$tenants_dir"
