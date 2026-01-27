@@ -10,3 +10,4 @@ spec:
           matchCondition:
             type: Ready
             status: "True"
+        # Remove the second readiness check (Bound check) by only defining one
