@@ -200,13 +200,6 @@ main() {
         exit 1
     fi
     
-    # Wait for job completion with better error handling (fallback)
-    if ! kubectl wait --for=condition=complete --timeout=30s job/$JOB_NAME -n $NAMESPACE 2>/dev/null; then
-        echo "❌ Job did not complete within final check timeout"
-        show_diagnostics
-        exit 1
-    fi
-    
     # Check if job succeeded or failed
     JOB_STATUS=$(kubectl get job $JOB_NAME -n $NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null || echo "Unknown")
     JOB_FAILED=$(kubectl get job $JOB_NAME -n $NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null || echo "False")

@@ -53,11 +53,7 @@ spec:
           df -h /app || echo "Could not check disk space"
           echo ""
           echo "=== DATABASE ENVIRONMENT VARIABLES ==="
-          echo "POSTGRES_USER: ${POSTGRES_USER:-not set}"
-          echo "POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-not set}"
-          echo "POSTGRES_DB: ${POSTGRES_DB:-not set}"
-          echo "POSTGRES_HOST: ${POSTGRES_HOST:-not set}"
-          echo "POSTGRES_PORT: ${POSTGRES_PORT:-not set}"
+          echo "DATABASE_URL: ${DATABASE_URL:-not set}"
           echo ""
           
           echo "=== TEST PATH VALIDATION ==="
