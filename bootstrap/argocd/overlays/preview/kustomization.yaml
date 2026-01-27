@@ -194,8 +194,8 @@ patches:
       ignoreDifferences:
       - group: apiextensions.crossplane.io
         kind: Composition
-        jqPathExpressions:
-        - '.metadata.labels."crossplane.io/composite"'
-        - '.metadata.labels."crossplane.io/claim-name"'
-        - '.metadata.labels."crossplane.io/claim-namespace"'
-        - '.spec.resources[].readinessChecks'
+        jsonPointers:
+        - /metadata/labels/crossplane.io~1composite
+      - /metadata/labels/crossplane.io~1claim-name
+      - /metadata/labels/crossplane.io~1claim-namespace
+      - /spec/resources
