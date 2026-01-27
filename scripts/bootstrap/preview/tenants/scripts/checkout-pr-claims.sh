@@ -81,13 +81,16 @@ checkout_pr_claims() {
         # Try SSH first (works locally), fallback to HTTPS (works in CI)
         local clone_success=false
         
+        # Check for GitHub token (GitHub Actions or custom)
+        local github_token="${GITHUB_TOKEN:-${BOT_GITHUB_TOKEN:-}}"
+        
         log_info "Attempting SSH clone with branch: $current_branch"
         if git clone -b "$current_branch" "$tenants_repo" "$tenants_dir" 2>/dev/null; then
             log_success "SSH clone successful, checked out branch: $current_branch"
             clone_success=true
-        elif [[ -n "${GITHUB_TOKEN:-}" ]]; then
+        elif [[ -n "$github_token" ]]; then
             log_info "SSH failed, trying HTTPS with GitHub token..."
-            local https_repo="https://${GITHUB_TOKEN}@github.com/arun4infra/zerotouch-tenants.git"
+            local https_repo="https://${github_token}@github.com:arun4infra/zerotouch-tenants.git"
             if git clone -b "$current_branch" "$https_repo" "$tenants_dir" 2>/dev/null; then
                 log_success "HTTPS clone successful, checked out branch: $current_branch"
                 clone_success=true
@@ -99,7 +102,7 @@ checkout_pr_claims() {
                 fi
             fi
         else
-            log_info "SSH failed and no GITHUB_TOKEN available, trying branch fallback with SSH..."
+            log_info "SSH failed and no GitHub token available, trying branch fallback with SSH..."
             if git clone -b main "$tenants_repo" "$tenants_dir" 2>/dev/null; then
                 log_success "SSH clone successful with main branch"
                 clone_success=true
@@ -110,11 +113,12 @@ checkout_pr_claims() {
             log_error "All clone attempts failed. Check repository access and authentication."
             log_error "Attempted methods:"
             log_error "  1. SSH with branch: $current_branch"
-            if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+            if [[ -n "$github_token" ]]; then
                 log_error "  2. HTTPS with GitHub token and branch: $current_branch"
                 log_error "  3. HTTPS with GitHub token and main branch"
             else
-                log_error "  2. SSH with main branch (no GITHUB_TOKEN available)"
+                log_error "  2. SSH with main branch (no GitHub token available)"
+                log_error "  Available tokens: GITHUB_TOKEN=${GITHUB_TOKEN:+set} BOT_GITHUB_TOKEN=${BOT_GITHUB_TOKEN:+set}"
             fi
             exit 1
         fi
