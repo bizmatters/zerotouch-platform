@@ -57,7 +57,8 @@ checkout_pr_claims() {
         log_info "Checking out PR claims for service: $service_name, namespace: $namespace"
         
         # Checkout zerotouch-tenants repository
-        local tenants_repo="git@github.com:arun4infra/zerotouch-tenants.git"
+        # Use environment variable or default to SSH URL
+        local tenants_repo="${TENANTS_REPO_URL:-git@github.com:arun4infra/zerotouch-tenants.git}"
         local tenants_dir="platform/tenants-temp"
         
         # Detect current branch for checkout
@@ -90,7 +91,9 @@ checkout_pr_claims() {
             clone_success=true
         elif [[ -n "$github_token" ]]; then
             log_info "SSH failed, trying HTTPS with GitHub token..."
-            local https_repo="https://${github_token}@github.com:arun4infra/zerotouch-tenants.git"
+            # Extract org/repo from SSH URL and construct HTTPS URL
+            local repo_path=$(echo "$tenants_repo" | sed 's|git@github.com:||' | sed 's|\.git$||')
+            local https_repo="https://${github_token}@github.com/${repo_path}.git"
             if git clone -b "$current_branch" "$https_repo" "$tenants_dir" 2>/dev/null; then
                 log_success "HTTPS clone successful, checked out branch: $current_branch"
                 clone_success=true

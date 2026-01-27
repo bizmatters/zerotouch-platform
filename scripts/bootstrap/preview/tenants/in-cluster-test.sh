@@ -348,6 +348,8 @@ main() {
     export TEST_NAME="${TEST_NAME}"
     export TIMEOUT="${TIMEOUT}"
     export JWT_SECRET="test-secret-key-for-ci-testing"
+    export BOT_GITHUB_TOKEN="${BOT_GITHUB_TOKEN:-}"
+    export BOT_GITHUB_USERNAME="${BOT_GITHUB_USERNAME:-}"
     
     # Continue with existing workflow steps...
     run_ci_workflow
