@@ -38,6 +38,7 @@ load_service_config() {
     if command -v yq &> /dev/null; then
         SERVICE_NAME=$(yq eval '.service.name' "$config_file")
         NAMESPACE=$(yq eval '.service.namespace' "$config_file")
+        WAIT_TIMEOUT=$(yq eval '.deployment.wait_timeout // 300' "$config_file")
     else
         echo "❌ yq is required but not installed"
         exit 1
@@ -52,10 +53,10 @@ load_service_config() {
 # Load configuration
 load_service_config
 
-# Default values
+# Default values (can be overridden by environment or config)
 ENVIRONMENT="${1:-ci}"
 IMAGE_TAG="${2:-latest}"
-WAIT_TIMEOUT="${WAIT_TIMEOUT:-300}"
+# WAIT_TIMEOUT now loaded from config in load_service_config()
 
 echo "🚀 Deploying ${SERVICE_NAME} to ${ENVIRONMENT} environment..."
 
