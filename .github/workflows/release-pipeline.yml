@@ -27,15 +27,6 @@ on:
       AWS_ROLE_ARN:
         description: 'AWS IAM Role ARN for OIDC authentication'
         required: true
-      DEV_SECRETS_BLOB:
-        description: 'Dev environment secrets as KEY=VALUE newline-separated'
-        required: false
-      STAGING_SECRETS_BLOB:
-        description: 'Staging environment secrets as KEY=VALUE newline-separated'
-        required: false
-      PROD_SECRETS_BLOB:
-        description: 'Production environment secrets as KEY=VALUE newline-separated'
-        required: false
 
 env:
   SERVICE_NAME: ${{ inputs.service_name }}
@@ -59,16 +50,6 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ap-south-1
-
-      - name: Sync Dev Secrets to SSM
-        env:
-          SECRETS_DATA: ${{ secrets.DEV_SECRETS_BLOB }}
-        run: |
-          chmod +x ./scripts/release/template/sync-secrets-to-ssm.sh
-          ./scripts/release/template/sync-secrets-to-ssm.sh \
-            "${{ inputs.service_name }}" \
-            "dev" \
-            "$SECRETS_DATA"
 
       - name: Deploy to Dev (Automatic)
         run: ./scripts/release/deploy-direct.sh dev
@@ -107,16 +88,6 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ap-south-1
 
-      - name: Sync Staging Secrets to SSM
-        env:
-          SECRETS_DATA: ${{ secrets.STAGING_SECRETS_BLOB }}
-        run: |
-          chmod +x ./scripts/release/template/sync-secrets-to-ssm.sh
-          ./scripts/release/template/sync-secrets-to-ssm.sh \
-            "${{ inputs.service_name }}" \
-            "staging" \
-            "$SECRETS_DATA"
-
       - name: Deploy to Staging (Manual Approval Required)
         run: ./scripts/release/deploy-direct.sh staging
         env:
@@ -153,16 +124,6 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ap-south-1
-
-      - name: Sync Production Secrets to SSM
-        env:
-          SECRETS_DATA: ${{ secrets.PROD_SECRETS_BLOB }}
-        run: |
-          chmod +x ./scripts/release/template/sync-secrets-to-ssm.sh
-          ./scripts/release/template/sync-secrets-to-ssm.sh \
-            "${{ inputs.service_name }}" \
-            "prod" \
-            "$SECRETS_DATA"
 
       - name: Deploy to Production (Manual Approval Required)
         run: ./scripts/release/deploy-direct.sh production

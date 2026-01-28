@@ -86,21 +86,6 @@ if ! kubectl cluster-info &> /dev/null; then
     exit 1
 fi
 
-    # Sync secrets to SSM for PR environment
-    echo "🔍 DEBUG: PR_SECRETS_BLOB length: ${#PR_SECRETS_BLOB}"
-    if [[ -n "${PR_SECRETS_BLOB:-}" ]]; then
-        echo "🔐 Syncing PR secrets to SSM..."
-        SYNC_SCRIPT="${PLATFORM_ROOT}/scripts/release/template/sync-secrets-to-ssm.sh"
-        if [[ -f "$SYNC_SCRIPT" ]]; then
-            chmod +x "$SYNC_SCRIPT"
-            "$SYNC_SCRIPT" "${SERVICE_NAME}" "pr" "${PR_SECRETS_BLOB}"
-        else
-            echo "⚠️  Secret sync script not found, skipping: $SYNC_SCRIPT"
-        fi
-    else
-        echo "ℹ️  No PR_SECRETS_BLOB provided, skipping secret sync"
-    fi
-
 # Mock Landing Zone (Preview Mode Only)
 # In Production, tenant-infrastructure creates namespaces
 # In Preview, CI must simulate this behavior

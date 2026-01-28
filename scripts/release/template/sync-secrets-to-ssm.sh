@@ -1,22 +1,16 @@
 #!/bin/bash
 # Sync Service Secrets to AWS SSM - Production Grade
-# Usage: ./sync-secrets-to-ssm.sh <service-name> <env> <secrets-block>
+# Usage: ./sync-secrets-to-ssm.sh <service-name> <env>
 
 set -euo pipefail
 
 SERVICE_NAME="$1"
 ENV="$2"
-SECRETS_BLOCK="$3"
 
 # Validate Inputs
 if [[ -z "$SERVICE_NAME" || -z "$ENV" ]]; then
-    echo "❌ Usage: $0 <service-name> <env> <secrets-block>"
+    echo "❌ Usage: $0 <service-name> <env>"
     exit 1
-fi
-
-if [[ -z "$SECRETS_BLOCK" ]]; then
-    echo "ℹ️  No secrets provided for $ENV. Skipping sync."
-    exit 0
 fi
 
 # Validate AWS CLI is available
@@ -33,34 +27,55 @@ fi
 
 echo "🔐 Syncing secrets for $SERVICE_NAME [$ENV]..."
 
+# Construct environment-specific variable names
+ENV_PREFIX=$(echo "$ENV" | tr '[:lower:]' '[:upper:]')
+
+# Build secrets blob from environment variables
+SECRETS_BLOB=""
+
+# Check for DATABASE_URL
+DB_VAR="${ENV_PREFIX}_DATABASE_URL"
+if [[ -n "${!DB_VAR:-}" ]]; then
+    SECRETS_BLOB+="DATABASE_URL=${!DB_VAR}"$'\n'
+fi
+
+# Check for OPENAI_API_KEY
+OPENAI_VAR="${ENV_PREFIX}_OPENAI_API_KEY"
+if [[ -n "${!OPENAI_VAR:-}" ]]; then
+    SECRETS_BLOB+="OPENAI_API_KEY=${!OPENAI_VAR}"$'\n'
+fi
+
+if [[ -z "$SECRETS_BLOB" ]]; then
+    echo "❌ No secrets found for $ENV. Expected ${ENV_PREFIX}_DATABASE_URL or ${ENV_PREFIX}_OPENAI_API_KEY."
+    exit 1
+fi
+
 # Process Secrets
-# Note: Secrets are passed directly via environment variables, no decoding needed
 while IFS='=' read -r key value; do
-    # 1. Skip empty/comment lines
-    [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+    # Skip empty lines
+    [[ -z "$key" ]] && continue
     
-    # 2. Guardrail: Enforce Underscore Convention
+    # Guardrail: Enforce Underscore Convention
     if [[ "$key" =~ [-] ]]; then
         echo "❌ ERROR: Hyphens not allowed in secret keys: '$key'. Use underscores (e.g., DATABASE_URL)."
         exit 1
     fi
     
-    # 3. Normalization: DATABASE_URL -> database_url
-    # Keep underscores to match platform standard
+    # Normalization: DATABASE_URL -> database_url
     PARAM_KEY=$(echo "$key" | tr '[:upper:]' '[:lower:]')
     
-    # 4. Construct Path: /zerotouch/staging/identity-service/database_url
+    # Construct Path: /zerotouch/dev/deepagents-runtime/database_url
     SSM_PATH="/zerotouch/${ENV}/${SERVICE_NAME}/${PARAM_KEY}"
     
     echo "   -> Pushing $key to $SSM_PATH"
     
-    # 5. Push to AWS (Quietly)
+    # Push to AWS
     aws ssm put-parameter \
         --name "$SSM_PATH" \
         --value "$value" \
         --type "SecureString" \
         --overwrite \
         --no-cli-pager > /dev/null
-done <<< "$SECRETS_BLOCK"
+done <<< "$SECRETS_BLOB"
 
 echo "✅ Secrets synced successfully."
