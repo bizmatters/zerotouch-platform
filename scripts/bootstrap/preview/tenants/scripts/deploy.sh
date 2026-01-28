@@ -87,6 +87,7 @@ if ! kubectl cluster-info &> /dev/null; then
 fi
 
     # Sync secrets to SSM for PR environment
+    echo "🔍 DEBUG: PR_SECRETS_BLOB length: ${#PR_SECRETS_BLOB}"
     if [[ -n "${PR_SECRETS_BLOB:-}" ]]; then
         echo "🔐 Syncing PR secrets to SSM..."
         SYNC_SCRIPT="${PLATFORM_ROOT}/scripts/release/template/sync-secrets-to-ssm.sh"

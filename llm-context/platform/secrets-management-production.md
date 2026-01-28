@@ -192,7 +192,6 @@ data:
 - secretKey: JWT_PRIVATE_KEY
   remoteRef:
     key: /zerotouch/prod/service/jwt_private_key
-  decodingStrategy: Base64  # For certificates, keys
 ```
 
 ## Troubleshooting
