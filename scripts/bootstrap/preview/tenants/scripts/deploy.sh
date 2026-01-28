@@ -89,14 +89,6 @@ fi
     # Sync secrets to SSM for PR environment
     echo "🔍 DEBUG: PR_SECRETS_BLOB length: ${#PR_SECRETS_BLOB}"
     if [[ -n "${PR_SECRETS_BLOB:-}" ]]; then
-        # Attempt to Base64 decode if the blob looks like base64
-        # This supports fixing the GitHub Actions secret masking issue
-        if [[ "$PR_SECRETS_BLOB" =~ ^[a-zA-Z0-9+/]+={0,2}$ ]] && ! [[ "$PR_SECRETS_BLOB" =~ [[:space:]] ]]; then
-            echo "🔐 Detected Base64 encoded secrets blob, decoding..."
-            DECODED_BLOB=$(echo "$PR_SECRETS_BLOB" | base64 -d 2>/dev/null || echo "$PR_SECRETS_BLOB")
-            PR_SECRETS_BLOB="$DECODED_BLOB"
-        fi
-        
         echo "🔐 Syncing PR secrets to SSM..."
         SYNC_SCRIPT="${PLATFORM_ROOT}/scripts/release/template/sync-secrets-to-ssm.sh"
         if [[ -f "$SYNC_SCRIPT" ]]; then
@@ -107,10 +99,6 @@ fi
         fi
     else
         echo "ℹ️  No PR_SECRETS_BLOB provided, skipping secret sync"
-        if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-            echo "⚠️  NOTE: If you expected secrets, GitHub Actions may have masked the output."
-            echo "   Workaround: Base64 encode the secrets blob in the workflow before outputting it."
-        fi
     fi
 
 # Mock Landing Zone (Preview Mode Only)
