@@ -122,11 +122,20 @@ else
 fi
 
 # Apply external secrets with PR overlay patches
+EXTERNAL_SECRETS_BASE="${PROJECT_ROOT}/platform/${SERVICE_NAME}/base/external-secrets"
 EXTERNAL_SECRETS_OVERLAY="${PROJECT_ROOT}/platform/${SERVICE_NAME}/overlays/pr"
 
-if [[ -f "$EXTERNAL_SECRETS_OVERLAY/kustomization.yaml" ]]; then
+if [[ -d "$EXTERNAL_SECRETS_BASE" ]]; then
     echo "📋 Applying external secrets with PR overlay..."
-    kubectl kustomize "$EXTERNAL_SECRETS_OVERLAY" | kubectl apply -f - -n "${NAMESPACE}"
+    
+    # Apply base first
+    kubectl apply -f "$EXTERNAL_SECRETS_BASE" -n "${NAMESPACE}" --recursive
+    
+    # Then apply overlay patches if they exist
+    if [[ -f "$EXTERNAL_SECRETS_OVERLAY/kustomization.yaml" ]]; then
+        kubectl apply -k "$EXTERNAL_SECRETS_OVERLAY" -n "${NAMESPACE}"
+    fi
+    
     echo "✅ External secrets applied"
     
     # Force immediate sync of secrets
@@ -147,7 +156,7 @@ if [[ -f "$EXTERNAL_SECRETS_OVERLAY/kustomization.yaml" ]]; then
     
     echo "✅ Secrets synced"
 else
-    echo "ℹ️  No ExternalSecrets overlay found, skipping"
+    echo "ℹ️  No ExternalSecrets found, skipping"
 fi
 
 # Apply overlay claims if they exist (for PR environment)

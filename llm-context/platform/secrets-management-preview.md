@@ -1,129 +1,244 @@
 
-### 2. Preview Architecture (PRs / CI Testing)
-This document outlines the declarative flow used for ephemeral testing environments.
-
-**File:** `docs/architecture/secrets-management-preview.md`
-
-```markdown
 # Platform Secret Management: Preview Architecture
-**Scope:** Pull Requests (PRs), Local Testing (Kind), CI Pipelines
+**Scope:** Pull Requests (PRs), CI Testing (Kind Clusters)
 
 ## Executive Summary
-Preview environments now use the **same declarative pattern** as production environments.
-Secrets are synced to AWS SSM under `/zerotouch/pr/*` paths, then fetched by External Secrets Operator.
-This ensures consistency across all environments and provides audit trails.
+Preview environments use the **same declarative pattern** as production, with secrets synced to `/zerotouch/pr/*` in AWS SSM. This ensures PR tests validate the actual production secret flow, catching integration issues early.
 
-## Architecture Wireframe
+## Architecture Flow
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                             PREVIEW SECRET LIFECYCLE                                │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 
-   1. PREPARATION                       2. SYNC TO SSM
-   (GitHub Secrets)                     (deploy.sh)
+   1. SECRET STORAGE                    2. MANIFEST DEFINITION
+   (AWS SSM - Values)                   (Service Repo - Structure)
 ┌───────────────────────────┐        ┌───────────────────────────┐
-│ Service Repo              │        │ CI Runner (GitHub)        │
-│ ├── .github/workflows/    │        │                           │
-│ │   main-pipeline.yml     │ Blob   │ 1. prepare-secrets job    │
-│ │   prepare-secrets:      │ ─────> │ 2. sync-secrets-to-ssm.sh │
-│ │     PR_DATABASE_URL     │        │ 3. Push to SSM            │
-│ │     PR_OPENAI_API_KEY   │        └─────────────┬─────────────┘
-└───────────────────────────┘                      │
-                                                   │ Synced to SSM
-                                                   ▼
-                                        ┌──────────────────────────┐
-                                        │ AWS SSM Parameter Store  │
-                                        │ /zerotouch/pr/service/*  │
-                                        └─────────────┬────────────┘
-                                                      │
-   3. DECLARATIVE FETCH                               │ ESO Fetches
-   (ExternalSecrets + Kustomize)                      │
-┌────────────────────────────────────────────────────┼────────────┐
-│ KIND CLUSTER (Ephemeral Namespace)                 │            │
-├─────────────────────────────────────────────────────┼────────────┤
-│                                                     ▼            │
-│    ┌───────────────────┐       ┌──────────────────────────┐    │
-│    │ ExternalSecret    │ ────> │ K8s Secret (Opaque)      │    │
-│    │ (PR Overlay)      │ ESO   │ envFrom: secretRef       │    │
-│    │ /zerotouch/pr/*   │       └──────────────────────────┘    │
-│    └───────────────────┘                                        │
-│                                                                 │
-│    * External Secrets Operator fetches from SSM                │
-│    * Kustomize patches apply PR-specific paths                 │
-└─────────────────────────────────────────────────────────────────┘
+│ AWS SSM Parameter Store   │        │ service-repo/platform/    │
+│                           │        │ service/                  │
+│ /zerotouch/pr/service/    │        │                           │
+│   database_url            │        │ base/external-secrets/    │
+│   openai_api_key          │        │   db-es.yaml              │
+│                           │        │   key: /.../_ENV_/...     │
+│ (Ephemeral - cleaned up)  │        │                           │
+│ (SecureString encrypted)  │        │ overlays/pr/              │
+└─────────────┬─────────────┘        │   patches/secrets.yaml    │
+              │                      │   key: /.../pr/...        │
+              │ ESO Fetches          └─────────────┬─────────────┘
+              │                                    │
+              │                                    │ kubectl apply
+              ▼                                    ▼
+┌────────────────────────────────────────────────────────────────┐
+│ KIND CLUSTER (Ephemeral)                                       │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  ExternalSecret (CRD)                                          │
+│    ↓ (ESO reconciles)                                          │
+│  K8s Secret (Opaque)                                           │
+│    ↓ (mounted)                                                 │
+│  Pod (Test Runner - envFrom: secretRef)                        │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
 ```
 
-## The Workflow Steps
+## Core Components
 
-### 1. Secret Preparation (`main-pipeline.yml`)
-The service workflow prepares secrets as KEY=VALUE blob:
+### 1. Secret Storage (AWS SSM)
+- **Path Pattern:** `/zerotouch/pr/{service}/{key}`
+- **Encryption:** SecureString type
+- **Lifecycle:** Ephemeral - created during CI, cleaned up after PR
+- **Example:** `/zerotouch/pr/identity-service/database_url`
+
+### 2. Base Manifests (Service Repo)
+ExternalSecrets live in **service repository** (not tenant repo):
 
 ```yaml
-prepare-secrets:
-  outputs:
-    pr_blob: ${{ steps.pr.outputs.blob }}
-  steps:
-    - id: pr
-      run: |
-        echo "DATABASE_URL=${{ secrets.PR_DATABASE_URL }}" >> $GITHUB_OUTPUT
-        echo "OPENAI_API_KEY=${{ secrets.PR_OPENAI_API_KEY }}" >> $GITHUB_OUTPUT
+# service-repo/platform/service/base/external-secrets/db-es.yaml
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: service-db
+  labels:
+    zerotouch.io/managed: "true"
+spec:
+  secretStoreRef:
+    name: aws-parameter-store
+    kind: ClusterSecretStore
+  data:
+  - secretKey: DATABASE_URL
+    remoteRef:
+      key: /zerotouch/_ENV_/service/database_url
 ```
 
-### 2. Sync to SSM (`deploy.sh`)
-The deploy script syncs secrets to SSM before applying manifests:
+### 3. PR Overlay (Kustomize Patches)
+Patches inject `pr` environment:
 
-```bash
-sync-secrets-to-ssm.sh "${SERVICE_NAME}" "pr" "${PR_SECRETS_BLOB}"
-```
-
-This creates parameters at `/zerotouch/pr/{service}/{key}` with:
-- Hyphen validation (enforces underscores)
-- Lowercase normalization
-- SecureString encryption
-
-### 3. Declarative Application
-ExternalSecrets are applied via kustomize with PR overlay patches:
-
-```bash
-kubectl kustomize overlays/pr | kubectl apply -f -
-```
-
-**Base manifest** uses `_ENV_` placeholder:
 ```yaml
-remoteRef:
-  key: /zerotouch/_ENV_/service/database_url
+# service-repo/platform/service/overlays/pr/patches/secrets-patch.yaml
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: service-db
+spec:
+  data:
+  - secretKey: DATABASE_URL
+    remoteRef:
+      key: /zerotouch/pr/service/database_url  # Actual path
 ```
 
-**PR patch** overrides with actual path:
+### 4. Deployment Flow
+1. **Sync to SSM:** Deploy script uses `sync-secrets-to-ssm.sh` to push PR secrets to `/zerotouch/pr/*`
+2. **Apply Manifests:** Deploy script uses `kubectl kustomize` to merge base + PR overlay
+3. **Force Refresh:** Deploy script uses `force-secret-refresh.sh` to annotate ExternalSecrets
+4. **ESO Fetch:** External Secrets Operator creates Kubernetes secrets
+5. **Pod Mount:** Test pods consume via `envFrom: secretRef`
+
+**Scripts:**
+- `zerotouch-platform/scripts/release/template/sync-secrets-to-ssm.sh`
+- `zerotouch-platform/scripts/release/force-secret-refresh.sh`
+- `zerotouch-platform/scripts/bootstrap/preview/tenants/scripts/deploy.sh`
+
+**Workflows:**
+- `zerotouch-platform/.github/workflows/ci-test.yml`
+
+### 5. SecretStore Configuration
+ESO requires ClusterSecretStore to authenticate with AWS:
+
 ```yaml
-remoteRef:
-  key: /zerotouch/pr/service/database_url
+# Deployed by platform bootstrap
+apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: aws-parameter-store
+spec:
+  provider:
+    aws:
+      service: ParameterStore
+      region: us-east-1
+      auth:
+        jwt:
+          serviceAccountRef:
+            name: external-secrets
+            namespace: external-secrets
 ```
 
-### 4. Force Sync
-After applying ExternalSecrets, immediate sync is triggered:
+**Auth Method:** IRSA (IAM Roles for Service Accounts) - no credentials in cluster
 
-```bash
-kubectl annotate externalsecret -l zerotouch.io/managed=true force-sync=$(date +%s)
-kubectl wait --for=condition=Ready externalsecret --timeout=60s
+## Key Patterns
+
+### Placeholder Pattern
+Base manifests use `_ENV_` placeholder to prevent accidental cross-environment access:
+```yaml
+key: /zerotouch/_ENV_/service/database_url
 ```
+If overlay fails to patch, ESO attempts to fetch `/zerotouch/_ENV_/...` and fails immediately.
+
+### Label-Based Sync
+All managed ExternalSecrets require label:
+```yaml
+metadata:
+  labels:
+    zerotouch.io/managed: "true"
+```
+Enables scoped force-sync without affecting platform secrets (ArgoCD, ESO).
+
+### Key Normalization
+- **GitHub Secrets:** `PR_DATABASE_URL` (uppercase with underscores)
+- **SSM Path:** `/zerotouch/pr/service/database_url` (lowercase)
+- **Sync Script:** Automatically converts and validates (rejects hyphens)
+
+## Service Requirements
+
+### Repository Structure
+```
+service-repo/
+├── .github/workflows/
+│   └── main-pipeline.yml           # Calls ci-test.yml
+├── platform/
+│   └── service-name/
+│       ├── base/
+│       │   ├── external-secrets/
+│       │   │   └── *.yaml          # _ENV_ placeholder
+│       │   └── kustomization.yaml
+│       └── overlays/
+│           └── pr/
+│               ├── patches/
+│               │   └── secrets-patch.yaml  # pr paths
+│               └── kustomization.yaml
+└── scripts/ci/
+    └── in-cluster-test.sh          # Local dev testing
+```
+
+### GitHub Secrets Naming Convention
+```
+PR_DATABASE_URL
+PR_OPENAI_API_KEY
+PR_ANTHROPIC_API_KEY
+```
+**Pattern:** `PR_` prefix + `UPPER_CASE_UNDERSCORE` (no hyphens)
+
+### Local Development
+Set same env variables in `.env` and run `scripts/ci/in-cluster-test.sh` - identical to PR flow.
+
+## Security Model
+
+| Layer | Protection |
+|-------|-----------|
+| **Storage** | SSM SecureString encryption at rest |
+| **Access** | IAM roles with least-privilege policies |
+| **Audit** | CloudTrail logs all SSM parameter access |
+| **Isolation** | Separate `/pr/` namespace prevents cross-env leaks |
+| **Lifecycle** | Ephemeral - deleted after PR closes |
 
 ## Key Differences from Production
 
-| Feature | Production (Main) | Preview (PR) |
-| :--- | :--- | :--- |
-| **Mechanism** | GitOps + External Secrets Operator | Same (ESO) |
-| **Source** | AWS SSM `/zerotouch/prod/*` | AWS SSM `/zerotouch/pr/*` |
-| **Persistence** | Permanent | Ephemeral (cleaned up) |
-| **Latency** | 10s - 60s (ESO Sync) | Same (with force-sync) |
-| **Auditing** | CloudTrail Logs | CloudTrail Logs |
-| **Overlay** | prod patches | pr patches |
+| Aspect | Production | Preview (PR) |
+|--------|-----------|--------------|
+| **Manifest Location** | `zerotouch-tenants/` repo | `service-repo/platform/` |
+| **Deployment** | ArgoCD GitOps | Direct `kubectl apply` |
+| **SSM Path** | `/zerotouch/{dev\|staging\|prod}/*` | `/zerotouch/pr/*` |
+| **Cluster** | Persistent (Talos) | Ephemeral (Kind) |
+| **Lifecycle** | Permanent | Deleted with PR |
 
-## Benefits of Declarative Approach
-1. **Consistency:** Same pattern across all environments
-2. **Audit Trail:** All secret access logged in CloudTrail
-3. **Security:** Secrets encrypted in SSM, not in CI logs
-4. **Testability:** PR tests use real ExternalSecrets flow
-5. **Maintainability:** Single code path for all environments
+## Troubleshooting
+
+### Secrets Not Available in Pods
+```bash
+# 1. Check ExternalSecret status
+kubectl get externalsecret -n namespace
+kubectl describe externalsecret service-db -n namespace
+
+# 2. Verify SSM parameter exists
+aws ssm get-parameter --name /zerotouch/pr/service/database_url
+
+# 3. Check ESO operator logs
+kubectl logs -n external-secrets -l app.kubernetes.io/name=external-secrets
 ```
+
+### Kustomize Patch Not Applied
+```bash
+# Test kustomize build locally
+kubectl kustomize platform/service/overlays/pr
+
+# Verify _ENV_ was replaced
+kubectl kustomize platform/service/overlays/pr | grep "key:"
+```
+
+### Force-Sync Not Triggering
+```bash
+# Check label exists
+kubectl get externalsecret -n namespace -l zerotouch.io/managed=true
+
+# Manually trigger sync
+kubectl annotate externalsecret service-db -n namespace \
+  force-sync=$(date +%s) --overwrite
+```
+
+## Benefits
+
+1. **Production Parity:** PR tests validate actual ExternalSecrets flow
+2. **Early Detection:** Catches secret integration issues before merge
+3. **Audit Trail:** All access logged in CloudTrail
+4. **Security:** Secrets encrypted in SSM, never in CI logs
+5. **Consistency:** Single pattern across all environments

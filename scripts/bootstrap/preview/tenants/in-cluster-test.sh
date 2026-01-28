@@ -555,6 +555,9 @@ trap cleanup EXIT
     # Determine which tag to deploy
     FINAL_IMAGE_TAG="${OVERRIDE_IMAGE_TAG:-$IMAGE_TAG}"
     
+    # Export PR_SECRETS_BLOB for deploy.sh
+    export PR_SECRETS_BLOB="${PR_SECRETS_BLOB:-}"
+    
     # Deploy service
     DEPLOY_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/deploy.sh"
     if [[ -f "$DEPLOY_SCRIPT" ]]; then
