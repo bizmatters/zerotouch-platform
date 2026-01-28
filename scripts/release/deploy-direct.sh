@@ -78,7 +78,7 @@ validate_environment() {
     log_info "Validating deployment environment"
     
     # Check required environment variables
-    local required_vars=("SERVICE_NAME" "IMAGE_TAG" "TENANT_REPO_TOKEN" "BOT_GITHUB_USERNAME")
+    local required_vars=("SERVICE_NAME" "IMAGE_TAG" "BOT_GITHUB_TOKEN")
     
     for var in "${required_vars[@]}"; do
         if [[ -z "${!var:-}" ]]; then
@@ -104,8 +104,13 @@ clone_tenant_repo() {
     temp_dir=$(mktemp -d)
     export TENANT_REPO_DIR="$temp_dir/zerotouch-tenants"
     
-    # Clone with authentication
-    local auth_url="https://${TENANT_REPO_TOKEN}@github.com/${BOT_GITHUB_USERNAME}/zerotouch-tenants.git"
+    # Clone with authentication - extract org from TENANT_REPO_URL or default to current repo owner
+    local repo_org="${GITHUB_REPOSITORY_OWNER:-arun4infra}"
+    if [[ -n "${TENANT_REPO_URL:-}" ]]; then
+        repo_org=$(echo "$TENANT_REPO_URL" | sed -n 's|.*github.com[:/]\([^/]*\)/.*|\1|p')
+    fi
+    
+    local auth_url="https://${BOT_GITHUB_TOKEN}@github.com/${repo_org}/zerotouch-tenants.git"
     
     if git clone "$auth_url" "$TENANT_REPO_DIR"; then
         log_success "Tenant repository cloned to: $TENANT_REPO_DIR"

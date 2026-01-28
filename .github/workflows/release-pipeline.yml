@@ -16,13 +16,10 @@ on:
         description: 'Tenant repository URL'
         required: false
         type: string
-        default: 'https://github.com/arun4infra/zerotouch-tenants.git'
+        default: 'https://github.com/${{ github.repository_owner }}/zerotouch-tenants.git'
     secrets:
       BOT_GITHUB_TOKEN:
         description: 'GitHub token for tenant repository access'
-        required: true
-      BOT_GITHUB_USERNAME:
-        description: 'GitHub username for bot account'
         required: true
       AWS_ROLE_ARN:
         description: 'AWS IAM Role ARN for OIDC authentication'
@@ -56,8 +53,7 @@ jobs:
         env:
           SERVICE_NAME: ${{ env.SERVICE_NAME }}
           IMAGE_TAG: ${{ inputs.image_tag }}
-          TENANT_REPO_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
-          BOT_GITHUB_USERNAME: ${{ secrets.BOT_GITHUB_USERNAME }}
+          BOT_GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
           TENANT_REPO_URL: ${{ env.TENANT_REPO_URL }}
 
       - name: Force Secret Refresh (Dev)
@@ -93,8 +89,7 @@ jobs:
         env:
           SERVICE_NAME: ${{ env.SERVICE_NAME }}
           IMAGE_TAG: ${{ inputs.image_tag }}
-          TENANT_REPO_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
-          BOT_GITHUB_USERNAME: ${{ secrets.BOT_GITHUB_USERNAME }}
+          BOT_GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
           TENANT_REPO_URL: ${{ env.TENANT_REPO_URL }}
 
       - name: Force Secret Refresh (Staging)
@@ -130,8 +125,7 @@ jobs:
         env:
           SERVICE_NAME: ${{ env.SERVICE_NAME }}
           IMAGE_TAG: ${{ inputs.image_tag }}
-          TENANT_REPO_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
-          BOT_GITHUB_USERNAME: ${{ secrets.BOT_GITHUB_USERNAME }}
+          BOT_GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
           TENANT_REPO_URL: ${{ env.TENANT_REPO_URL }}
 
       - name: Force Secret Refresh (Production)
