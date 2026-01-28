@@ -58,7 +58,7 @@ checkout_pr_claims() {
         
         # Checkout zerotouch-tenants repository
         # Use environment variable or default to SSH URL
-        local tenants_repo="${TENANTS_REPO_URL:-git@github.com:arun4infra/zerotouch-tenants.git}"
+        local tenants_repo="${TENANTS_REPO_URL:-git@github.com:bizmatters/zerotouch-tenants.git}"
         local tenants_dir="platform/tenants-temp"
         
         # Detect current branch for checkout
