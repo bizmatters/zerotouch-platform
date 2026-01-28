@@ -79,6 +79,14 @@ jobs:
           BOT_GITHUB_USERNAME: ${{ secrets.BOT_GITHUB_USERNAME }}
           TENANT_REPO_URL: ${{ env.TENANT_REPO_URL }}
 
+      - name: Force Secret Refresh (Dev)
+        run: |
+          chmod +x ./scripts/release/force-secret-refresh.sh
+          ./scripts/release/force-secret-refresh.sh \
+            "${{ inputs.service_name }}" \
+            "dev" \
+            "platform-identity"
+
   deploy-staging:
     needs: deploy-dev
     runs-on: ubuntu-latest
@@ -118,6 +126,14 @@ jobs:
           BOT_GITHUB_USERNAME: ${{ secrets.BOT_GITHUB_USERNAME }}
           TENANT_REPO_URL: ${{ env.TENANT_REPO_URL }}
 
+      - name: Force Secret Refresh (Staging)
+        run: |
+          chmod +x ./scripts/release/force-secret-refresh.sh
+          ./scripts/release/force-secret-refresh.sh \
+            "${{ inputs.service_name }}" \
+            "staging" \
+            "platform-identity"
+
   deploy-production:
     needs: deploy-staging
     runs-on: ubuntu-latest
@@ -156,3 +172,11 @@ jobs:
           TENANT_REPO_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
           BOT_GITHUB_USERNAME: ${{ secrets.BOT_GITHUB_USERNAME }}
           TENANT_REPO_URL: ${{ env.TENANT_REPO_URL }}
+
+      - name: Force Secret Refresh (Production)
+        run: |
+          chmod +x ./scripts/release/force-secret-refresh.sh
+          ./scripts/release/force-secret-refresh.sh \
+            "${{ inputs.service_name }}" \
+            "prod" \
+            "platform-identity"

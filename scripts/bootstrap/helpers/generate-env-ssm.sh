@@ -73,27 +73,30 @@ PARAM_LIST="/zerotouch/prod/openai_api_key=
 /zerotouch/prod/argocd/repos/zerotouch-tenants/url=
 /zerotouch/prod/argocd/repos/zerotouch-tenants/username=
 /zerotouch/prod/argocd/repos/zerotouch-tenants/password=
-/zerotouch/prod/ide-orchestrator/jwt-secret=
-/zerotouch/prod/ide-orchestrator/spec-engine-url=
-/zerotouch/prod/ide-orchestrator/database_url=
-/zerotouch/prod/identity-service/node_env=
-/zerotouch/prod/identity-service/neon_auth_url=
-/zerotouch/prod/identity-service/database_url=
-/zerotouch/prod/identity-service/jwt_private_key=
-/zerotouch/prod/identity-service/jwt_public_key=
-/zerotouch/prod/identity-service/jwt_key_id=
-/zerotouch/prod/identity-service/token_pepper=
-/zerotouch/prod/identity-service/redis_host=
-/zerotouch/prod/identity-service/redis_port=
-/zerotouch/prod/identity-service/redis_username=
-/zerotouch/prod/identity-service/redis_password=
-/zerotouch/prod/identity-service/jwt_previous_private_key=
-/zerotouch/prod/identity-service/jwt_previous_public_key=
-/zerotouch/prod/identity-service/jwt_previous_key_id=
-/zerotouch/prod/identity-service/token_pepper=
-/zerotouch/prod/deepagents-runtime/database_url=
-/zerotouch/prod/deepagents-runtime/openai_api_key=
-/zerotouch/prod/deepagents-runtime/anthropic_api_key="
+"
+
+# Removed from above string
+# /zerotouch/prod/ide-orchestrator/jwt-secret=
+# /zerotouch/prod/ide-orchestrator/spec-engine-url=
+# /zerotouch/prod/ide-orchestrator/database_url=
+# /zerotouch/prod/identity-service/node_env=
+# /zerotouch/prod/identity-service/neon_auth_url=
+# /zerotouch/prod/identity-service/database_url=
+# /zerotouch/prod/identity-service/jwt_private_key=
+# /zerotouch/prod/identity-service/jwt_public_key=
+# /zerotouch/prod/identity-service/jwt_key_id=
+# /zerotouch/prod/identity-service/token_pepper=
+# /zerotouch/prod/identity-service/redis_host=
+# /zerotouch/prod/identity-service/redis_port=
+# /zerotouch/prod/identity-service/redis_username=
+# /zerotouch/prod/identity-service/redis_password=
+# /zerotouch/prod/identity-service/jwt_previous_private_key=
+# /zerotouch/prod/identity-service/jwt_previous_public_key=
+# /zerotouch/prod/identity-service/jwt_previous_key_id=
+# /zerotouch/prod/identity-service/token_pepper=
+# /zerotouch/prod/deepagents-runtime/database_url=
+# /zerotouch/prod/deepagents-runtime/openai_api_key=
+# /zerotouch/prod/deepagents-runtime/anthropic_api_key=
 
 # Process hardcoded parameter list
 while IFS='=' read -r key value || [ -n "$key" ]; do
@@ -126,36 +129,36 @@ while IFS='=' read -r key value || [ -n "$key" ]; do
             */argocd/repos/zerotouch-tenants/url) env_var="TENANTS_REPO_URL" ;;
             */argocd/repos/zerotouch-tenants/username) env_var="BOT_GITHUB_USERNAME" ;;
             */argocd/repos/zerotouch-tenants/password) env_var="BOT_GITHUB_TOKEN" ;;
-            # IDE Orchestrator service secrets
-            /zerotouch/prod/ide-orchestrator/jwt-secret) env_var="IDEO_JWT_SECRET" ;;
-            /zerotouch/prod/ide-orchestrator/spec-engine-url) env_var="IDEO_SPEC_ENGINE_URL" ;;
-            /zerotouch/prod/ide-orchestrator/database_url) env_var="IDEO_DATABASE_URL" ;;
-            # Identity Service secrets
-            /zerotouch/prod/identity-service/node_env) env_var="IDENTITY_NODE_ENV" ;;
-            /zerotouch/prod/identity-service/neon_auth_url) env_var="IDENTITY_NEON_AUTH_URL" ;;
-            /zerotouch/prod/identity-service/database_url) env_var="IDENTITY_DATABASE_URL" ;;
-            /zerotouch/prod/identity-service/jwt_private_key) env_var="IDENTITY_JWT_PRIVATE_KEY" ;;
-            /zerotouch/prod/identity-service/jwt_public_key) env_var="IDENTITY_JWT_PUBLIC_KEY" ;;
-            /zerotouch/prod/identity-service/jwt_key_id) env_var="IDENTITY_JWT_KEY_ID" ;;
-            /zerotouch/prod/identity-service/token_pepper) env_var="IDENTITY_TOKEN_PEPPER" ;;
-            /zerotouch/prod/identity-service/redis_host) env_var="IDENTITY_REDIS_HOST" ;;
-            /zerotouch/prod/identity-service/redis_port) env_var="IDENTITY_REDIS_PORT" ;;
-            /zerotouch/prod/identity-service/redis_username) env_var="IDENTITY_REDIS_USERNAME" ;;
-            /zerotouch/prod/identity-service/redis_password) env_var="IDENTITY_REDIS_PASSWORD" ;;
-            /zerotouch/prod/identity-service/jwt_previous_private_key) env_var="IDENTITY_JWT_PREVIOUS_PRIVATE_KEY" ;;
-            /zerotouch/prod/identity-service/jwt_previous_public_key) env_var="IDENTITY_JWT_PREVIOUS_PUBLIC_KEY" ;;
-            /zerotouch/prod/identity-service/jwt_previous_key_id) env_var="IDENTITY_JWT_PREVIOUS_KEY_ID" ;;
-            /zerotouch/prod/identity-service/jwt_private_key) env_var="IDENTITY_JWT_PRIVATE_KEY" ;;
-            /zerotouch/prod/identity-service/jwt_public_key) env_var="IDENTITY_JWT_PUBLIC_KEY" ;;
-            /zerotouch/prod/identity-service/jwt_key_id) env_var="IDENTITY_JWT_KEY_ID" ;;
-            /zerotouch/prod/identity-service/jwt_previous_private_key) env_var="IDENTITY_JWT_PREVIOUS_PRIVATE_KEY" ;;
-            /zerotouch/prod/identity-service/jwt_previous_public_key) env_var="IDENTITY_JWT_PREVIOUS_PUBLIC_KEY" ;;
-            /zerotouch/prod/identity-service/jwt_previous_key_id) env_var="IDENTITY_JWT_PREVIOUS_KEY_ID" ;;
-            /zerotouch/prod/identity-service/token_pepper) env_var="IDENTITY_TOKEN_PEPPER" ;;
-            # DeepAgents Runtime secrets
-            /zerotouch/prod/deepagents-runtime/postgres_uri) env_var="POSTGRES_URI" ;;
-            /zerotouch/prod/deepagents-runtime/openai_api_key) env_var="OPENAI_API_KEY" ;;
-            /zerotouch/prod/deepagents-runtime/anthropic_api_key) env_var="ANTHROPIC_API_KEY" ;;
+            # # IDE Orchestrator service secrets
+            # /zerotouch/prod/ide-orchestrator/jwt-secret) env_var="IDEO_JWT_SECRET" ;;
+            # /zerotouch/prod/ide-orchestrator/spec-engine-url) env_var="IDEO_SPEC_ENGINE_URL" ;;
+            # /zerotouch/prod/ide-orchestrator/database_url) env_var="IDEO_DATABASE_URL" ;;
+            # # Identity Service secrets
+            # /zerotouch/prod/identity-service/node_env) env_var="IDENTITY_NODE_ENV" ;;
+            # /zerotouch/prod/identity-service/neon_auth_url) env_var="IDENTITY_NEON_AUTH_URL" ;;
+            # /zerotouch/prod/identity-service/database_url) env_var="IDENTITY_DATABASE_URL" ;;
+            # /zerotouch/prod/identity-service/jwt_private_key) env_var="IDENTITY_JWT_PRIVATE_KEY" ;;
+            # /zerotouch/prod/identity-service/jwt_public_key) env_var="IDENTITY_JWT_PUBLIC_KEY" ;;
+            # /zerotouch/prod/identity-service/jwt_key_id) env_var="IDENTITY_JWT_KEY_ID" ;;
+            # /zerotouch/prod/identity-service/token_pepper) env_var="IDENTITY_TOKEN_PEPPER" ;;
+            # /zerotouch/prod/identity-service/redis_host) env_var="IDENTITY_REDIS_HOST" ;;
+            # /zerotouch/prod/identity-service/redis_port) env_var="IDENTITY_REDIS_PORT" ;;
+            # /zerotouch/prod/identity-service/redis_username) env_var="IDENTITY_REDIS_USERNAME" ;;
+            # /zerotouch/prod/identity-service/redis_password) env_var="IDENTITY_REDIS_PASSWORD" ;;
+            # /zerotouch/prod/identity-service/jwt_previous_private_key) env_var="IDENTITY_JWT_PREVIOUS_PRIVATE_KEY" ;;
+            # /zerotouch/prod/identity-service/jwt_previous_public_key) env_var="IDENTITY_JWT_PREVIOUS_PUBLIC_KEY" ;;
+            # /zerotouch/prod/identity-service/jwt_previous_key_id) env_var="IDENTITY_JWT_PREVIOUS_KEY_ID" ;;
+            # /zerotouch/prod/identity-service/jwt_private_key) env_var="IDENTITY_JWT_PRIVATE_KEY" ;;
+            # /zerotouch/prod/identity-service/jwt_public_key) env_var="IDENTITY_JWT_PUBLIC_KEY" ;;
+            # /zerotouch/prod/identity-service/jwt_key_id) env_var="IDENTITY_JWT_KEY_ID" ;;
+            # /zerotouch/prod/identity-service/jwt_previous_private_key) env_var="IDENTITY_JWT_PREVIOUS_PRIVATE_KEY" ;;
+            # /zerotouch/prod/identity-service/jwt_previous_public_key) env_var="IDENTITY_JWT_PREVIOUS_PUBLIC_KEY" ;;
+            # /zerotouch/prod/identity-service/jwt_previous_key_id) env_var="IDENTITY_JWT_PREVIOUS_KEY_ID" ;;
+            # /zerotouch/prod/identity-service/token_pepper) env_var="IDENTITY_TOKEN_PEPPER" ;;
+            # # DeepAgents Runtime secrets
+            # /zerotouch/prod/deepagents-runtime/postgres_uri) env_var="POSTGRES_URI" ;;
+            # /zerotouch/prod/deepagents-runtime/openai_api_key) env_var="OPENAI_API_KEY" ;;
+            # /zerotouch/prod/deepagents-runtime/anthropic_api_key) env_var="ANTHROPIC_API_KEY" ;;
             # Other repos - use REPOS_<NAME>_<FIELD> pattern
             */argocd/repos/*/url)
                 repo_name=$(echo "$key" | sed 's|.*/argocd/repos/\([^/]*\)/url|\1|' | tr '[:lower:]' '[:upper:]' | tr '-' '_')

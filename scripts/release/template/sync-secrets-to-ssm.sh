@@ -1,15 +1,16 @@
 #!/bin/bash
-# Sync Service Secrets to AWS SSM - Template
+# Sync Service Secrets to AWS SSM - Production Grade
 # Usage: ./sync-secrets-to-ssm.sh <service-name> <env> <secrets-block>
 
-set -e
+set -euo pipefail
 
-SERVICE_NAME=$1
-ENV=$2
-SECRETS_BLOCK=$3
+SERVICE_NAME="$1"
+ENV="$2"
+SECRETS_BLOCK="$3"
 
+# Validate Inputs
 if [[ -z "$SERVICE_NAME" || -z "$ENV" ]]; then
-    echo "Usage: $0 <service-name> <env> <secrets-block>"
+    echo "❌ Usage: $0 <service-name> <env> <secrets-block>"
     exit 1
 fi
 
@@ -20,47 +21,45 @@ fi
 
 # Validate AWS CLI is available
 if ! command -v aws &> /dev/null; then
-    echo "✗ AWS CLI not found. Please install AWS CLI."
+    echo "❌ AWS CLI not found. Please install AWS CLI."
     exit 1
 fi
 
 # Validate AWS credentials
 if ! aws sts get-caller-identity &> /dev/null; then
-    echo "✗ AWS credentials not configured or invalid."
+    echo "❌ AWS credentials not configured or invalid."
     exit 1
 fi
 
 echo "🔐 Syncing secrets for $SERVICE_NAME [$ENV]..."
 
-SYNCED_COUNT=0
-
-# Read the multi-line string safely
+# Process Secrets
 while IFS='=' read -r key value; do
-    # Skip empty lines or comments
+    # 1. Skip empty/comment lines
     [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
     
-    # Normalize Key: OPENAI_API_KEY -> openai_api_key
-    PARAM_KEY=$(echo "$key" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+    # 2. Guardrail: Enforce Underscore Convention
+    if [[ "$key" =~ [-] ]]; then
+        echo "❌ ERROR: Hyphens not allowed in secret keys: '$key'. Use underscores (e.g., DATABASE_URL)."
+        exit 1
+    fi
     
-    # Construct Path: /zerotouch/dev/service/key
+    # 3. Normalization: DATABASE_URL -> database_url
+    # Keep underscores to match platform standard
+    PARAM_KEY=$(echo "$key" | tr '[:upper:]' '[:lower:]')
+    
+    # 4. Construct Path: /zerotouch/staging/identity-service/database_url
     SSM_PATH="/zerotouch/${ENV}/${SERVICE_NAME}/${PARAM_KEY}"
     
     echo "   -> Pushing $key to $SSM_PATH"
     
-    # Push to AWS (Quietly to avoid leaking values in logs)
-    if aws ssm put-parameter \
+    # 5. Push to AWS (Quietly)
+    aws ssm put-parameter \
         --name "$SSM_PATH" \
         --value "$value" \
         --type "SecureString" \
         --overwrite \
-        --no-cli-pager > /dev/null 2>&1; then
-        SYNCED_COUNT=$((SYNCED_COUNT + 1))
-    else
-        echo "✗ Failed to sync $key"
-        exit 1
-    fi
+        --no-cli-pager > /dev/null
 done <<< "$SECRETS_BLOCK"
 
-echo "✅ Secrets synced successfully ($SYNCED_COUNT secrets)"
-
-exit 0
+echo "✅ Secrets synced successfully."

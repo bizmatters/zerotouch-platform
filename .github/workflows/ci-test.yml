@@ -26,6 +26,10 @@ on:
         required: false
         type: boolean
         default: false
+      pr_secrets_blob:
+        description: 'PR environment secrets as KEY=VALUE newline-separated'
+        required: false
+        type: string
     secrets:
       BOT_GITHUB_TOKEN:
         description: 'GitHub token for platform access'
@@ -134,10 +138,9 @@ jobs:
           TEST_PATH: ${{ inputs.test_suite }}
           TEST_NAME: ${{ inputs.test_name }}
           USE_REAL_LLM: ${{ inputs.use_real_llm }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           IDEO_JWT_SECRET: ${{ secrets.IDEO_JWT_SECRET }}
           IDEO_SPEC_ENGINE_URL: ${{ secrets.IDEO_SPEC_ENGINE_URL }}
+          PR_SECRETS_BLOB: ${{ inputs.pr_secrets_blob }}
           # Override image for in-cluster testing
           OVERRIDE_IMAGE_TAG: ${{ inputs.image_tag }}
         run: |

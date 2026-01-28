@@ -86,6 +86,20 @@ if ! kubectl cluster-info &> /dev/null; then
     exit 1
 fi
 
+    # Sync secrets to SSM for PR environment
+    if [[ -n "${PR_SECRETS_BLOB:-}" ]]; then
+        echo "🔐 Syncing PR secrets to SSM..."
+        SYNC_SCRIPT="${PLATFORM_ROOT}/scripts/release/template/sync-secrets-to-ssm.sh"
+        if [[ -f "$SYNC_SCRIPT" ]]; then
+            chmod +x "$SYNC_SCRIPT"
+            "$SYNC_SCRIPT" "${SERVICE_NAME}" "pr" "${PR_SECRETS_BLOB}"
+        else
+            echo "⚠️  Secret sync script not found, skipping: $SYNC_SCRIPT"
+        fi
+    else
+        echo "ℹ️  No PR_SECRETS_BLOB provided, skipping secret sync"
+    fi
+
 # Mock Landing Zone (Preview Mode Only)
 # In Production, tenant-infrastructure creates namespaces
 # In Preview, CI must simulate this behavior
@@ -107,12 +121,33 @@ else
     echo "✅ Platform claims applied"
 fi
 
-# Apply external secrets if they exist
-EXTERNAL_SECRETS_DIR="${PROJECT_ROOT}/platform/${SERVICE_NAME}/base/external-secrets"
-if [[ -d "$EXTERNAL_SECRETS_DIR" ]]; then
-    echo "📋 Applying external secrets..."
-    kubectl apply -f "$EXTERNAL_SECRETS_DIR/" -n "${NAMESPACE}" --recursive
+# Apply external secrets with PR overlay patches
+EXTERNAL_SECRETS_OVERLAY="${PROJECT_ROOT}/platform/${SERVICE_NAME}/overlays/pr"
+
+if [[ -f "$EXTERNAL_SECRETS_OVERLAY/kustomization.yaml" ]]; then
+    echo "📋 Applying external secrets with PR overlay..."
+    kubectl kustomize "$EXTERNAL_SECRETS_OVERLAY" | kubectl apply -f - -n "${NAMESPACE}"
     echo "✅ External secrets applied"
+    
+    # Force immediate sync of secrets
+    echo "🔄 Forcing immediate secret sync..."
+    kubectl annotate externalsecret \
+        -n "${NAMESPACE}" \
+        -l zerotouch.io/managed=true \
+        force-sync="$(date +%s)" \
+        --overwrite
+    
+    echo "⏳ Waiting for secrets to become Ready..."
+    kubectl wait \
+        --for=condition=Ready \
+        externalsecret \
+        -n "${NAMESPACE}" \
+        -l zerotouch.io/managed=true \
+        --timeout=60s
+    
+    echo "✅ Secrets synced"
+else
+    echo "ℹ️  No ExternalSecrets overlay found, skipping"
 fi
 
 # Apply overlay claims if they exist (for PR environment)
