@@ -33,6 +33,13 @@ fi
 
 echo "🔐 Syncing secrets for $SERVICE_NAME [$ENV]..."
 
+# Decode Base64 if detected (GitHub Actions outputs are encoded to bypass masking)
+if [[ "$SECRETS_BLOCK" =~ ^[a-zA-Z0-9+/]+={0,2}$ ]] && ! [[ "$SECRETS_BLOCK" =~ [[:space:]] ]]; then
+    echo "🔐 Detected Base64 encoded secrets blob, decoding..."
+    DECODED_BLOB=$(echo "$SECRETS_BLOCK" | base64 -d 2>/dev/null || echo "$SECRETS_BLOCK")
+    SECRETS_BLOCK="$DECODED_BLOB"
+fi
+
 # Process Secrets
 while IFS='=' read -r key value; do
     # 1. Skip empty/comment lines
