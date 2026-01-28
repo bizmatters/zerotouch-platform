@@ -1,6 +1,6 @@
 
 ### 2. Preview Architecture (PRs / CI Testing)
-This document outlines the imperative flow used for ephemeral testing environments.
+This document outlines the declarative flow used for ephemeral testing environments.
 
 **File:** `docs/architecture/secrets-management-preview.md`
 
@@ -9,9 +9,9 @@ This document outlines the imperative flow used for ephemeral testing environmen
 **Scope:** Pull Requests (PRs), Local Testing (Kind), CI Pipelines
 
 ## Executive Summary
-Preview environments prioritize **Speed** and **Isolation** over persistence. 
-Instead of syncing from AWS SSM (which risks pollution and requires cloud permissions), secrets are injected **imperatively** at runtime by the build script.
-Mock values are used by default, with an option to override for integration tests.
+Preview environments now use the **same declarative pattern** as production environments.
+Secrets are synced to AWS SSM under `/zerotouch/pr/*` paths, then fetched by External Secrets Operator.
+This ensures consistency across all environments and provides audit trails.
 
 ## Architecture Wireframe
 
@@ -20,75 +20,110 @@ Mock values are used by default, with an option to override for integration test
 │                             PREVIEW SECRET LIFECYCLE                                │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 
-   1. CONFIGURATION                     2. EXECUTION (in-cluster-test.sh)
-   (Mock & Env Vars)                    (Imperative Injection)
+   1. PREPARATION                       2. SYNC TO SSM
+   (GitHub Secrets)                     (deploy.sh)
 ┌───────────────────────────┐        ┌───────────────────────────┐
-│ Service Repo              │        │ CI Runner (GitHub/Local)  │
-│ ├── ci/config.yaml        │        │                           │
-│ │   env:                  │ Reads  │ 1. Read config.yaml       │
-│ │     USE_MOCK_LLM: true  │ ─────> │ 2. Detect Dependencies    │
-│ │                         │        │ 3. Generate Mock Values   │
-│ └── .env (Local Only)     │        │ 4. Run kubectl create     │
-│     OPENAI_API_KEY=sk-..  │        └─────────────┬─────────────┘
+│ Service Repo              │        │ CI Runner (GitHub)        │
+│ ├── .github/workflows/    │        │                           │
+│ │   main-pipeline.yml     │ Blob   │ 1. prepare-secrets job    │
+│ │   prepare-secrets:      │ ─────> │ 2. sync-secrets-to-ssm.sh │
+│ │     PR_DATABASE_URL     │        │ 3. Push to SSM            │
+│ │     PR_OPENAI_API_KEY   │        └─────────────┬─────────────┘
 └───────────────────────────┘                      │
-                                                   │ Direct Apply
-                                                   │ (Bypasses SSM/ESO)
+                                                   │ Synced to SSM
                                                    ▼
-┌────────────────────────────────────────────────────────────────┐
-│ KIND CLUSTER (Ephemeral Namespace)                             │
-├────────────────────────────────────────────────────────────────┤
-│                                                                │
+                                        ┌──────────────────────────┐
+                                        │ AWS SSM Parameter Store  │
+                                        │ /zerotouch/pr/service/*  │
+                                        └─────────────┬────────────┘
+                                                      │
+   3. DECLARATIVE FETCH                               │ ESO Fetches
+   (ExternalSecrets + Kustomize)                      │
+┌────────────────────────────────────────────────────┼────────────┐
+│ KIND CLUSTER (Ephemeral Namespace)                 │            │
+├─────────────────────────────────────────────────────┼────────────┤
+│                                                     ▼            │
 │    ┌───────────────────┐       ┌──────────────────────────┐    │
-│    │ K8s Secret        │ ────> │ Pod (Test Runner)        │    │
-│    │ (Opaque)          │ Mount │ envFrom: secretRef       │    │
-│    └───────────────────┘       └──────────────────────────┘    │
-│                                                                │
-│    * Note: External Secrets Operator is NOT used for           *
-│            tenant secrets in Preview mode.                     │
-└────────────────────────────────────────────────────────────────┘
+│    │ ExternalSecret    │ ────> │ K8s Secret (Opaque)      │    │
+│    │ (PR Overlay)      │ ESO   │ envFrom: secretRef       │    │
+│    │ /zerotouch/pr/*   │       └──────────────────────────┘    │
+│    └───────────────────┘                                        │
+│                                                                 │
+│    * External Secrets Operator fetches from SSM                │
+│    * Kustomize patches apply PR-specific paths                 │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ## The Workflow Steps
 
-### 1. Configuration (`ci/config.yaml`)
-The service declares what secrets it *needs*, but not the values.
+### 1. Secret Preparation (`main-pipeline.yml`)
+The service workflow prepares secrets as KEY=VALUE blob:
 
 ```yaml
-service:
-  name: "identity-service"
-secrets:
-  database: true    # Needs <service>-db-conn
-  jwt_keys: true    # Needs <service>-jwt-keys
-env:
-  USE_MOCK_LLM: "true" # Logic flag to bypass real secrets
+prepare-secrets:
+  outputs:
+    pr_blob: ${{ steps.pr.outputs.blob }}
+  steps:
+    - id: pr
+      run: |
+        echo "DATABASE_URL=${{ secrets.PR_DATABASE_URL }}" >> $GITHUB_OUTPUT
+        echo "OPENAI_API_KEY=${{ secrets.PR_OPENAI_API_KEY }}" >> $GITHUB_OUTPUT
 ```
 
-### 2. Generation Logic (`deploy.sh` / `in-cluster-test.sh`)
-The CI script acts as the "Secret Generator".
+### 2. Sync to SSM (`deploy.sh`)
+The deploy script syncs secrets to SSM before applying manifests:
 
-*   **Database Secrets:** Since the CI spins up a fresh Postgres instance inside the cluster, the script *knows* the credentials (usually `postgres`/`postgres`) and generates the secret immediately.
-*   **LLM Keys:** 
-    *   If `USE_MOCK_LLM=true`: Injects dummy values (`sk-mock-key`).
-    *   If Integration Test: Reads from GitHub Secrets (`OPENAI_API_KEY`) env var and injects directly.
+```bash
+sync-secrets-to-ssm.sh "${SERVICE_NAME}" "pr" "${PR_SECRETS_BLOB}"
+```
 
-### 3. Direct Application
-The script runs `kubectl create secret generic ...` directly into the PR namespace.
+This creates parameters at `/zerotouch/pr/{service}/{key}` with:
+- Hyphen validation (enforces underscores)
+- Lowercase normalization
+- SecureString encryption
 
-**Why bypass ESO?**
-1.  **Speed:** No waiting for AWS API calls or Operator reconciliation loop.
-2.  **Cost:** Reduces API calls to AWS SSM.
-3.  **Cleanliness:** Prevents thousands of PR-specific keys from polluting the `/zerotouch/` SSM hierarchy.
+### 3. Declarative Application
+ExternalSecrets are applied via kustomize with PR overlay patches:
+
+```bash
+kubectl kustomize overlays/pr | kubectl apply -f -
+```
+
+**Base manifest** uses `_ENV_` placeholder:
+```yaml
+remoteRef:
+  key: /zerotouch/_ENV_/service/database_url
+```
+
+**PR patch** overrides with actual path:
+```yaml
+remoteRef:
+  key: /zerotouch/pr/service/database_url
+```
+
+### 4. Force Sync
+After applying ExternalSecrets, immediate sync is triggered:
+
+```bash
+kubectl annotate externalsecret -l zerotouch.io/managed=true force-sync=$(date +%s)
+kubectl wait --for=condition=Ready externalsecret --timeout=60s
+```
 
 ## Key Differences from Production
 
 | Feature | Production (Main) | Preview (PR) |
 | :--- | :--- | :--- |
-| **Mechanism** | GitOps + External Secrets Operator | Shell Script + `kubectl create` |
-| **Source** | AWS SSM Parameter Store | Generated Mocks or GH Env Vars |
-| **Persistence** | Permanent | Deleted when PR closes |
-| **Latency** | 10s - 60s (ESO Sync) | Instant (<1s) |
-| **Auditing** | CloudTrail Logs | CI Logs |
+| **Mechanism** | GitOps + External Secrets Operator | Same (ESO) |
+| **Source** | AWS SSM `/zerotouch/prod/*` | AWS SSM `/zerotouch/pr/*` |
+| **Persistence** | Permanent | Ephemeral (cleaned up) |
+| **Latency** | 10s - 60s (ESO Sync) | Same (with force-sync) |
+| **Auditing** | CloudTrail Logs | CloudTrail Logs |
+| **Overlay** | prod patches | pr patches |
 
-## When to use Real Secrets in Preview?
-Only during **Integration Tests** where mocking is impossible. In this case, secrets are passed as Environment Variables to the CI Runner, which then injects them as Kubernetes Secrets. They never touch AWS SSM.
+## Benefits of Declarative Approach
+1. **Consistency:** Same pattern across all environments
+2. **Audit Trail:** All secret access logged in CloudTrail
+3. **Security:** Secrets encrypted in SSM, not in CI logs
+4. **Testability:** PR tests use real ExternalSecrets flow
+5. **Maintainability:** Single code path for all environments
 ```
