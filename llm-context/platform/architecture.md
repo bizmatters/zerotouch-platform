@@ -1,6 +1,6 @@
 # DeepAgents Runtime - Platform Architecture
 
-## Current Architecture (Crossplane + ArgoCD Separation of Concerns)
+## Current Architecture (Managed Services + GitOps)
 
 **ArgoCD Role:**
 - Deploys application manifests (Deployments, Services, ConfigMaps)
@@ -9,24 +9,51 @@
 - Syncs tenant applications from `zerotouch-tenants/` repository
 
 **Crossplane Role:**
-- Provisions infrastructure ONLY (PostgreSQL, Redis/Dragonfly, S3 buckets)
-- Creates infrastructure connection secrets automatically
+- Provisions ephemeral cache ONLY (DragonflyInstance)
+- Creates cache connection secrets automatically
+- Does NOT provision databases (external Neon)
 - Does NOT generate application Deployments
-- Manages infrastructure lifecycle (create, update, delete)
+
+**External Services:**
+- Databases: Managed Neon PostgreSQL (external to cluster)
+- Identity: Neon Auth (OAuth provider, external to cluster)
+- Storage: AWS S3 or Hetzner Object Storage (external to cluster)
 
 **Platform Abstraction:**
-- Infrastructure: Crossplane Claims (PostgresInstance, DragonflyInstance)
+- Ephemeral Cache: Crossplane Claims (DragonflyInstance only)
 - Applications: Standard Kubernetes manifests (Deployment, Service)
-- Secrets: ExternalSecrets Operator syncs from AWS SSM
+- Database Secrets: Services inject via CI workflows, synced from AWS SSM
+- Application Secrets: ExternalSecrets Operator syncs from AWS SSM
 - Overlays: Kustomize handles environment-specific configuration
 
 ## Resource Flow
 
-1. **ArgoCD** reads kustomization and deploys resources:
+1. **Platform Initialization** (one-time):
+   ```bash
+   # User provides Neon API key during platform setup
+   # Stored in AWS SSM: /zerotouch/platform/neon_api_key
+   ```
+
+2. **Service Deployment** triggers database provisioning:
+   ```bash
+   # Platform calls Neon API to create database
+   curl -X POST "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/databases" \
+     -H "Authorization: Bearer ${NEON_API_KEY}" \
+     -d '{"name": "identity-service-dev"}'
+   
+   # Platform stores connection string in SSM
+   aws ssm put-parameter \
+     --name "/zerotouch/dev/identity-service/database_url" \
+     --value "postgres://user:pass@ep-xxx.neon.tech/identity-service-dev"
+   ```
+
+3. **ArgoCD** deploys application resources:
    ```yaml
-   # Infrastructure Claims (Crossplane provisions)
-   apiVersion: database.bizmatters.io/v1alpha1
-   kind: PostgresInstance
+   # Cache Infrastructure (Crossplane provisions)
+   apiVersion: cache.bizmatters.io/v1alpha1
+   kind: DragonflyInstance
+   metadata:
+     name: identity-cache
    
    # Application Manifests (ArgoCD deploys)
    apiVersion: apps/v1
@@ -40,31 +67,36 @@
          - name: identity-service
            envFrom:
            - secretRef:
-               name: identity-service-db  # From ExternalSecret
+               name: identity-service-db      # From ExternalSecret (Neon)
+           - secretRef:
+               name: identity-cache-conn      # From Crossplane
+           - secretRef:
+               name: identity-service-jwt     # From ExternalSecret (SSM)
    ```
 
-2. **Crossplane** provisions infrastructure:
-   - Creates PostgreSQL database instance
-   - Generates connection secrets (identity-service-db-conn)
-   - Does NOT create application Deployments
+4. **Crossplane** provisions ephemeral cache:
+   - Creates DragonflyInstance (Redis-compatible cache)
+   - Generates cache connection secrets (identity-cache-conn)
+   - Does NOT provision databases
 
-3. **External Secrets Operator** syncs application secrets from AWS SSM:
-   - Database credentials (from Crossplane or external)
+5. **External Secrets Operator** syncs from AWS SSM:
+   - Database connection strings (platform-provisioned via Neon API)
    - JWT keys (jwt_private_key, jwt_public_key)
-   - API keys (openai_api_key, etc.)
+   - API keys (openai_api_key, anthropic_api_key)
    - Image pull secrets (ghcr-pull-secret)
 
-4. **ArgoCD** deploys application Deployment:
-   - References ExternalSecrets for configuration
-   - Mounts secrets as environment variables
-   - Manages application lifecycle independently of infrastructure
+6. **Service starts** with all connections:
+   - Connects to platform-provisioned Neon database
+   - Connects to Crossplane-provisioned Dragonfly cache
+   - Uses JWT keys for authentication
 
 ## Key Benefits
 
-- **Clear Separation:** Infrastructure (Crossplane) vs Applications (ArgoCD)
-- **Platform Team:** Provides infrastructure abstractions via Crossplane Claims
-- **Developers:** Write standard Kubernetes manifests, reference infrastructure secrets
-- **GitOps:** ArgoCD handles application deployment, Crossplane handles infrastructure provisioning
-- **No Manual Configuration:** Infrastructure secrets auto-generated, application secrets synced from SSM
+- **Managed Databases:** Zero operational overhead for stateful data (Neon handles backups, HA, PITR)
+- **Ephemeral Cache:** Crossplane provisions Dragonfly for fast, reconstructable data
+- **Service Autonomy:** Each service manages its own secrets via CI workflows
+- **GitOps:** ArgoCD handles application deployment from tenant repository
+- **Crash-Only Platform:** Cluster is disposable (no persistent data inside)
+- **Connectivity Injection:** Platform injects connection strings, doesn't host databases
 
-Both tools work together with clear boundaries - ArgoCD deploys applications, Crossplane provisions infrastructure.
+Clear separation: Managed services (databases) + Internal platform (compute + cache).

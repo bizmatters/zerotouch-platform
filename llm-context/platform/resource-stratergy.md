@@ -58,28 +58,41 @@ Since the Platform does not *host* the data, it acts as a **Connectivity Engine*
 
 ## 5. The Three Resource Models
 
-### Type 1: Internal Platform Provisioned (MVP Scope)
+### Type 1: Bring Your Own Credentials (MVP Scope)
+**"The Automated Operator"**
+*   **Workflow:** User provides Neon API key once during platform initialization. Platform provisions databases automatically via Neon API.
+*   **Platform Role:** Lifecycle Manager (Provision, Deprovision).
+*   **Mechanism:**
+    1.  User provides Neon API key during platform setup (stored in AWS SSM).
+    2.  When service is deployed, platform calls Neon API to create database.
+    3.  Platform captures connection string from Neon API response.
+    4.  Platform stores `DATABASE_URL` in AWS SSM at `/zerotouch/{env}/service-name/database_url`.
+    5.  ExternalSecrets Operator syncs from SSM to Kubernetes Secret.
+    6.  Service container receives `DATABASE_URL` via environment variable.
+*   **Pros:** "Magical" UX. Centralized provisioning. Zero manual database creation. No financial liability (bills go to user's Neon account).
+*   **Cons:** Requires Neon API integration. State reconciliation needed (track which databases exist).
+
+### Type 2: Internal Platform Provisioned (Future Scope)
 **"The Self-Hosted Cloud"**
 *   **Workflow:** The user selects "Internal Postgres" and pays the Platform directly.
 *   **Platform Role:** Hoster & DBA.
 *   **Mechanism:**
     1.  Platform triggers Crossplane to spin up a **CloudNativePG** cluster on local Kubernetes nodes.
     2.  Data lives on local NVMe/SSD via OpenEBS/Longhorn.
-*   **Pros:** Cheapest for the user (no AWS markup). High margins for the Platform. Good for dev/preview environments.
-*   **Cons:** High operational risk for the solo founder (backups, disk resizing, HA are your problem).
+*   **Pros:** Cheapest for the user (no AWS markup). High margins for the Platform.
+*   **Cons:** High operational risk (backups, disk resizing, HA). Not implemented in MVP.
 
-### Type 2: Bring Your Own Connection (Future Scope)
+### Type 3: Bring Your Own Connection (Future Scope)
 **"The Connectivity Vault"**
-*   **Workflow:** The user provisions a database externally (e.g., AWS Console, Neon UI), copies the connection string, and pastes it into our Platform Dashboard.
+*   **Workflow:** User manually provisions database (Neon UI, AWS Console), copies connection string, pastes into Platform Dashboard.
 *   **Platform Role:** Secure Storage & Injection.
 *   **Mechanism:**
-    1.  User saves `postgres://user:pass@host:5432/db`.
-    2.  Platform encrypts and stores it in the Internal Meta-DB.
-    3.  Platform injects it as `DATABASE_URL` into the user's application container at runtime.
-*   **Pros:** Lowest engineering effort for MVP. Zero liability for data persistence (user owns the backup).
-*   **Cons:** Higher friction for the user (context switching).
-
-### Type 3: Bring Your Own Credentials (BYO-Key) (Future Scope)
+    1.  User saves `postgres://user:pass@host:5432/db` in Platform UI.
+    2.  Platform encrypts and stores in AWS SSM.
+    3.  ExternalSecrets syncs to Kubernetes Secret.
+    4.  Platform injects as `DATABASE_URL` into service container.
+*   **Pros:** Maximum flexibility. User controls database configuration.
+*   **Cons:** Higher friction (manual provisioning). Not implemented in MVP.
 **"The Automated Operator"**
 *   **Workflow:** The user provides a high-privilege API Key (e.g., AWS IAM User, Neon API Key) to the Platform.
 *   **Platform Role:** Lifecycle Manager (Provision, Deprovision).
@@ -92,12 +105,13 @@ Since the Platform does not *host* the data, it acts as a **Connectivity Engine*
 
 ## 3. MVP Implementation Strategy
 
-For the **MVP Launch**, we will implement **Type 1 (Connection String)** exclusively.
+For the **MVP Launch**, we will implement **Type 1 (Bring Your Own Credentials)** exclusively.
 
 **Rationale:**
-1.  **Speed to Market:** We avoid writing complex Terraform/Crossplane wrappers for AWS/Azure/Neon immediately.
-2.  **Safety:** We eliminate the risk of "Runaway Cloud Bills" or "Accidental Deletion" caused by bugs in our provisioning logic during the early days.
-3.  **Universal Compatibility:** Any resource that has a URL (Redis, Mongo, Postgres, API Services) works immediately without custom code.
+1.  **Automated Provisioning:** Platform provisions databases via Neon API automatically. No manual database creation.
+2.  **Centralized Management:** Single Neon API key provisions all service databases. Simplified credential management.
+3.  **Zero Liability:** Databases billed to user's Neon account. Platform doesn't host data.
+4.  **Service Autonomy:** Each service gets its own isolated Neon database, provisioned on-demand.
 
 ## 4. Architecture Implications
 
@@ -107,15 +121,17 @@ To support this evolution without rewriting the core later, the **Identity & Res
 The database schema for `resources` will support a `kind` discriminator:
 
 ```typescript
-type ResourceKind = 'external_link' | 'managed_integration' | 'internal_hosted';
+type ResourceKind = 'neon_provisioned' | 'internal_hosted' | 'external_link';
 
 interface Resource {
   id: string;
   org_id: string;
   kind: ResourceKind;
   
-  // Type 1: Static data provided by user
-  connection_details?: EncryptedString; 
+  // Type 1 (MVP): Platform-provisioned via Neon API
+  neon_project_id?: string;           // Neon project ID
+  neon_database_name?: string;        // Database name in Neon
+  connection_details?: EncryptedString;  // Generated connection string
   
   // Type 2 & 3: Dynamic references (Future)
   provisioning_job_id?: string;
@@ -123,8 +139,9 @@ interface Resource {
 }
 ```
 
-*   **For MVP:** The logic simply reads `connection_details`, decrypts it, and injects it.
-*   **For Future:** The logic will trigger a Worker to fill `connection_details` after an API call (Type 2) or CRD apply (Type 3).
+*   **For MVP (Type 1):** Platform calls Neon API to create database, stores connection string in AWS SSM, syncs via ExternalSecrets.
+*   **For Future (Type 2):** Platform provisions CloudNativePG clusters via Crossplane.
+*   **For Future (Type 3):** User manually provides connection strings via Platform UI.
 
 ## 6. Summary
 We treat **Compute** as a commodity we control, and **Data** as a precious asset we entrust to specialists. This allows the solo founder to focus entirely on building product features rather than managing backups, replication lags, and disk upgrades.

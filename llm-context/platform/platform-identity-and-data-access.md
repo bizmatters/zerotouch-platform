@@ -187,30 +187,54 @@ All internal communication relies on this token structure.
 ## 4. Implementation Guidelines for Product Teams
 
 ### A. Database Configuration (Neon)
-Neon database authentication is configured automatically during cluster bootstrap via Neon API:
+Neon database authentication is a **one-time platform-wide configuration**, performed during initial platform provisioning.
 
-**Automated Configuration (via bootstrap script):**
-```bash
-# scripts/bootstrap/infra/02-configure-neon-auth.sh
-# Runs during cluster creation, configures Neon Auth programmatically
+**When to Configure:**
+- **Once during platform initialization per environment** (first-time setup)
+- **NOT per cluster** (cluster rebuilds don't affect this)
+- Configuration persists for the entire platform lifecycle
 
-curl -X POST "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/auth/providers" \
-  -H "Authorization: Bearer ${NEON_API_KEY}" \
-  -d '{
-    "type": "external",
-    "jwks_url": "https://platform.zerotouch.dev/.well-known/jwks.json",
-    "audience": "platform-services"
-  }'
+**Platform Initialization Workflow:**
+This should be part of a separate `platform-init` workflow that runs only once:
+
+```yaml
+# .github/workflows/platform-init.yml
+# Run this ONCE when setting up the platform for the first time
+name: Platform Initialization
+
+on:
+  workflow_dispatch:  # Manual trigger only
+
+jobs:
+  configure-neon-auth:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure Neon Auth Provider
+        run: |
+          # Configure Neon Auth to trust Identity Service JWKs
+          curl -X POST "https://console.neon.tech/api/v2/projects/${NEON_AUTH_PROJECT_ID}/auth/providers" \
+            -H "Authorization: Bearer ${NEON_API_KEY}" \
+            -d '{
+              "type": "external",
+              "jwks_url": "https://platform.zerotouch.dev/.well-known/jwks.json",
+              "audience": "platform-services"
+            }'
 ```
 
-**Manual Configuration (for development/testing only):**
-1. Go to Neon Console → Project → **Authentication** settings
+**Manual Configuration (Alternative):**
+1. Go to Neon Console → **Neon Auth Project** → **Authentication** settings
 2. Add an **External Provider**
-3. **JWKS URL:** `https://platform.zerotouch.dev/.well-known/jwks.json` (or environment-specific URL)
+3. **JWKS URL:** `https://platform.zerotouch.dev/.well-known/jwks.json` (production URL)
 4. **Audience:** `platform-services`
-5. Enable **Row Level Security (RLS)** on your tables to use the `org` claim for isolation
+5. This configuration applies to all environments (dev/staging/prod)
 
-**RLS Parameter Verification (REQUIRED before deployment):**
+**Why Platform-Wide:**
+- Neon Auth is the OAuth provider for developer login
+- Developers log in to "the platform", not to specific environments
+- Same Google OAuth app, same user database across all environments
+- Environment separation happens AFTER authentication (via organization context)
+
+**RLS Parameter Verification (One-time check):**
 ```sql
 -- Test JWT claims parameter name in Neon SQL Editor
 SELECT current_setting('request.jwt.claims', true);
@@ -219,42 +243,47 @@ SELECT current_setting('neon.jwt_claims', true);
 -- Update RLS policies with correct parameter name
 ```
 
+**Important:** This is infrastructure configuration, not application deployment. It should be documented in platform setup guides, not in cluster creation workflows.
+
 ### B. Service Implementation (Node.js/Python/Go)
-Your service does **not** need a static database password in `secrets`.
 
-**How to connect:**
-1.  Initialize a connection pool once at application startup.
-2.  Read the `Authorization` header from incoming requests.
-3.  Use the JWT as the password when acquiring connections from the pool.
+**Secret Injection via Platform Provisioning:**
+Platform automatically provisions databases and injects connection strings:
 
-**Node.js Example:**
+**Platform Provisioning Flow:**
+1. User provides Neon API key once (stored in AWS SSM: `/zerotouch/platform/neon_api_key`)
+2. When service deploys, platform calls Neon API to create database
+3. Platform stores generated `DATABASE_URL` in AWS SSM at `/zerotouch/{env}/service-name/database_url`
+4. ExternalSecrets syncs from SSM to Kubernetes Secret
+5. Service reads connection string from environment variable
+
+**Service Connection Code:**
 ```javascript
 // Initialize pool once at startup (src/infrastructure/database.ts)
 import { Pool } from 'pg';
 
+// DATABASE_URL injected from ExternalSecret (platform-provisioned via Neon API)
 const pool = new Pool({
-  host: process.env.DATABASE_HOST,
-  user: 'authenticated',           // Standard Neon role
-  database: 'my_service_db',
+  connectionString: process.env.DATABASE_URL,  // Full Neon connection string
   max: 3,                          // Fixed pool size for HPA safety
   idleTimeoutMillis: 10000,        // Aggressive for serverless
   connectionTimeoutMillis: 5000,
 });
 
 // In your route handler - pool handles connection reuse
-const token = req.headers.authorization.split(' ')[1];
-
-// Neon's proxy handles JWT multiplexing - pool provides connection reuse
 const client = await pool.connect();
 try {
-  // Execute query with JWT-authenticated connection
   const result = await client.query('SELECT * FROM my_table WHERE org_id = $1', [orgId]);
 } finally {
   client.release();
 }
 ```
 
-**Important:** Neon's serverless proxy handles JWT multiplexing across connections. The pool provides connection reuse while Neon manages the JWT authentication layer.
+**Important:** 
+- Platform provisions databases automatically via Neon API
+- Single Neon API key provisions all service databases
+- Each service gets isolated database in shared Neon project
+- Connection strings stored in AWS SSM, synced via ExternalSecrets
 
 ### C. Service Account Tokens (Machine-to-Machine)
 For background jobs, cron tasks, and queue workers that don't have user sessions:
