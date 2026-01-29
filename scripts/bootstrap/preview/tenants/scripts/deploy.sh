@@ -104,27 +104,24 @@ else
     echo "❌ No PR overlay kustomization found at: $EXTERNAL_SECRETS_OVERLAY"
     exit 1
 fi
-    
-    # Force immediate sync of secrets
-    echo "🔄 Forcing immediate secret sync..."
-    kubectl annotate externalsecret \
-        -n "${NAMESPACE}" \
-        -l zerotouch.io/managed=true \
-        force-sync="$(date +%s)" \
-        --overwrite
-    
-    echo "⏳ Waiting for secrets to become Ready..."
-    kubectl wait \
-        --for=condition=Ready \
-        externalsecret \
-        -n "${NAMESPACE}" \
-        -l zerotouch.io/managed=true \
-        --timeout=60s
-    
-    echo "✅ Secrets synced"
-else
-    echo "ℹ️  No ExternalSecrets found, skipping"
-fi
+
+# Force immediate sync of secrets
+echo "🔄 Forcing immediate secret sync..."
+kubectl annotate externalsecret \
+    -n "${NAMESPACE}" \
+    -l zerotouch.io/managed=true \
+    force-sync="$(date +%s)" \
+    --overwrite
+
+echo "⏳ Waiting for secrets to become Ready..."
+kubectl wait \
+    --for=condition=Ready \
+    externalsecret \
+    -n "${NAMESPACE}" \
+    -l zerotouch.io/managed=true \
+    --timeout=60s
+
+echo "✅ Secrets synced"
 
 # Apply overlay claims if they exist (for PR environment)
 OVERLAY_CLAIMS_DIR="${PROJECT_ROOT}/platform/${SERVICE_NAME}/overlays/pr"
