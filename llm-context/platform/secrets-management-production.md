@@ -103,7 +103,14 @@ spec:
 **Workflows:**
 - `zerotouch-platform/.github/workflows/release-pipeline.yml`
 
-### 5. SecretStore Configuration
+### 5. Authentication
+**GitHub App Token Pattern:**
+- Release workflows generate installation tokens using GitHub Apps
+- Required inputs: `APP_ID` (variable), `APP_PRIVATE_KEY` (secret)
+- Token scoped to required repositories only
+- Scripts automatically use `GITHUB_REPOSITORY_OWNER` for organization detection
+
+### 6. SecretStore Configuration
 ESO requires ClusterSecretStore to authenticate with AWS:
 
 ```yaml

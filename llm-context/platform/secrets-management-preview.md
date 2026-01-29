@@ -100,9 +100,19 @@ spec:
 - `zerotouch-platform/scripts/bootstrap/preview/tenants/scripts/deploy.sh`
 
 **Workflows:**
-- `zerotouch-platform/.github/workflows/ci-test.yml`
+- Services call `scripts/ci/in-cluster-test.sh` directly from their workflows
 
-### 5. SecretStore Configuration
+### 5. Authentication
+**GitHub App Token Pattern:**
+- Services generate installation tokens per-job using GitHub Apps
+- Required inputs: `APP_ID` (variable), `APP_PRIVATE_KEY` (secret)
+- Token scoped to required repositories only
+- No username required - tokens use `x-access-token:` prefix
+
+**Why per-job generation:**
+GitHub Actions cannot pass secrets via job outputs. Each job must generate its own token.
+
+### 6. SecretStore Configuration
 ESO requires ClusterSecretStore to authenticate with AWS:
 
 ```yaml
@@ -177,6 +187,13 @@ PR_OPENAI_API_KEY
 PR_ANTHROPIC_API_KEY
 ```
 **Pattern:** `PR_` prefix + `UPPER_CASE_UNDERSCORE` (no hyphens)
+
+### GitHub App Configuration
+Services must configure GitHub App for repository access:
+- `APP_ID`: GitHub App ID (stored as repository variable)
+- `APP_PRIVATE_KEY`: GitHub App private key (stored as repository secret)
+- Token generated per-job with required repository access
+- Scripts automatically use `GITHUB_REPOSITORY_OWNER` when available
 
 ### Local Development
 Set same env variables in `.env` and run `scripts/ci/in-cluster-test.sh` - identical to PR flow.

@@ -78,53 +78,28 @@ checkout_pr_claims() {
         mkdir -p platform
         log_info "Created platform directory"
         
-        # Clone the repository and checkout the same branch
-        # Try SSH first (works locally), fallback to HTTPS (works in CI)
-        local clone_success=false
-        
-        # Check for GitHub token (GitHub Actions or custom)
+        # Clone the repository using GitHub token
         local github_token="${GITHUB_TOKEN:-${BOT_GITHUB_TOKEN:-}}"
         
-        log_info "Attempting SSH clone with branch: $current_branch"
-        if git clone -b "$current_branch" "$tenants_repo" "$tenants_dir" 2>&1 | grep -v "Cloning into"; then
-            log_success "SSH clone successful, checked out branch: $current_branch"
-            clone_success=true
-        elif [[ -n "$github_token" ]]; then
-            log_info "SSH failed, trying HTTPS with GitHub token..."
-            # Extract org/repo from SSH URL and construct HTTPS URL
-            local repo_path=$(echo "$tenants_repo" | sed 's|git@github.com:||' | sed 's|\.git$||')
-            local https_repo="https://x-access-token:${github_token}@github.com/${repo_path}.git"
-            if git clone -b "$current_branch" "$https_repo" "$tenants_dir" 2>&1 | grep -v "Cloning into"; then
-                log_success "HTTPS clone successful, checked out branch: $current_branch"
-                clone_success=true
-            else
-                log_warn "Branch $current_branch not found in tenants repo, falling back to main"
-                if git clone -b main "$https_repo" "$tenants_dir" 2>&1 | grep -v "Cloning into"; then
-                    log_success "HTTPS clone successful, checked out main branch"
-                    clone_success=true
-                fi
-            fi
-        else
-            log_info "SSH failed and no GitHub token available, trying branch fallback with SSH..."
-            if git clone -b main "$tenants_repo" "$tenants_dir" 2>&1 | grep -v "Cloning into"; then
-                log_success "SSH clone successful with main branch"
-                clone_success=true
-            fi
-        fi
-        
-        if [[ "$clone_success" != "true" ]]; then
-            log_error "All clone attempts failed. Check repository access and authentication."
-            log_error "Attempted methods:"
-            log_error "  1. SSH with branch: $current_branch"
-            if [[ -n "$github_token" ]]; then
-                log_error "  2. HTTPS with GitHub token and branch: $current_branch"
-                log_error "  3. HTTPS with GitHub token and main branch"
-            else
-                log_error "  2. SSH with main branch (no GitHub token available)"
-                log_error "  Available tokens: GITHUB_TOKEN=${GITHUB_TOKEN:+set} BOT_GITHUB_TOKEN=${BOT_GITHUB_TOKEN:+set}"
-            fi
+        if [[ -z "$github_token" ]]; then
+            log_error "GitHub token required but not found"
+            log_error "Set GITHUB_TOKEN or BOT_GITHUB_TOKEN environment variable"
             exit 1
         fi
+        
+        log_info "GitHub token available (length: ${#github_token})"
+        
+        # Extract org/repo from SSH URL and construct HTTPS URL
+        local repo_path=$(echo "$tenants_repo" | sed 's|git@github.com:||' | sed 's|\.git$||')
+        local https_repo="https://x-access-token:${github_token}@github.com/${repo_path}.git"
+        
+        log_info "Cloning ${repo_path} branch: $current_branch"
+        if ! git clone -b "$current_branch" "$https_repo" "$tenants_dir"; then
+            log_error "Failed to clone tenants repository"
+            exit 1
+        fi
+        
+        log_success "Clone successful, checked out branch: $current_branch"
         
         # Path to service directory
         local service_path="$tenants_dir/tenants/$service_name"
