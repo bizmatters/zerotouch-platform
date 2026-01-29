@@ -93,37 +93,17 @@ echo "📁 Setting up landing zone for preview mode..."
 kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
 echo "✅ Mock landing zone '${NAMESPACE}' created"
 
-# Apply platform claims and manifests
-echo "📋 Applying platform claims..."
-CLAIMS_DIR="${PROJECT_ROOT}/platform/${SERVICE_NAME}/base/claims/"
-
-if [[ ! -d "$CLAIMS_DIR" ]]; then
-    echo "ℹ️  No platform claims directory found, skipping..."
-elif [ -z "$(find "$CLAIMS_DIR" -maxdepth 1 \( -name '*.yaml' -o -name '*.yml' \) 2>/dev/null)" ]; then
-    echo "ℹ️  No platform claims files found (directory is empty), skipping..."
-else
-    echo "✅ Found platform claims, applying..."
-    kubectl apply -f "$CLAIMS_DIR" -n "${NAMESPACE}" --recursive
-    echo "✅ Platform claims applied"
-fi
-
 # Apply external secrets with PR overlay patches
-EXTERNAL_SECRETS_BASE="${PROJECT_ROOT}/platform/${SERVICE_NAME}/base/external-secrets"
 EXTERNAL_SECRETS_OVERLAY="${PROJECT_ROOT}/platform/${SERVICE_NAME}/overlays/pr"
 
-if [[ -d "$EXTERNAL_SECRETS_BASE" ]]; then
-    echo "📋 Applying external secrets..."
-    
-    # Use Kustomize overlay if it exists, otherwise use base
-    if [[ -f "$EXTERNAL_SECRETS_OVERLAY/kustomization.yaml" ]]; then
-        echo "   Using PR overlay kustomization..."
-        kubectl apply -k "$EXTERNAL_SECRETS_OVERLAY" -n "${NAMESPACE}"
-    else
-        echo "   Using base manifests (no overlay found)..."
-        kubectl apply -f "$EXTERNAL_SECRETS_BASE" -n "${NAMESPACE}" --recursive
-    fi
-    
-    echo "✅ External secrets applied"
+if [[ -f "$EXTERNAL_SECRETS_OVERLAY/kustomization.yaml" ]]; then
+    echo "📋 Applying PR overlay (includes claims and external secrets)..."
+    kubectl apply -k "$EXTERNAL_SECRETS_OVERLAY" -n "${NAMESPACE}"
+    echo "✅ PR overlay applied"
+else
+    echo "❌ No PR overlay kustomization found at: $EXTERNAL_SECRETS_OVERLAY"
+    exit 1
+fi
     
     # Force immediate sync of secrets
     echo "🔄 Forcing immediate secret sync..."
