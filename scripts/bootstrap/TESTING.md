@@ -49,7 +49,7 @@ steps:
   - name: Configure AWS
     uses: aws-actions/configure-aws-credentials@v4
     with:
-      role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+      role-to-assume: ${{ vars.AWS_ROLE_ARN }}
       aws-region: ap-south-1
   
   - name: Export AWS credentials

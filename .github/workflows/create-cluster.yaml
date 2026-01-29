@@ -45,8 +45,8 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       BOT_GITHUB_USERNAME: ${{ secrets.BOT_GITHUB_USERNAME }}
       BOT_GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
-      TENANTS_REPO_NAME: ${{ secrets.TENANTS_REPO_NAME }}
-      TENANTS_REPO_URL: https://github.com/${{ secrets.BOT_GITHUB_USERNAME }}/${{ secrets.TENANTS_REPO_NAME }}.git
+      TENANTS_REPO_NAME: ${{ vars.TENANTS_REPO_NAME }}
+      TENANTS_REPO_URL: https://github.com/${{ secrets.BOT_GITHUB_USERNAME }}/${{ vars.TENANTS_REPO_NAME }}.git
       CI: true
     
     steps:
@@ -74,7 +74,7 @@ jobs:
       - name: Checkout tenants repository
         uses: actions/checkout@v4
         with:
-          repository: ${{ secrets.BOT_GITHUB_USERNAME }}/${{ secrets.TENANTS_REPO_NAME }}
+          repository: ${{ secrets.BOT_GITHUB_USERNAME }}/${{ vars.TENANTS_REPO_NAME }}
           token: ${{ secrets.BOT_GITHUB_TOKEN }}
           path: .tenants-cache
 

@@ -36,10 +36,10 @@ jobs:
     secrets:
       BOT_GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
       BOT_GITHUB_USERNAME: ${{ secrets.BOT_GITHUB_USERNAME }}
-      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      TENANTS_REPO_NAME: ${{ secrets.TENANTS_REPO_NAME }}
+      TENANTS_REPO_NAME: ${{ vars.TENANTS_REPO_NAME }}
 
   # Add more test jobs as needed:
   # test-api:

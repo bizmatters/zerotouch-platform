@@ -31,7 +31,8 @@ When adding functionality, place it according to this strict hierarchy:
 
 ### Law 2: The OS is Immutable
 *   **Rule:** We use Talos Linux. There is no SSH. There is no package manager.
-*   **Implication:** If a node is acting up, we **reboot it**. If that fails, we **replace it**. We never "log in to fix it."
+*   **Implication:** If a node is acting up, we **reboot it via Talos API** (`talosctl reboot --nodes <node-ip>`). If that fails, we **replace it** via bootstrap script. We never "log in to fix it."
+*   **Operational Procedures:** See `docs/runbooks/node-management.md` for detailed Talos commands.
 
 ### Law 3: Data Gravity
 *   **Rule:** Stateless apps are cattle. Databases are pets, but managed by robots.

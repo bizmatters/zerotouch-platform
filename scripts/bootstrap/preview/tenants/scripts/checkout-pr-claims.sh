@@ -57,15 +57,17 @@ checkout_pr_claims() {
         log_info "Checking out PR claims for service: $service_name, namespace: $namespace"
         
         # Checkout zerotouch-tenants repository
-        # Use environment variable or default to SSH URL
-        local tenants_repo="${TENANTS_REPO_URL:-git@github.com:bizmatters/zerotouch-tenants.git}"
+        # Construct tenant repository URL from components
+        local github_username="${BOT_GITHUB_USERNAME:-${GITHUB_REPOSITORY_OWNER}}"
+        local tenants_repo_name="${TENANTS_REPO_NAME:-${GITHUB_VARS_TENANTS_REPO_NAME}}"
+        local tenants_repo_url="https://github.com/${github_username}/${tenants_repo_name}.git"
         local tenants_dir="platform/tenants-temp"
         
         # Detect current branch for checkout
         local current_branch=$(git branch --show-current 2>/dev/null || echo "main")
         log_info "Current branch detected: $current_branch"
         
-        log_info "Cloning tenants repository: $tenants_repo"
+        log_info "Cloning tenants repository: $tenants_repo_url"
         log_info "Target directory: $tenants_dir"
         
         # Remove existing temp directory if it exists
@@ -89,8 +91,17 @@ checkout_pr_claims() {
         
         log_info "GitHub token available (length: ${#github_token})"
         
-        # Extract org/repo from SSH URL and construct HTTPS URL
-        local repo_path=$(echo "$tenants_repo" | sed 's|git@github.com:||' | sed 's|\.git$||')
+        # Extract org/repo from URL and construct HTTPS URL with token
+        local repo_path
+        if [[ "$tenants_repo_url" =~ git@github.com:(.+)\.git ]]; then
+            repo_path="${BASH_REMATCH[1]}"
+        elif [[ "$tenants_repo_url" =~ https://github.com/(.+)\.git ]]; then
+            repo_path="${BASH_REMATCH[1]}"
+        else
+            log_error "Invalid repository URL format: $tenants_repo_url"
+            exit 1
+        fi
+        
         local https_repo="https://x-access-token:${github_token}@github.com/${repo_path}.git"
         
         log_info "Cloning ${repo_path} branch: $current_branch"

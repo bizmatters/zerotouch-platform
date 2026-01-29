@@ -50,11 +50,13 @@ Preview environments use the **same declarative pattern** as production, with se
 - **Lifecycle:** Ephemeral - created during CI, cleaned up after PR
 - **Example:** `/zerotouch/pr/identity-service/database_url`
 
-### 2. Base Manifests (Service Repo)
-ExternalSecrets live in **service repository** (not tenant repo):
+### 2. Base Manifests (Tenant Repo - Same as Production)
+ExternalSecrets live in **tenant repository** (same structure as production):
+
+**Important:** Preview environments use the same `zerotouch-tenants/` repository structure as production. The service repository checkout to `service-repo/platform/` is only for CI testing, not for manifest storage.
 
 ```yaml
-# service-repo/platform/service/base/external-secrets/db-es.yaml
+# zerotouch-tenants/tenants/service/base/external-secrets/db-es.yaml
 apiVersion: external-secrets.io/v1beta1
 kind: ExternalSecret
 metadata:
@@ -75,7 +77,7 @@ spec:
 Patches inject `pr` environment:
 
 ```yaml
-# service-repo/platform/service/overlays/pr/patches/secrets-patch.yaml
+# zerotouch-tenants/tenants/service/overlays/pr/patches/secrets-patch.yaml
 apiVersion: external-secrets.io/v1beta1
 kind: ExternalSecret
 metadata:
@@ -161,24 +163,31 @@ Enables scoped force-sync without affecting platform secrets (ArgoCD, ESO).
 ## Service Requirements
 
 ### Repository Structure
+
+**Tenant Repository (Source of Truth):**
+```
+zerotouch-tenants/tenants/service-name/
+├── base/
+│   ├── external-secrets/
+│   │   └── *.yaml          # _ENV_ placeholder
+│   └── kustomization.yaml
+└── overlays/
+    └── pr/
+        ├── patches/
+        │   └── secrets-patch.yaml  # pr paths
+        └── kustomization.yaml
+```
+
+**Service Repository (CI Testing Only):**
 ```
 service-repo/
 ├── .github/workflows/
 │   └── main-pipeline.yml           # Calls ci-test.yml
-├── platform/
-│   └── service-name/
-│       ├── base/
-│       │   ├── external-secrets/
-│       │   │   └── *.yaml          # _ENV_ placeholder
-│       │   └── kustomization.yaml
-│       └── overlays/
-│           └── pr/
-│               ├── patches/
-│               │   └── secrets-patch.yaml  # pr paths
-│               └── kustomization.yaml
 └── scripts/ci/
-    └── in-cluster-test.sh          # Local dev testing
+    └── in-cluster-test.sh          # Checks out tenant repo for testing
 ```
+
+**Note:** Service repository does NOT store manifests. CI testing checks out the tenant repository to validate the same manifests that will be deployed to production.
 
 ### GitHub Secrets Naming Convention
 ```
@@ -212,11 +221,12 @@ Set same env variables in `.env` and run `scripts/ci/in-cluster-test.sh` - ident
 
 | Aspect | Production | Preview (PR) |
 |--------|-----------|--------------|
-| **Manifest Location** | `zerotouch-tenants/` repo | `service-repo/platform/` |
-| **Deployment** | ArgoCD GitOps | Direct `kubectl apply` |
+| **Manifest Location** | `zerotouch-tenants/` repo | `zerotouch-tenants/` repo (same) |
+| **Deployment** | ArgoCD GitOps | Direct `kubectl apply` (CI testing) |
 | **SSM Path** | `/zerotouch/{dev\|staging\|prod}/*` | `/zerotouch/pr/*` |
 | **Cluster** | Persistent (Talos) | Ephemeral (Kind) |
 | **Lifecycle** | Permanent | Deleted with PR |
+| **CI Workflow** | ArgoCD watches tenant repo | CI checks out tenant repo for testing |
 
 ## Troubleshooting
 

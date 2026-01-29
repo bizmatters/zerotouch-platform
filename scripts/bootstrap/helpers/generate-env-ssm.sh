@@ -123,16 +123,16 @@ while IFS='=' read -r key value || [ -n "$key" ]; do
             /zerotouch/prod/hetzner/api-token) env_var="HETZNER_API_TOKEN" ;;
             /zerotouch/prod/hetzner/dns-token) env_var="HETZNER_DNS_TOKEN" ;;
             # GitHub credentials - use BOT_GITHUB_USERNAME and BOT_GITHUB_TOKEN
-            */github/username|*/ghcr/username) env_var="BOT_GITHUB_USERNAME" ;;
-            */github/token|*/github/password|*/ghcr/password) env_var="BOT_GITHUB_TOKEN" ;;
-            # Tenant repo - use TENANTS_REPO_URL and BOT_GITHUB credentials
-            */argocd/repos/zerotouch-tenants/url) env_var="TENANTS_REPO_URL" ;;
-            */argocd/repos/zerotouch-tenants/username) env_var="BOT_GITHUB_USERNAME" ;;
-            */argocd/repos/zerotouch-tenants/password) env_var="BOT_GITHUB_TOKEN" ;;
+            # */github/username|*/ghcr/username) env_var="BOT_GITHUB_USERNAME" ;;
+            # */github/token|*/github/password|*/ghcr/password) env_var="BOT_GITHUB_TOKEN" ;;
+            # # Tenant repo - use TENANTS_REPO_URL and BOT_GITHUB credentials
+            # */argocd/repos/zerotouch-tenants/url) env_var="TENANTS_REPO_URL" ;;
+            # */argocd/repos/zerotouch-tenants/username) env_var="BOT_GITHUB_USERNAME" ;;
+            # */argocd/repos/zerotouch-tenants/password) env_var="BOT_GITHUB_TOKEN" ;;
             # # IDE Orchestrator service secrets
-            # /zerotouch/prod/ide-orchestrator/jwt-secret) env_var="IDEO_JWT_SECRET" ;;
-            # /zerotouch/prod/ide-orchestrator/spec-engine-url) env_var="IDEO_SPEC_ENGINE_URL" ;;
-            # /zerotouch/prod/ide-orchestrator/database_url) env_var="IDEO_DATABASE_URL" ;;
+            # /zerotouch/prod/ide-orchestrator/jwt-secret) env_var="JWT_SECRET" ;;
+            # /zerotouch/prod/ide-orchestrator/spec-engine-url) env_var="SPEC_ENGINE_URL" ;;
+            # /zerotouch/prod/ide-orchestrator/database_url) env_var="DATABASE_URL" ;;
             # # Identity Service secrets
             # /zerotouch/prod/identity-service/node_env) env_var="IDENTITY_NODE_ENV" ;;
             # /zerotouch/prod/identity-service/neon_auth_url) env_var="IDENTITY_NEON_AUTH_URL" ;;

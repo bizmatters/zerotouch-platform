@@ -169,7 +169,8 @@ fi
 
 # Create tenant repository credentials
 GITHUB_USERNAME="${BOT_GITHUB_USERNAME:-${GITHUB_REPOSITORY_OWNER:-arun4infra}}"
-TENANT_REPO_URL="https://github.com/${GITHUB_USERNAME}/zerotouch-tenants.git"
+TENANTS_REPO_NAME="${TENANTS_REPO_NAME:-${GITHUB_VARS_TENANTS_REPO_NAME}}"
+TENANT_REPO_URL="https://github.com/${GITHUB_USERNAME}/${TENANTS_REPO_NAME}.git"
 if kubectl get secret tenant-repo-credentials -n "$ARGOCD_NAMESPACE" &>/dev/null; then
     log_warn "Tenant repository credentials already exist, skipping..."
 else
