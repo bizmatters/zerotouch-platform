@@ -162,6 +162,53 @@ spec:
 
 ## Service Requirements
 
+### Adding New Secrets to Services
+
+When platform infrastructure adds new ExternalSecrets (e.g., `platform-global-config`), services must update their deployment manifests to consume them:
+
+**Steps:**
+1. **Create ExternalSecret** in `base/external-secrets/` (e.g., `platform-config-es.yaml`)
+2. **Add to base kustomization** in `base/kustomization.yaml`:
+   ```yaml
+   resources:
+     - external-secrets/platform-config-es.yaml
+   ```
+3. **Update ALL deployment overlays** to reference the new secret:
+   ```yaml
+   # overlays/{dev,pr,staging,production}/deployment.yaml
+   spec:
+     secret1Name: service-db-conn
+     secret2Name: service-app-secrets
+     secret3Name: platform-global-config  # NEW SECRET
+   ```
+
+**Critical:** All environment overlays (dev, pr, staging, production) must be updated, or pods will fail to start due to missing secret references.
+
+**Example: Adding Platform JWKS URL**
+```yaml
+# base/external-secrets/platform-config-es.yaml
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: platform-global-config
+  namespace: service-namespace
+spec:
+  target:
+    name: platform-global-config
+  data:
+  - secretKey: PLATFORM_JWKS_URL
+    remoteRef:
+      key: /zerotouch/_ENV_/zerotouch-platform/jwks_url
+```
+
+```yaml
+# overlays/dev/deployment.yaml
+spec:
+  secret1Name: service-db-conn
+  secret2Name: service-app-secrets
+  secret3Name: platform-global-config  # Injects PLATFORM_JWKS_URL
+```
+
 ### Tenant Repository Structure
 
 ```
