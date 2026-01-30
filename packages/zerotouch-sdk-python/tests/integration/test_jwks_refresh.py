@@ -180,12 +180,19 @@ class TestRefreshErrorPaths:
     def test_refresh_failure_warning_logged(self, auth, jwt_gen, caplog):
         """Test refresh failure logs warning (line 126)."""
         import logging
-        caplog.set_level(logging.INFO)
+        caplog.set_level(logging.WARNING)
         
         token = jwt_gen.create_token()
         
+        # Remove kid from cache to trigger refresh path
+        test_kid = jwt_gen.kid
+        if test_kid in auth.cached_kids:
+            auth.cached_kids.remove(test_kid)
+        
         # Mock to trigger refresh path
         with patch.object(auth.jwk_client, 'get_signing_key') as mock_get_key:
+            # First call: unknown kid triggers refresh
+            # Second call: still fails after refresh
             mock_get_key.side_effect = PyJWKClientError("Unknown kid")
             
             with patch.object(auth.jwk_client, 'get_signing_keys') as mock_refresh:
@@ -199,6 +206,10 @@ class TestRefreshErrorPaths:
                 
                 # Verify refresh was attempted
                 assert mock_refresh.called
+                
+                # Verify warning was logged
+                warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+                assert any("refresh failed" in r.message.lower() for r in warnings)
 
 
 class TestSuccessfulRefreshPath:
