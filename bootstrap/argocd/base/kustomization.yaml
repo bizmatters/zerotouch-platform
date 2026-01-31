@@ -2,7 +2,8 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-- 00-eso.yaml
+- 00-eso.yaml  # ESO Helm chart (will be deprecated after migration)
+- 00-secrets.yaml  # KSOPS + ESO packages
 - 01-crossplane.yaml
 - 01-cert-manager.yaml
 - 02-cnpg.yaml
