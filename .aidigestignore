@@ -13,8 +13,9 @@ bootstrap/argocd/overlays/preview
 CONTRIBUTING.md
 platform/intelligence
 platform/observability
-
+packages
 # Scripts
+scripts
 # scripts/bootstrap/helpers
 # scripts/bootstrap/preview
 # scripts/bootstrap/validation
