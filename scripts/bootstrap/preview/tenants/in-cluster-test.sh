@@ -38,6 +38,14 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 log_info() { echo -e "${BLUE}[IN-CLUSTER-TEST]${NC} $*"; }
+
+# Detect if we are running in CI or Local
+if [[ -n "${KIND_NODE_IMAGE:-}" ]]; then
+    log_info "[CI] Detected Pre-Cached Image: ${KIND_NODE_IMAGE}"
+    export KIND_NODE_IMAGE
+else
+    log_info "[LOCAL] No pre-cached image detected. Using upstream default."
+fi
 log_success() { echo -e "${GREEN}[IN-CLUSTER-TEST]${NC} $*"; }
 log_error() { echo -e "${RED}[IN-CLUSTER-TEST]${NC} $*"; }
 log_warn() { echo -e "${YELLOW}[IN-CLUSTER-TEST]${NC} $*"; }

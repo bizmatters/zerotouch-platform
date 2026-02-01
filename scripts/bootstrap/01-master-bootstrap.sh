@@ -174,6 +174,14 @@ if [ "$MODE" = "preview" ]; then
         echo -e "${YELLOW}⚠ Service .env file not found at: $SERVICE_ENV_FILE${NC}"
     fi
     
+    # Detect and export KIND_NODE_IMAGE if set (from CI)
+    if [[ -n "${KIND_NODE_IMAGE:-}" ]]; then
+        echo -e "${BLUE}[CI] Using Pre-Cached Image: ${KIND_NODE_IMAGE}${NC}"
+        export KIND_NODE_IMAGE
+    else
+        echo -e "${BLUE}[LOCAL] Using upstream default Kind image${NC}"
+    fi
+    
     "$SCRIPT_DIR/preview/setup-preview.sh"
 fi
 

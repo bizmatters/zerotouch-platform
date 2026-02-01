@@ -1,0 +1,31 @@
+name: Build Platform Preview Image
+
+on:
+  push:
+    paths:
+      - 'platform/versions.yaml'
+      - 'platform/docker/preview/Dockerfile'
+    branches: [main]
+
+permissions:
+  packages: write
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: platform/docker/preview/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/zerotouch-preview-node:latest

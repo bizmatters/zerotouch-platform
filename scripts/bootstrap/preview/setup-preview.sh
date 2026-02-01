@@ -138,12 +138,19 @@ echo ""
 if kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}$"; then
     echo -e "${YELLOW}Kind cluster '$CLUSTER_NAME' already exists${NC}"
 else
+    # Determine Image
+    # If KIND_NODE_IMAGE is set (from CI), use it. Otherwise default to upstream.
+    DEFAULT_KIND_IMAGE="kindest/node:v1.31.0"
+    TARGET_IMAGE="${KIND_NODE_IMAGE:-$DEFAULT_KIND_IMAGE}"
+    
     echo -e "${BLUE}Creating Kind cluster '$CLUSTER_NAME'...${NC}"
+    echo -e "${BLUE}Using Node Image: $TARGET_IMAGE${NC}"
+    
     if [ ! -f "$KIND_CONFIG" ]; then
         echo -e "${RED}Error: Kind config not found at $KIND_CONFIG${NC}"
         exit 3
     fi
-    kind create cluster --config "$KIND_CONFIG" || exit 3
+    kind create cluster --config "$KIND_CONFIG" --image "$TARGET_IMAGE" || exit 3
     echo -e "${GREEN}✓ Kind cluster created${NC}"
 fi
 
