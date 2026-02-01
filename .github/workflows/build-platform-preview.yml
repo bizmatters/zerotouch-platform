@@ -47,6 +47,11 @@ jobs:
           sort -u images.txt -o images.txt
           echo "Images to cache:"
           cat images.txt
+          
+          # Generate version tag from versions.yaml hash
+          VERSION_HASH=$(sha256sum platform/versions.yaml | cut -d' ' -f1 | cut -c1-8)
+          echo "version_tag=$VERSION_HASH" >> $GITHUB_OUTPUT
+          echo "Image version tag: $VERSION_HASH"
       
       - name: Pull and Archive Images
         run: |
@@ -84,4 +89,6 @@ jobs:
           context: platform/docker/preview
           file: platform/docker/preview/Dockerfile
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.extract.outputs.version_tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
