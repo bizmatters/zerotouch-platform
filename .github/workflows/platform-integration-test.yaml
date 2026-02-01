@@ -9,7 +9,6 @@ on:
   workflow_call:
 
 permissions:
-  id-token: write      # Required for AWS OIDC authentication
   contents: read
 
 jobs:
@@ -19,15 +18,26 @@ jobs:
     timeout-minutes: 45
     
     steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: zerotouch-platform,zerotouch-tenants
+
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
-          aws-region: ap-south-1
-          mask-aws-account-id: true
+          token: ${{ steps.app-token.outputs.token }}
+
+      # - name: Configure AWS credentials
+      #   uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+      #     aws-region: ap-south-1
+      #     mask-aws-account-id: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -49,10 +59,7 @@ jobs:
       - name: Bootstrap Platform Preview Environment
         env:
           KIND_NODE_IMAGE: ghcr.io/${{ github.repository_owner }}/zerotouch-preview-node:${{ steps.version.outputs.hash }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          BOT_GITHUB_USERNAME: ${{ secrets.BOT_GITHUB_USERNAME }}
-          BOT_GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
+          BOT_GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           TENANTS_REPO_NAME: ${{ vars.TENANTS_REPO_NAME }}
         run: |
           chmod +x scripts/bootstrap/01-master-bootstrap.sh
