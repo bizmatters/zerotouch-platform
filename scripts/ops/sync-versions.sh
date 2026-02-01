@@ -125,5 +125,59 @@ else
     echo "✓ Cilium -> $(yq '.components.cilium.version' $VERSIONS_FILE) (unchanged)"
 fi
 
+# 11. Update SOPS and Age versions in KSOPS install script
+SOPS_VER=$(yq '.components.cli_tools.sops' $VERSIONS_FILE)
+AGE_VER=$(yq '.components.cli_tools.age' $VERSIONS_FILE)
+
+CURRENT_SOPS=$(grep '^SOPS_VERSION=' ${REPO_ROOT}/scripts/bootstrap/install/08a-install-ksops.sh | cut -d'"' -f2)
+CURRENT_AGE=$(grep '^AGE_VERSION=' ${REPO_ROOT}/scripts/bootstrap/install/08a-install-ksops.sh | cut -d'"' -f2)
+
+if [ "$CURRENT_SOPS" != "$SOPS_VER" ]; then
+    sed -i.bak "s/SOPS_VERSION=\".*\"/SOPS_VERSION=\"$SOPS_VER\"/" ${REPO_ROOT}/scripts/bootstrap/install/08a-install-ksops.sh
+    rm ${REPO_ROOT}/scripts/bootstrap/install/08a-install-ksops.sh.bak
+    echo "✓ SOPS -> $SOPS_VER (updated)"
+else
+    echo "✓ SOPS -> $SOPS_VER (unchanged)"
+fi
+
+if [ "$CURRENT_AGE" != "$AGE_VER" ]; then
+    sed -i.bak "s/AGE_VERSION=\".*\"/AGE_VERSION=\"$AGE_VER\"/" ${REPO_ROOT}/scripts/bootstrap/install/08a-install-ksops.sh
+    rm ${REPO_ROOT}/scripts/bootstrap/install/08a-install-ksops.sh.bak
+    echo "✓ Age -> $AGE_VER (updated)"
+else
+    echo "✓ Age -> $AGE_VER (unchanged)"
+fi
+
+# 12. Update kubectl and helm versions in production infra deps script
+KUBECTL_VER=$(yq '.components.cli_tools.kubectl' $VERSIONS_FILE)
+HELM_VER=$(yq '.components.cli_tools.helm' $VERSIONS_FILE)
+
+# Update kubectl version (replace the curl command that fetches latest)
+CURRENT_KUBECTL_LINE=$(grep 'curl -LO.*kubectl' ${REPO_ROOT}/scripts/bootstrap/infra/00-setup-infra-deps.sh)
+if [[ "$CURRENT_KUBECTL_LINE" == *"$KUBECTL_VER"* ]]; then
+    echo "✓ kubectl -> $KUBECTL_VER (unchanged)"
+else
+    sed -i.bak "s|curl -LO \"https://dl.k8s.io/release/.*kubectl\"|curl -LO \"https://dl.k8s.io/release/${KUBECTL_VER}/bin/linux/amd64/kubectl\"|" ${REPO_ROOT}/scripts/bootstrap/infra/00-setup-infra-deps.sh
+    rm ${REPO_ROOT}/scripts/bootstrap/infra/00-setup-infra-deps.sh.bak
+    echo "✓ kubectl -> $KUBECTL_VER (updated)"
+fi
+
+# Update helm version (add version variable to helm install)
+if grep -q "DESIRED_VERSION=" ${REPO_ROOT}/scripts/bootstrap/infra/00-setup-infra-deps.sh; then
+    CURRENT_HELM=$(grep 'DESIRED_VERSION=' ${REPO_ROOT}/scripts/bootstrap/infra/00-setup-infra-deps.sh | cut -d'=' -f2)
+    if [ "$CURRENT_HELM" != "$HELM_VER" ]; then
+        sed -i.bak "s/DESIRED_VERSION=.*/DESIRED_VERSION=$HELM_VER/" ${REPO_ROOT}/scripts/bootstrap/infra/00-setup-infra-deps.sh
+        rm ${REPO_ROOT}/scripts/bootstrap/infra/00-setup-infra-deps.sh.bak
+        echo "✓ helm -> $HELM_VER (updated)"
+    else
+        echo "✓ helm -> $HELM_VER (unchanged)"
+    fi
+else
+    # Add version variable before helm install
+    sed -i.bak '/curl.*get-helm-3/i\    export DESIRED_VERSION='$HELM_VER ${REPO_ROOT}/scripts/bootstrap/infra/00-setup-infra-deps.sh
+    rm ${REPO_ROOT}/scripts/bootstrap/infra/00-setup-infra-deps.sh.bak
+    echo "✓ helm -> $HELM_VER (updated)"
+fi
+
 echo ""
 echo "Sync complete. Commit changes to bootstrap/argocd/base/ and scripts/."

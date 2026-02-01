@@ -50,6 +50,19 @@ log_step() {
     echo -e "${BLUE}==>${NC} $1"
 }
 
+# Install ArgoCD CLI
+install_argocd_cli() {
+    if ! command -v argocd &> /dev/null; then
+        log_step "Installing ArgoCD CLI..."
+        curl -sSL -o argocd "https://github.com/argoproj/argo-cd/releases/download/$ARGOCD_VERSION/argocd-linux-amd64"
+        chmod +x argocd
+        sudo mv argocd /usr/local/bin/argocd
+        log_info "ArgoCD CLI installed successfully"
+    else
+        log_info "ArgoCD CLI already available"
+    fi
+}
+
 # Function to check if command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
@@ -81,9 +94,12 @@ NODE_COUNT=$(kubectl get nodes --no-headers 2>/dev/null | wc -l | tr -d ' ')
 log_info "Cluster: $CLUSTER_NAME"
 log_info "Nodes: $NODE_COUNT"
 
-# Step 1: Install ArgoCD
+# Step 1: Install ArgoCD CLI and Server
 log_info ""
-log_step "Step 1/5: Installing ArgoCD..."
+log_step "Step 1/5: Installing ArgoCD CLI and Server..."
+
+# Install ArgoCD CLI first
+install_argocd_cli
 
 if kubectl get namespace "$ARGOCD_NAMESPACE" &>/dev/null; then
     log_warn "ArgoCD namespace already exists"

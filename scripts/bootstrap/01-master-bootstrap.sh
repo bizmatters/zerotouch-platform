@@ -258,6 +258,10 @@ Verify parameters:
   aws ssm get-parameters-by-path --path /zerotouch/prod --region ap-south-1"
 fi
 
+# Step 8a: Install KSOPS (SOPS + Age + Key Generation)
+step "Installing KSOPS (SOPS + Age + Key Generation)..."
+"$SCRIPT_DIR/install/08a-install-ksops.sh"
+
 # Step 9: Apply patches for preview mode BEFORE ArgoCD installation
 if [ "$MODE" = "preview" ]; then
     step "Applying patches before ArgoCD installation..."

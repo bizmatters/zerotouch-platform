@@ -46,6 +46,32 @@ BOT_GITHUB_USERNAME=bot-user
 BOT_GITHUB_TOKEN=ghp_xxx
 ```
 
+### Preview Image Caching System
+
+Preview mode uses **versioned Kind node images** with pre-cached platform components for faster CI/CD:
+
+**Version Parity:**
+- `platform/versions.yaml` - Single source of truth for all component versions
+- `scripts/ops/sync-versions.sh` - Syncs ArgoCD manifests from versions.yaml
+- Image tagged with SHA256 hash of versions.yaml (e.g., `a1b2c3d4`)
+
+**Build Process:**
+1. **Trigger:** Changes to `platform/versions.yaml` trigger `build-platform-preview.yml`
+2. **Extract:** Workflow extracts image references from versions.yaml
+3. **Cache:** Pulls and archives images into `platform-images.tar`
+4. **Build:** Creates Kind node image with systemd service to import images on boot
+5. **Tag:** Images tagged as `ghcr.io/<org>/zerotouch-preview-node:<hash>` and `:latest`
+
+**CI Usage:**
+- Workflows calculate same hash: `sha256sum platform/versions.yaml | cut -c1-8`
+- Use versioned image: `KIND_NODE_IMAGE=ghcr.io/<org>/zerotouch-preview-node:<hash>`
+- Images available instantly when Kind cluster boots (no pull delays)
+
+**Benefits:**
+- **Speed:** Core platform images (ArgoCD, ESO, NATS, KEDA) pre-cached
+- **Reproducibility:** Same versions.yaml = same image = same test results
+- **Efficiency:** Only rebuilds when component versions change
+
 ## Preview Mode Patches
 
 Patches in `scripts/bootstrap/patches/` adapt platform for Kind:

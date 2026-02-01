@@ -9,11 +9,7 @@ on:
   workflow_dispatch:
 
 env:
-  KIND_VERSION: v0.20.0
-  KUBECTL_VERSION: v1.28.0
-  ARGOCD_VERSION: v2.10.0
-  SOPS_VERSION: v3.8.1
-  AGE_VERSION: v1.1.1
+  # All tools pre-installed in preview cache image
 
 jobs:
   validate-ksops:
@@ -34,53 +30,16 @@ jobs:
           path: zerotouch-tenants
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install kubectl
-        run: |
-          curl -LO "https://dl.k8s.io/release/${{ env.KUBECTL_VERSION }}/bin/linux/amd64/kubectl"
-          chmod +x kubectl
-          sudo mv kubectl /usr/local/bin/
-          kubectl version --client
 
-      - name: Install Kind
-        run: |
-          curl -Lo ./kind "https://kind.sigs.k8s.io/dl/${{ env.KIND_VERSION }}/kind-linux-amd64"
-          chmod +x ./kind
-          sudo mv ./kind /usr/local/bin/kind
-          kind version
 
-      - name: Install SOPS
+      - name: Setup Preview Environment
         run: |
-          curl -LO "https://github.com/getsops/sops/releases/download/${{ env.SOPS_VERSION }}/sops-${{ env.SOPS_VERSION }}.linux.amd64"
-          chmod +x sops-${{ env.SOPS_VERSION }}.linux.amd64
-          sudo mv sops-${{ env.SOPS_VERSION }}.linux.amd64 /usr/local/bin/sops
-          sops --version
-
-      - name: Install Age
-        run: |
-          curl -LO "https://github.com/FiloSottile/age/releases/download/${{ env.AGE_VERSION }}/age-${{ env.AGE_VERSION }}-linux-amd64.tar.gz"
-          tar xzf age-${{ env.AGE_VERSION }}-linux-amd64.tar.gz
-          sudo mv age/age /usr/local/bin/
-          sudo mv age/age-keygen /usr/local/bin/
-          age --version
-
-      - name: Create Kind cluster
-        run: |
-          cat <<EOF | kind create cluster --config=-
-          kind: Cluster
-          apiVersion: kind.x-k8s.io/v1alpha4
-          name: ksops-test
-          nodes:
-          - role: control-plane
-            kubeadmConfigPatches:
-            - |
-              kind: InitConfiguration
-              nodeRegistration:
-                kubeletExtraArgs:
-                  node-labels: "ingress-ready=true"
-          EOF
+          cd zerotouch-platform
           
-          kubectl cluster-info
-          kubectl get nodes
+          # Use existing setup-preview.sh script
+          ./scripts/bootstrap/preview/setup-preview.sh
+          
+          echo "Preview environment setup complete"
 
       - name: Install ArgoCD
         run: |

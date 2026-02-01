@@ -53,3 +53,12 @@ components:
   
   ksops:
     image: "viaductoss/ksops:v4.4.0"
+
+  # CLI Tools (synced to both preview cache and production install scripts)
+  cli_tools:
+    kubectl: "v1.28.0"
+    helm: "v3.13.0"
+    sops: "v3.8.1"
+    age: "v1.1.1"
+    argocd: "v2.10.0"
+    kind: "v0.20.0"
