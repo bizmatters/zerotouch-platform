@@ -1,0 +1,13 @@
+[Unit]
+Description=Import Pre-Cached ZeroTouch Platform Images
+After=containerd.service
+Before=kubelet.service
+Requires=containerd.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/import-images.sh
+RemainAfterExit=true
+
+[Install]
+WantedBy=multi-user.target
