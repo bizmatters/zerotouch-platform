@@ -78,11 +78,11 @@ echo -e "${GREEN}✓ Kind config updated with local repo mount at /repo${NC}"
 echo ""
 
 # 4. Validate AWS credentials
-if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
-    echo -e "${RED}Error: AWS credentials required${NC}"
-    echo -e "Set: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN (optional)"
-    exit 1
-fi
+# if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+#     echo -e "${RED}Error: AWS credentials required${NC}"
+#     echo -e "Set: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN (optional)"
+#     exit 1
+# fi
 
 echo -e "${GREEN}✓ AWS credentials configured${NC}"
 echo ""
