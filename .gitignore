@@ -3,6 +3,7 @@ environments/*/talos-values.yaml
 environments/*/talos-values.yaml.bak
 environments/*/*.secret.yaml
 .env
+.env.sops
 .env.ssm
 .age-key
 .sops.yaml
