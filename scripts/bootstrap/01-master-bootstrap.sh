@@ -263,8 +263,8 @@ fi
 # fi
 
 # Step 8a: Install KSOPS (SOPS + Age + Key Generation)
-# step "Installing KSOPS (SOPS + Age + Key Generation)..."
-# "$SCRIPT_DIR/install/08a-install-ksops.sh"
+step "Installing KSOPS (SOPS + Age + Key Generation)..."
+"$SCRIPT_DIR/install/08a-install-ksops.sh"
 
 # Step 9: Apply patches for preview mode BEFORE ArgoCD installation
 if [ "$MODE" = "preview" ]; then
