@@ -91,10 +91,38 @@ else
 fi
 
 # ============================================================================
-# 3. Create test encrypted secret and verify ArgoCD decrypts it
+# 3. Detect KSOPS binary location for later use
 # ============================================================================
 echo ""
-echo "3. Creating test encrypted secret..."
+echo "3. Detecting KSOPS binary location..."
+
+# Determine ksops binary path
+if command -v ksops &>/dev/null; then
+    KSOPS_BIN="ksops"
+elif command -v kustomize-sops &>/dev/null; then
+    KSOPS_BIN="kustomize-sops"
+elif command -v go &>/dev/null; then
+    KSOPS_BIN="$(go env GOPATH)/bin/kustomize-sops"
+    if [[ ! -f "$KSOPS_BIN" ]]; then
+        log_check "FAIL" "ksops binary not found at $KSOPS_BIN"
+        echo ""
+        echo "Diagnostic: Install ksops with: go install github.com/viaduct-ai/kustomize-sops@latest"
+        exit 1
+    fi
+else
+    log_check "FAIL" "ksops binary not available (Go not found)"
+    echo ""
+    echo "Diagnostic: Install Go and ksops"
+    exit 1
+fi
+
+log_check "PASS" "KSOPS binary found: $KSOPS_BIN"
+
+# ============================================================================
+# 4. Create test encrypted secret
+# ============================================================================
+echo ""
+echo "4. Creating test encrypted secret..."
 
 # Create test namespace
 kubectl create namespace "$TEST_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f - &>/dev/null
@@ -193,8 +221,8 @@ generators:
   - ./secret-generator.yaml
 KUSTOMEOF
 
-# Create KSOPS generator file
-cat > secret-generator.yaml << 'GENEOF'
+# Create KSOPS generator file with absolute path to binary
+cat > secret-generator.yaml << GENEOF
 apiVersion: viaduct.ai/v1
 kind: ksops
 metadata:
@@ -202,7 +230,7 @@ metadata:
   annotations:
     config.kubernetes.io/function: |
         exec:
-          path: kustomize-sops
+          path: $KSOPS_BIN
 files:
   - ./test-secret.yaml
 GENEOF
@@ -217,41 +245,23 @@ git commit -m "Initial commit" &>/dev/null
 log_check "PASS" "Test encrypted secret created successfully"
 
 # ============================================================================
-# 4. Simulate local KSOPS decryption to verify key validity
+# 5. Simulate local KSOPS decryption to verify key validity
 # ============================================================================
 echo ""
-echo "4. Simulating local KSOPS decryption..."
+echo "5. Simulating local KSOPS decryption..."
 
-# Check if ksops and kustomize are available locally
+# Check if kustomize is available
 if ! command -v kustomize &>/dev/null; then
     log_check "FAIL" "kustomize binary not available for local simulation"
     echo ""
     echo "Diagnostic: Install kustomize with: brew install kustomize (macOS)"
-    echo "Note: Required for KSOPS decryption validation"
     exit 1
-fi
-
-if ! command -v ksops &>/dev/null && ! command -v kustomize-sops &>/dev/null; then
-    log_check "FAIL" "ksops binary not available for local simulation"
-    echo ""
-    echo "Diagnostic: Install ksops with: go install github.com/viaduct-ai/kustomize-sops@latest"
-    echo "Note: This validates the Age key works with KSOPS logic"
-    exit 1
-fi
-
-# Use kustomize-sops if ksops not available
-KSOPS_CMD="ksops"
-if ! command -v ksops &>/dev/null; then
-    KSOPS_CMD="kustomize-sops"
 fi
 
 # Set SOPS_AGE_KEY_FILE for decryption
 TEMP_KEY_FILE=$(mktemp)
 echo "$COMBINED_KEYS" > "$TEMP_KEY_FILE"
 export SOPS_AGE_KEY_FILE="$TEMP_KEY_FILE"
-
-# Ensure ksops is in PATH
-export PATH="$PATH:$(go env GOPATH)/bin"
 
 # Run ksops to decrypt the test secret locally
 echo "Running local ksops decryption..."
@@ -296,10 +306,10 @@ else
 fi
 
 # ============================================================================
-# 5. Restore original sops-age secret
+# 6. Restore original sops-age secret
 # ============================================================================
 echo ""
-echo "5. Restoring original sops-age secret..."
+echo "6. Restoring original sops-age secret..."
 
 kubectl create secret generic sops-age -n argocd \
     --from-literal=keys.txt="$ORIGINAL_KEYS" \
