@@ -106,6 +106,24 @@ if ! command -v helm &> /dev/null; then
 fi
 echo -e "${GREEN}✓ helm available${NC}"
 
+# ksops (for KSOPS validation)
+if ! command -v ksops &> /dev/null; then
+    echo -e "${BLUE}Installing ksops...${NC}"
+    if command -v go &> /dev/null; then
+        go install github.com/viaduct-ai/kustomize-sops@latest
+        # Add GOPATH/bin to PATH if not already there
+        export PATH="$PATH:$(go env GOPATH)/bin"
+    else
+        echo -e "${YELLOW}Warning: Go not installed, skipping ksops installation${NC}"
+        echo -e "${YELLOW}KSOPS validation will be limited${NC}"
+    fi
+fi
+if command -v ksops &> /dev/null; then
+    echo -e "${GREEN}✓ ksops available${NC}"
+else
+    echo -e "${YELLOW}⚠ ksops not available (Go required)${NC}"
+fi
+
 # kind
 if ! command -v kind &> /dev/null; then
     echo -e "${BLUE}Installing kind...${NC}"
