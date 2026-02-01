@@ -33,10 +33,13 @@ jobs:
         id: extract
         run: |
           echo "Extracting images from platform/versions.yaml..."
+          # Extract only from versions.yaml file
+          cd platform
           # Extract all 'image' fields (including nested ones)
-          yq '.. | select(has("image")) | .image' platform/versions.yaml > images.txt
+          yq '.. | select(has("image")) | .image' versions.yaml > ../images.txt
           # Also grab operator_image if present (special case for CNPG)
-          yq '.. | select(has("operator_image")) | .operator_image' platform/versions.yaml >> images.txt
+          yq '.. | select(has("operator_image")) | .operator_image' versions.yaml >> ../images.txt
+          cd ..
           # Add hardcoded critical system images needed for Kind
           echo "docker.io/kindest/kindnetd:v20240813-c6f155d6" >> images.txt
           echo "docker.io/kindest/local-path-provisioner:v0.0.28" >> images.txt
@@ -49,10 +52,24 @@ jobs:
         run: |
           mkdir -p platform/docker/preview
           echo "Pulling images..."
-          xargs -n 1 docker pull < images.txt
-          echo "Saving images to tarball..."
-          docker save -o platform/docker/preview/platform-images.tar $(cat images.txt | tr '\n' ' ')
-          ls -lh platform/docker/preview/platform-images.tar
+          # Pull images one by one, continue on failure
+          while IFS= read -r img; do
+            echo "Pulling $img..."
+            docker pull "$img" || echo "Warning: Failed to pull $img, skipping..."
+          done < images.txt
+          # Get list of successfully pulled images
+          docker images --format "{{.Repository}}:{{.Tag}}" | grep -F -f images.txt > pulled-images.txt || true
+          echo "Successfully pulled images:"
+          cat pulled-images.txt
+          # Save only successfully pulled images
+          if [ -s pulled-images.txt ]; then
+            echo "Saving images to tarball..."
+            docker save -o platform/docker/preview/platform-images.tar $(cat pulled-images.txt | tr '\n' ' ')
+            ls -lh platform/docker/preview/platform-images.tar
+          else
+            echo "Error: No images were successfully pulled"
+            exit 1
+          fi
       
       - name: Log in to Registry
         uses: docker/login-action@v3

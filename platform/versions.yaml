@@ -52,4 +52,4 @@ components:
     image: "qdrant/qdrant:v1.16.0"
   
   ksops:
-    image: "ghcr.io/viaduct-ai/ksops:v4.4.0"
+    image: "viaductoss/ksops:v4.4.0"
