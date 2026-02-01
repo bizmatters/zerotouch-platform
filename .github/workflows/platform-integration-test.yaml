@@ -39,9 +39,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyyaml
 
+      - name: Calculate Version Hash
+        id: version
+        run: |
+          VERSION_HASH=$(sha256sum platform/versions.yaml | cut -d' ' -f1 | cut -c1-8)
+          echo "hash=$VERSION_HASH" >> $GITHUB_OUTPUT
+          echo "Using preview image version: $VERSION_HASH"
+
       - name: Bootstrap Platform Preview Environment
         env:
-          KIND_NODE_IMAGE: ghcr.io/${{ github.repository_owner }}/zerotouch-preview-node:latest
+          KIND_NODE_IMAGE: ghcr.io/${{ github.repository_owner }}/zerotouch-preview-node:${{ steps.version.outputs.hash }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BOT_GITHUB_USERNAME: ${{ secrets.BOT_GITHUB_USERNAME }}
