@@ -243,20 +243,24 @@ else
     echo -e "${BLUE}[1-7/${TOTAL_STEPS}] Skipping Talos installation (preview mode uses Kind)${NC}"
 fi
 
-# Step 7: Inject ESO Secrets
-step "Injecting ESO secrets..."
-"$SCRIPT_DIR/install/07-inject-eso-secrets.sh"
+# # Step 7: Inject ESO Secrets
+# step "Injecting ESO secrets..."
+# "$SCRIPT_DIR/install/07-inject-eso-secrets.sh"
 
-# Step 8: Inject SSM Parameters (BEFORE ArgoCD)
-step "Injecting SSM parameters..."
-"$SCRIPT_DIR/install/08-inject-ssm-parameters.sh"
+# # Step 8: Inject SSM Parameters (BEFORE ArgoCD)
+# step "Injecting SSM parameters..."
+# "$SCRIPT_DIR/install/08-inject-ssm-parameters.sh"
 
-if [ "$MODE" = "production" ]; then
-    "$SCRIPT_DIR/helpers/add-credentials.sh" "$CREDENTIALS_FILE" "AWS SSM PARAMETER STORE" "Parameters injected from .env.ssm to AWS SSM Parameter Store
+# step "Injecting KSOPS secrets..."
+"$SCRIPT_DIR/install/08-inject-sops-secrets.sh"
 
-Verify parameters:
-  aws ssm get-parameters-by-path --path /zerotouch/prod --region ap-south-1"
-fi
+
+# if [ "$MODE" = "production" ]; then
+#     "$SCRIPT_DIR/helpers/add-credentials.sh" "$CREDENTIALS_FILE" "AWS SSM PARAMETER STORE" "Parameters injected from .env.ssm to AWS SSM Parameter Store
+
+# Verify parameters:
+#   aws ssm get-parameters-by-path --path /zerotouch/prod --region ap-south-1"
+# fi
 
 # Step 8a: Install KSOPS (SOPS + Age + Key Generation)
 step "Installing KSOPS (SOPS + Age + Key Generation)..."
