@@ -69,7 +69,10 @@ jobs:
           echo "==> Step 2: Injecting Age keys..."
           ./scripts/bootstrap/infra/secrets/ksops/08c-inject-age-key.sh
           
-          echo "==> Step 3: Deploying KSOPS package..."
+          echo "==> Step 3: Creating Age key backup..."
+          ./scripts/bootstrap/infra/secrets/ksops/08d-create-age-backup.sh
+          
+          echo "==> Step 4: Deploying KSOPS package..."
           ./scripts/bootstrap/infra/secrets/ksops/08e-deploy-ksops-package.sh
           
           echo ""
