@@ -98,9 +98,9 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
     
     echo -e "${GREEN}✓ KSOPS sidecar container is ready${NC}"
     
-    # Check if CMP server socket exists
+    # Check if CMP server is running by looking at logs
     echo -e "${BLUE}Checking CMP server socket...${NC}"
-    if kubectl exec "$REPO_POD" -n "$ARGOCD_NAMESPACE" -c ksops -- test -S /var/run/argocd/argocd-cmp-server 2>/dev/null; then
+    if kubectl logs "$REPO_POD" -n "$ARGOCD_NAMESPACE" -c ksops --tail=10 2>/dev/null | grep -q "serving on.*sock"; then
         echo -e "${GREEN}✓ CMP server socket exists${NC}"
     else
         echo -e "${YELLOW}⏳ CMP server socket not ready yet${NC}"
@@ -109,12 +109,12 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
         continue
     fi
     
-    # Check if Age key file exists
+    # Check if Age key file exists (optional check)
     echo -e "${BLUE}Checking Age key file...${NC}"
-    if kubectl exec "$REPO_POD" -n "$ARGOCD_NAMESPACE" -c ksops -- test -f /home/argocd/.config/sops/age/keys.txt 2>/dev/null; then
-        echo -e "${GREEN}✓ Age key file exists${NC}"
+    if kubectl get secret sops-age -n "$ARGOCD_NAMESPACE" >/dev/null 2>&1; then
+        echo -e "${GREEN}✓ Age key secret exists${NC}"
     else
-        echo -e "${YELLOW}⚠️  Age key file not found (but sidecar is ready)${NC}"
+        echo -e "${YELLOW}⚠️  Age key secret not found (but sidecar is ready)${NC}"
     fi
     
     echo ""

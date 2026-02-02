@@ -3,7 +3,7 @@ name: Validate KSOPS Integration
 on:
   pull_request:
     paths:
-      - 'platform/packages/ksops/**'
+      - 'platform/secrets/ksops/**'
       - 'scripts/bootstrap/infra/secrets/ksops/**'
       - 'scripts/bootstrap/validation/secrets/**'
       - 'scripts/bootstrap/validation/11-verify-ksops.sh'
@@ -55,17 +55,13 @@ jobs:
 
       - name: Setup KSOPS Integration
         run: |
-          # Use orchestrated KSOPS setup script (requires ArgoCD to be running)
+          # Use orchestrated KSOPS setup script (includes key generation, injection, and deployment)
           ./scripts/bootstrap/install/08-setup-ksops.sh
           
-          echo "KSOPS setup complete"
-
-      - name: Deploy KSOPS Package to ArgoCD
-        run: |
-          # Use dedicated script for KSOPS package deployment (includes wait for sidecar readiness)
+          # Deploy KSOPS package to ArgoCD (includes wait for sidecar readiness)
           ./scripts/bootstrap/infra/secrets/ksops/08e-deploy-ksops-package.sh
           
-          echo "KSOPS package deployed and sidecar ready"
+          echo "KSOPS integration complete"
 
       - name: Run Master KSOPS Validation
         run: |

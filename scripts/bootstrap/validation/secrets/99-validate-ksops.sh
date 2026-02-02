@@ -70,7 +70,7 @@ echo "2. Verifying sops-age secret exists with correct format..."
 if ! kubectl get secret sops-age -n argocd &>/dev/null; then
     log_check "FAIL" "sops-age secret does not exist in argocd namespace"
     echo ""
-    echo "Diagnostic: Run inject-age-key.sh to create the secret"
+    echo "Diagnostic: Run 08c-inject-age-key.sh to create the secret"
     exit 1
 fi
 
@@ -130,7 +130,7 @@ kubectl create namespace "$TEST_NAMESPACE" --dry-run=client -o yaml | kubectl ap
 # Generate Age keypair for testing using platform script
 echo "Generating test Age keypair..."
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGE_KEYGEN_SCRIPT="$SCRIPT_DIR/../../../bootstrap/infra/secrets/generate-age-keys.sh"
+AGE_KEYGEN_SCRIPT="$SCRIPT_DIR/../../../bootstrap/infra/secrets/ksops/08b-generate-age-keys.sh"
 
 if [[ ! -f "$AGE_KEYGEN_SCRIPT" ]]; then
     log_check "FAIL" "generate-age-keys.sh script not found"

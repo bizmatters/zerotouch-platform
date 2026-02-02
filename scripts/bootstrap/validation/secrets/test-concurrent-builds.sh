@@ -50,7 +50,7 @@ echo "Setting up test environment..."
 
 # Generate Age keypair for testing using platform script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGE_KEYGEN_SCRIPT="$SCRIPT_DIR/../../../bootstrap/infra/secrets/generate-age-keys.sh"
+AGE_KEYGEN_SCRIPT="$SCRIPT_DIR/../../../bootstrap/infra/secrets/ksops/08b-generate-age-keys.sh"
 
 if [[ ! -f "$AGE_KEYGEN_SCRIPT" ]]; then
     log_test "FAIL" "generate-age-keys.sh script not found"
