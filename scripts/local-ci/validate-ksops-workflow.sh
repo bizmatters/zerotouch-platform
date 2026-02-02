@@ -54,7 +54,10 @@ export AGE_PUBLIC_KEY AGE_PRIVATE_KEY
 echo -e "${BLUE}==> Step 4.2: Injecting Age keys...${NC}"
 ./scripts/bootstrap/infra/secrets/ksops/08c-inject-age-key.sh
 
-echo -e "${BLUE}==> Step 4.3: Deploying KSOPS package...${NC}"
+echo -e "${BLUE}==> Step 4.3: Creating Age key backup...${NC}"
+./scripts/bootstrap/infra/secrets/ksops/08d-create-age-backup.sh
+
+echo -e "${BLUE}==> Step 4.4: Deploying KSOPS package...${NC}"
 ./scripts/bootstrap/infra/secrets/ksops/08e-deploy-ksops-package.sh
 
 echo -e "${GREEN}✓ KSOPS integration complete${NC}"
