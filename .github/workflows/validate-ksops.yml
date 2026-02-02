@@ -62,10 +62,10 @@ jobs:
 
       - name: Deploy KSOPS Package to ArgoCD
         run: |
-          # Use dedicated script for KSOPS package deployment
+          # Use dedicated script for KSOPS package deployment (includes wait for sidecar readiness)
           ./scripts/bootstrap/infra/secrets/ksops/08e-deploy-ksops-package.sh
           
-          echo "KSOPS package deployed to ArgoCD"
+          echo "KSOPS package deployed and sidecar ready"
 
       - name: Run Master KSOPS Validation
         run: |

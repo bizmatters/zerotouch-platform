@@ -41,4 +41,9 @@ echo -e "${BLUE}==> Waiting for repo-server rollout...${NC}"
 kubectl rollout status deployment/argocd-repo-server -n argocd --timeout=300s
 echo -e "${GREEN}✓ ArgoCD repo-server restarted with KSOPS sidecar${NC}"
 
+# Wait for KSOPS sidecar to be ready
+echo -e "${BLUE}==> Waiting for KSOPS sidecar to be ready...${NC}"
+"$SCRIPT_DIR/../../../wait/09c-wait-ksops-sidecar.sh" --timeout 300
+echo -e "${GREEN}✓ KSOPS sidecar is operational${NC}"
+
 echo -e "${GREEN}✅ KSOPS package deployment complete${NC}"
