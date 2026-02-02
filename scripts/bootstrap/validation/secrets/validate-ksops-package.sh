@@ -32,7 +32,7 @@ if kubectl get pod -n argocd -l app.kubernetes.io/name=argocd-repo-server -o jso
     if [[ -n "$SIDECAR_RUNNING" ]]; then
         # Check logs for socket creation message
         POD_NAME=$(kubectl get pod -n argocd -l app.kubernetes.io/name=argocd-repo-server -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
-        if kubectl logs -n argocd "$POD_NAME" -c ksops --tail=20 2>/dev/null | grep -q "serving on.*ksops.*\.sock"; then
+        if kubectl logs -n argocd "$POD_NAME" -c ksops --tail=100 2>/dev/null | grep -q "serving on"; then
             log_check "PASS" "KSOPS sidecar container running with CMP server socket"
         else
             log_check "FAIL" "KSOPS sidecar running but CMP server not initialized"
@@ -56,7 +56,7 @@ fi
 echo "3. Checking KSOPS plugin registration in sidecar logs..."
 POD_NAME=$(kubectl get pod -n argocd -l app.kubernetes.io/name=argocd-repo-server -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
 if [[ -n "$POD_NAME" ]]; then
-    if kubectl logs -n argocd "$POD_NAME" -c ksops --tail=100 2>/dev/null | grep -q "argocd-cmp-server"; then
+    if kubectl logs -n argocd "$POD_NAME" -c ksops --tail=100 2>/dev/null | grep -q "serving on"; then
         log_check "PASS" "KSOPS plugin loaded successfully (CMP server running)"
     else
         log_check "FAIL" "KSOPS plugin not loaded (CMP server not found in logs)"

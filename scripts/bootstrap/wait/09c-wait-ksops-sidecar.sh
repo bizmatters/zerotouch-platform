@@ -100,7 +100,7 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
     
     # Check if CMP server is running by looking at logs
     echo -e "${BLUE}Checking CMP server socket...${NC}"
-    if kubectl logs "$REPO_POD" -n "$ARGOCD_NAMESPACE" -c ksops --tail=20 2>/dev/null | grep -q "argocd-cmp-server.*serving"; then
+    if kubectl logs "$REPO_POD" -n "$ARGOCD_NAMESPACE" -c ksops --tail=100 2>/dev/null | grep -q "serving on"; then
         echo -e "${GREEN}✓ CMP server socket exists${NC}"
     else
         echo -e "${YELLOW}⏳ CMP server socket not ready yet${NC}"

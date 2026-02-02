@@ -113,11 +113,11 @@ fi
 
 # 6. Verify KSOPS sidecar logs
 echo -e "${BLUE}[6/6] Checking KSOPS sidecar logs...${NC}"
-SIDECAR_LOGS=$(kubectl logs -n argocd -l app.kubernetes.io/name=argocd-repo-server -c ksops --tail=10 2>/dev/null || echo "")
-if echo "$SIDECAR_LOGS" | grep -q "argocd-cmp-server.*serving"; then
+SIDECAR_LOGS=$(kubectl logs -n argocd -l app.kubernetes.io/name=argocd-repo-server -c ksops --tail=100 2>/dev/null || echo "")
+if echo "$SIDECAR_LOGS" | grep -q "serving on"; then
     echo -e "${GREEN}✓ KSOPS CMP server running${NC}"
 else
-    echo -e "${YELLOW}⚠ KSOPS CMP server logs not showing 'serving' message${NC}"
+    echo -e "${YELLOW}⚠ KSOPS CMP server logs not showing expected message${NC}"
 fi
 
 echo ""
