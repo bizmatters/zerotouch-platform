@@ -72,6 +72,34 @@ jobs:
           echo "==> Step 3: Deploying KSOPS package..."
           ./scripts/bootstrap/infra/secrets/ksops/08e-deploy-ksops-package.sh
           
+          echo ""
+          echo "==> Deployment Diagnostics"
+          echo "Checking repo-server deployment..."
+          kubectl get deployment argocd-repo-server -n argocd -o yaml | grep -A 20 "initContainers:" || echo "No initContainers found"
+          
+          echo ""
+          echo "Checking repo-server pod status..."
+          kubectl get pods -n argocd -l app.kubernetes.io/name=argocd-repo-server -o wide
+          
+          echo ""
+          echo "Checking init container logs..."
+          POD_NAME=$(kubectl get pod -n argocd -l app.kubernetes.io/name=argocd-repo-server -o jsonpath='{.items[0].metadata.name}')
+          echo "Pod: $POD_NAME"
+          kubectl logs -n argocd $POD_NAME -c install-ksops 2>&1 || echo "Init container not found or not started"
+          
+          echo ""
+          echo "Checking main container for KSOPS tools..."
+          kubectl exec -n argocd $POD_NAME -c argocd-repo-server -- ls -la /usr/local/bin/ | grep -E "ksops|kustomize" || echo "Tools not found"
+          
+          echo ""
+          echo "Checking environment variables..."
+          kubectl exec -n argocd $POD_NAME -c argocd-repo-server -- env | grep -E "SOPS|XDG" || echo "Env vars not set"
+          
+          echo ""
+          echo "Checking Age key mount..."
+          kubectl exec -n argocd $POD_NAME -c argocd-repo-server -- ls -la /.config/sops/age/ 2>&1 || echo "Age key path not found"
+          
+          echo ""
           echo "KSOPS integration complete"
 
       - name: Run Master KSOPS Validation
