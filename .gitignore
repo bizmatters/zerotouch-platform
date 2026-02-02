@@ -6,7 +6,6 @@ environments/*/*.secret.yaml
 .env.sops
 .env.ssm
 .age-key
-.sops.yaml
 .claude
 .kiro
 temp-docs
