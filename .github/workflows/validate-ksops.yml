@@ -53,12 +53,18 @@ jobs:
           
           echo "ArgoCD installation complete"
 
-      - name: Setup KSOPS Integration
+      - name: Setup KSOPS Tools and Keys
         run: |
-          # Use orchestrated KSOPS setup script (includes key generation, injection, and deployment)
-          ./scripts/bootstrap/install/08-setup-ksops.sh
+          # Install tools and generate keys only
+          ./scripts/bootstrap/infra/secrets/ksops/08a-install-ksops.sh
+          source ./scripts/bootstrap/infra/secrets/ksops/08b-generate-age-keys.sh
           
-          # Deploy KSOPS package to ArgoCD (includes wait for sidecar readiness)
+          echo "KSOPS tools and keys ready"
+
+      - name: Inject Age Keys and Deploy KSOPS
+        run: |
+          # Now inject keys into existing ArgoCD namespace and deploy package
+          ./scripts/bootstrap/infra/secrets/ksops/08c-inject-age-key.sh
           ./scripts/bootstrap/infra/secrets/ksops/08e-deploy-ksops-package.sh
           
           echo "KSOPS integration complete"
