@@ -36,11 +36,11 @@ while [[ $# -gt 0 ]]; do
 done
 
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║   Waiting for KSOPS Sidecar to be Ready                     ║${NC}"
+echo -e "${BLUE}║   Waiting for KSOPS to be Ready                             ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-echo -e "${BLUE}⏳ Waiting for KSOPS sidecar to be ready (timeout: ${TIMEOUT}s)...${NC}"
+echo -e "${BLUE}⏳ Waiting for KSOPS to be ready (timeout: ${TIMEOUT}s)...${NC}"
 echo -e "${BLUE}Namespace: $ARGOCD_NAMESPACE${NC}"
 echo ""
 
@@ -69,41 +69,36 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
     
     echo -e "${BLUE}Found repo server pod: $REPO_POD${NC}"
     
-    # Check if KSOPS sidecar container exists
-    KSOPS_CONTAINER=$(kubectl get pod "$REPO_POD" -n "$ARGOCD_NAMESPACE" -o jsonpath='{.spec.containers[?(@.name=="ksops")].name}' 2>/dev/null || echo "")
+    # Check if init container completed successfully
+    INIT_STATUS=$(kubectl get pod "$REPO_POD" -n "$ARGOCD_NAMESPACE" -o jsonpath='{.status.initContainerStatuses[?(@.name=="install-ksops")].state.terminated.reason}' 2>/dev/null || echo "")
     
-    if [[ -z "$KSOPS_CONTAINER" ]]; then
-        echo -e "${YELLOW}⏳ KSOPS sidecar container not found in pod spec${NC}"
+    if [[ "$INIT_STATUS" != "Completed" ]]; then
+        echo -e "${YELLOW}⏳ Init container install-ksops not completed yet (status: $INIT_STATUS)${NC}"
         sleep $CHECK_INTERVAL
         ELAPSED=$((ELAPSED + CHECK_INTERVAL))
         continue
     fi
     
-    echo -e "${BLUE}Found KSOPS sidecar container${NC}"
+    echo -e "${GREEN}✓ Init container install-ksops completed${NC}"
     
-    # Check if KSOPS sidecar is ready
-    KSOPS_READY=$(kubectl get pod "$REPO_POD" -n "$ARGOCD_NAMESPACE" -o jsonpath='{.status.containerStatuses[?(@.name=="ksops")].ready}' 2>/dev/null || echo "false")
+    # Check if main repo-server container is ready
+    REPO_READY=$(kubectl get pod "$REPO_POD" -n "$ARGOCD_NAMESPACE" -o jsonpath='{.status.containerStatuses[?(@.name=="argocd-repo-server")].ready}' 2>/dev/null || echo "false")
     
-    if [[ "$KSOPS_READY" != "true" ]]; then
-        echo -e "${YELLOW}⏳ KSOPS sidecar container not ready yet${NC}"
-        
-        # Show container status for debugging
-        KSOPS_STATE=$(kubectl get pod "$REPO_POD" -n "$ARGOCD_NAMESPACE" -o jsonpath='{.status.containerStatuses[?(@.name=="ksops")].state}' 2>/dev/null || echo "{}")
-        echo -e "${BLUE}KSOPS container state: $KSOPS_STATE${NC}"
-        
+    if [[ "$REPO_READY" != "true" ]]; then
+        echo -e "${YELLOW}⏳ Repo server container not ready yet${NC}"
         sleep $CHECK_INTERVAL
         ELAPSED=$((ELAPSED + CHECK_INTERVAL))
         continue
     fi
     
-    echo -e "${GREEN}✓ KSOPS sidecar container is ready${NC}"
+    echo -e "${GREEN}✓ Repo server container is ready${NC}"
     
-    # Check if CMP server is running by looking at logs
-    echo -e "${BLUE}Checking CMP server socket...${NC}"
-    if kubectl logs "$REPO_POD" -n "$ARGOCD_NAMESPACE" -c ksops --tail=100 2>/dev/null | grep -q "serving on"; then
-        echo -e "${GREEN}✓ CMP server socket exists${NC}"
+    # Check if KSOPS tools are available
+    echo -e "${BLUE}Checking KSOPS tools...${NC}"
+    if kubectl exec "$REPO_POD" -n "$ARGOCD_NAMESPACE" -c argocd-repo-server -- test -f /usr/local/bin/ksops 2>/dev/null; then
+        echo -e "${GREEN}✓ KSOPS binary exists${NC}"
     else
-        echo -e "${YELLOW}⏳ CMP server socket not ready yet${NC}"
+        echo -e "${YELLOW}⏳ KSOPS binary not found${NC}"
         sleep $CHECK_INTERVAL
         ELAPSED=$((ELAPSED + CHECK_INTERVAL))
         continue
@@ -118,7 +113,7 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
     fi
     
     echo ""
-    echo -e "${GREEN}✓ KSOPS sidecar is ready and operational!${NC}"
+    echo -e "${GREEN}✓ KSOPS is ready and operational!${NC}"
     echo ""
     exit 0
 done
