@@ -63,8 +63,13 @@ jobs:
       - name: Inject Age Keys and Deploy KSOPS
         run: |
           # Generate keys and inject in same shell session to preserve environment variables
-          source ./scripts/bootstrap/infra/secrets/ksops/08b-generate-age-keys.sh && \
-          ./scripts/bootstrap/infra/secrets/ksops/08c-inject-age-key.sh && \
+          echo "==> Step 1: Generating Age keys..."
+          source ./scripts/bootstrap/infra/secrets/ksops/08b-generate-age-keys.sh
+          
+          echo "==> Step 2: Injecting Age keys..."
+          ./scripts/bootstrap/infra/secrets/ksops/08c-inject-age-key.sh
+          
+          echo "==> Step 3: Deploying KSOPS package..."
           ./scripts/bootstrap/infra/secrets/ksops/08e-deploy-ksops-package.sh
           
           echo "KSOPS integration complete"

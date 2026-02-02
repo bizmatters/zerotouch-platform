@@ -1,16 +1,13 @@
 #!/bin/bash
 # SOPS Configuration Validation Script
-# Usage: ./validate-sops-config.sh [--tenants-repo-path <path>]
+# Usage: ./validate-sops-config.sh
 #
-# This script validates the .sops.yaml configuration file in the zerotouch-tenants repository
+# This script validates SOPS configuration dynamically for any repository
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-
-# Default tenants repo path
-TENANTS_REPO_PATH="${REPO_ROOT}/../zerotouch-tenants"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 # Colors for output
 RED='\033[0;31m'
@@ -19,35 +16,87 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Validation counters
-ERRORS=0
-WARNINGS=0
-
-# Parse arguments
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --tenants-repo-path)
-            TENANTS_REPO_PATH="$2"
-            shift 2
-            ;;
-        --help)
-            echo "Usage: $0 [--tenants-repo-path <path>]"
-            echo ""
-            echo "Options:"
-            echo "  --tenants-repo-path <path>  Path to zerotouch-tenants repository"
-            echo "  --help                      Show this help message"
-            exit 0
-            ;;
-        *)
-            echo -e "${RED}Unknown option: $1${NC}"
-            exit 1
-            ;;
-    esac
-done
-
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║   SOPS Configuration Validation                              ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
+
+cd "$REPO_ROOT"
+
+# Check if .sops.yaml exists in current repository
+if [[ -f "$REPO_ROOT/.sops.yaml" ]]; then
+    echo -e "${GREEN}✓ Found .sops.yaml in repository${NC}"
+    
+    # Validate existing configuration
+    if ! python3 -c "import yaml; yaml.safe_load(open('.sops.yaml'))" 2>/dev/null; then
+        echo -e "${RED}✗ Error: Invalid YAML format in .sops.yaml${NC}"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}✓ .sops.yaml format valid${NC}"
+    
+    # Test encryption with existing config
+    cat > test-secret.yaml <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: test-secret
+type: Opaque
+stringData:
+  test: value
+EOF
+    
+    if sops -e -i test-secret.yaml 2>/dev/null; then
+        echo -e "${GREEN}✓ SOPS encryption successful with repository config${NC}"
+        rm -f test-secret.yaml
+    else
+        echo -e "${RED}✗ Error: SOPS encryption failed${NC}"
+        rm -f test-secret.yaml
+        exit 1
+    fi
+    
+else
+    echo -e "${YELLOW}⚠ No .sops.yaml found in repository${NC}"
+    echo -e "${BLUE}Retrieving platform Age key...${NC}"
+    AGE_PRIVATE_KEY=$(kubectl get secret sops-age -n argocd -o jsonpath='{.data.keys\.txt}' | base64 -d | head -1)
+    AGE_PUBLIC_KEY=$(echo "$AGE_PRIVATE_KEY" | age-keygen -y)
+
+    if [[ -z "$AGE_PUBLIC_KEY" ]]; then
+        echo -e "${RED}✗ Error: Could not retrieve platform Age key${NC}"
+        exit 1
+    fi
+    
+    # Create temporary test configuration
+    cat > .sops.yaml.test <<EOF
+creation_rules:
+  - path_regex: .*\.yaml$
+    age: $AGE_PUBLIC_KEY
+    encrypted_regex: '^(data|stringData)$'
+EOF
+    
+    # Test with temporary config
+    cat > test-secret.yaml <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: test-secret
+type: Opaque
+stringData:
+  test: value
+EOF
+    
+    if SOPS_FILE=.sops.yaml.test sops -e -i test-secret.yaml 2>/dev/null; then
+        echo -e "${GREEN}✓ SOPS encryption successful with platform keys${NC}"
+    else
+        echo -e "${RED}✗ Error: SOPS encryption failed${NC}"
+        rm -f .sops.yaml.test test-secret.yaml
+        exit 1
+    fi
+    
+    # Cleanup
+    rm -f .sops.yaml.test test-secret.yaml
+fi
+
+echo -e "${GREEN}✓ SOPS configuration validation complete${NC}"
 echo ""
 
 SOPS_CONFIG="$TENANTS_REPO_PATH/.sops.yaml"

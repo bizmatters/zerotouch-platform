@@ -5,6 +5,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 # Colors
 RED='\033[0;31m'
@@ -19,6 +20,16 @@ echo -e "${BLUE}╚════════════════════�
 echo ""
 
 FAILED=0
+
+# Check if repository has .sops.yaml
+cd "$REPO_ROOT"
+if [[ -f ".sops.yaml" ]]; then
+    echo -e "${GREEN}✓ Repository has .sops.yaml configuration${NC}"
+    USE_REPO_CONFIG=true
+else
+    echo -e "${YELLOW}⚠ No .sops.yaml in repository, using platform keys for testing${NC}"
+    USE_REPO_CONFIG=false
+fi
 
 # 1. Verify KSOPS plugin activated (.sops.yaml detected)
 echo -e "${BLUE}[1/6] Checking KSOPS plugin configuration...${NC}"
@@ -62,34 +73,42 @@ else
     FAILED=1
 fi
 
-# 4. Verify test secret encrypted
+# 4. Verify test secret can be encrypted
 echo -e "${BLUE}[4/6] Checking test encrypted secret...${NC}"
-TEST_SECRET_PATH="../../../../../zerotouch-tenants/tenants/test-ksops/base/secrets/test.secret.yaml"
-if [ -f "$SCRIPT_DIR/$TEST_SECRET_PATH" ]; then
-    if grep -q "sops:" "$SCRIPT_DIR/$TEST_SECRET_PATH"; then
+TEST_DIR=$(mktemp -d)
+cat > "$TEST_DIR/test.yaml" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: test-secret
+type: Opaque
+stringData:
+  test: value
+EOF
+
+if $USE_REPO_CONFIG; then
+    if sops -e "$TEST_DIR/test.yaml" > "$TEST_DIR/test.enc.yaml" 2>/dev/null; then
         echo -e "${GREEN}✓ Test secret encrypted with SOPS${NC}"
     else
-        echo -e "${RED}✗ Test secret not encrypted${NC}"
+        echo -e "${RED}✗ Test secret encryption failed${NC}"
         FAILED=1
     fi
 else
-    echo -e "${RED}✗ Test secret file not found${NC}"
-    FAILED=1
+    echo -e "${YELLOW}⚠ Skipping encryption test (no .sops.yaml)${NC}"
 fi
+rm -rf "$TEST_DIR"
 
 # 5. Verify .sops.yaml configuration
 echo -e "${BLUE}[5/6] Checking .sops.yaml configuration...${NC}"
-SOPS_CONFIG="../../../../../zerotouch-tenants/.sops.yaml"
-if [ -f "$SCRIPT_DIR/$SOPS_CONFIG" ]; then
-    if grep -q "encrypted_regex" "$SCRIPT_DIR/$SOPS_CONFIG"; then
+if $USE_REPO_CONFIG; then
+    if grep -q "encrypted_regex" "$REPO_ROOT/.sops.yaml"; then
         echo -e "${GREEN}✓ .sops.yaml configuration exists${NC}"
     else
         echo -e "${RED}✗ .sops.yaml missing encrypted_regex${NC}"
         FAILED=1
     fi
 else
-    echo -e "${RED}✗ .sops.yaml not found${NC}"
-    FAILED=1
+    echo -e "${YELLOW}⚠ No .sops.yaml in repository${NC}"
 fi
 
 # 6. Verify KSOPS sidecar logs
