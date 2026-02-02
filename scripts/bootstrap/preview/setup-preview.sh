@@ -84,8 +84,8 @@ echo ""
 #     exit 1
 # fi
 
-echo -e "${GREEN}✓ AWS credentials configured${NC}"
-echo ""
+# echo -e "${GREEN}✓ AWS credentials configured${NC}"
+# echo ""
 
 # 5. Calculate version hash for preview image
 echo -e "${YELLOW}Calculating preview image version...${NC}"
