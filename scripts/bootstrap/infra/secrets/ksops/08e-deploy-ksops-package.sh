@@ -28,12 +28,12 @@ echo -e "${GREEN}✓ ArgoCD repo-server found${NC}"
 
 # Apply KSOPS ConfigMap
 echo -e "${BLUE}==> Applying KSOPS ConfigMap...${NC}"
-kubectl apply -f "$REPO_ROOT/platform/packages/ksops/cmp-plugin.yaml"
+kubectl apply -f "$REPO_ROOT/platform/secrets/ksops/cmp-plugin.yaml"
 echo -e "${GREEN}✓ KSOPS ConfigMap applied${NC}"
 
 # Apply KSOPS sidecar patch
 echo -e "${BLUE}==> Applying KSOPS sidecar patch...${NC}"
-kubectl patch deployment argocd-repo-server -n argocd --patch-file "$REPO_ROOT/platform/packages/ksops/patches/repo-server-ksops-sidecar.yaml"
+kubectl patch deployment argocd-repo-server -n argocd --patch-file "$REPO_ROOT/platform/secrets/ksops/patches/repo-server-ksops-sidecar.yaml"
 echo -e "${GREEN}✓ KSOPS sidecar patch applied${NC}"
 
 # Wait for rollout
