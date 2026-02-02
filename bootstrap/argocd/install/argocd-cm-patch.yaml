@@ -4,6 +4,9 @@ metadata:
   name: argocd-cm
   namespace: argocd
 data:
+  # Enable Kustomize plugins for KSOPS
+  kustomize.buildOptions: "--enable-alpha-plugins --enable-exec"
+  
   # Exclude Crossplane-generated composite resources from ArgoCD tracking
   # These X* resources are dynamically created by Crossplane when Claims are applied
   # ArgoCD should only manage the Claims, not the Composites

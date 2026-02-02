@@ -39,15 +39,29 @@ cleanup() {
 # NO trap - cleanup called explicitly at end
 
 # ============================================================================
-# 1. Verify KSOPS plugin loaded in ArgoCD logs
+# 1. Verify KSOPS init container completed and tools available
 # ============================================================================
-echo "1. Verifying KSOPS plugin loaded in ArgoCD logs..."
+echo "1. Verifying KSOPS init container and tools..."
 
 POD_NAME=$(kubectl get pod -n argocd -l app.kubernetes.io/name=argocd-repo-server -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
 if [[ -z "$POD_NAME" ]]; then
     log_check "FAIL" "Could not find argocd-repo-server pod"
     echo ""
     echo "Diagnostic: ArgoCD repo-server pod not found"
+else
+    # Check init container completed
+    INIT_STATUS=$(kubectl get pod -n argocd "$POD_NAME" -o jsonpath='{.status.initContainerStatuses[?(@.name=="install-ksops")].state.terminated.reason}' 2>/dev/null || echo "")
+    if [[ "$INIT_STATUS" == "Completed" ]]; then
+        # Check KSOPS binary exists
+        if kubectl exec -n argocd "$POD_NAME" -c argocd-repo-server -- test -f /usr/local/bin/ksops 2>/dev/null; then
+            log_check "PASS" "KSOPS init container completed and tools available"
+        else
+            log_check "FAIL" "Init container completed but KSOPS tools not found"
+        fi
+    else
+        log_check "FAIL" "KSOPS init container not completed (status: $INIT_STATUS)"
+    fi
+fi
     exit 1
 fi
 

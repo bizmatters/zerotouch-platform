@@ -40,20 +40,26 @@ else
     FAILED=1
 fi
 
-# 2. Verify KSOPS sidecar running
-echo -e "${BLUE}[2/6] Checking KSOPS sidecar status...${NC}"
+# 2. Verify KSOPS init container completed and tools available
+echo -e "${BLUE}[2/6] Checking KSOPS init container status...${NC}"
 POD_NAME=$(kubectl get pods -n argocd -l app.kubernetes.io/name=argocd-repo-server -o jsonpath='{.items[0].metadata.name}')
 if [ -z "$POD_NAME" ]; then
     echo -e "${RED}✗ argocd-repo-server pod not found${NC}"
     FAILED=1
 else
-    # Check if ksops container exists and is running
-    CONTAINER_STATUS=$(kubectl get pod "$POD_NAME" -n argocd -o jsonpath='{.status.containerStatuses[?(@.name=="ksops")].state}' 2>/dev/null || echo "")
-    if echo "$CONTAINER_STATUS" | grep -q "running"; then
-        echo -e "${GREEN}✓ KSOPS sidecar container running${NC}"
+    # Check if init container completed
+    INIT_STATUS=$(kubectl get pod "$POD_NAME" -n argocd -o jsonpath='{.status.initContainerStatuses[?(@.name=="install-ksops")].state.terminated.reason}' 2>/dev/null || echo "")
+    if [[ "$INIT_STATUS" == "Completed" ]]; then
+        # Check KSOPS binary exists
+        if kubectl exec -n argocd "$POD_NAME" -c argocd-repo-server -- test -f /usr/local/bin/ksops 2>/dev/null; then
+            echo -e "${GREEN}✓ KSOPS init container completed and tools available${NC}"
+        else
+            echo -e "${RED}✗ KSOPS tools not found${NC}"
+            FAILED=1
+        fi
     else
-        echo -e "${RED}✗ KSOPS sidecar not running${NC}"
-        echo -e "${YELLOW}  Status: $CONTAINER_STATUS${NC}"
+        echo -e "${RED}✗ KSOPS init container not completed${NC}"
+        echo -e "${YELLOW}  Status: $INIT_STATUS${NC}"
         FAILED=1
     fi
 fi
