@@ -46,19 +46,26 @@ jobs:
           
           echo "Preview environment setup complete"
 
+      - name: Install ArgoCD
+        run: |
+          # Use existing ArgoCD installation script
+          ./scripts/bootstrap/install/09-install-argocd.sh preview
+          
+          echo "ArgoCD installation complete"
+
       - name: Setup KSOPS Integration
         run: |
-          # Use orchestrated KSOPS setup script
+          # Use orchestrated KSOPS setup script (requires ArgoCD to be running)
           ./scripts/bootstrap/install/08-setup-ksops.sh
           
           echo "KSOPS setup complete"
 
-      - name: Install ArgoCD
+      - name: Deploy KSOPS Package to ArgoCD
         run: |
-          # Use existing ArgoCD installation script
-          ./scripts/bootstrap/install/09-install-argocd.sh
+          # Use dedicated script for KSOPS package deployment
+          ./scripts/bootstrap/infra/secrets/ksops/08e-deploy-ksops-package.sh
           
-          echo "ArgoCD installation complete"
+          echo "KSOPS package deployed to ArgoCD"
 
       - name: Run Master KSOPS Validation
         run: |
