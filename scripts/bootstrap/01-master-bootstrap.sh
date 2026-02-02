@@ -249,10 +249,10 @@ fi
 
 # # Step 8: Inject SSM Parameters (BEFORE ArgoCD)
 # step "Injecting SSM parameters..."
-# "$SCRIPT_DIR/install/08-inject-ssm-parameters.sh"
+# "$SCRIPT_DIR/infra/secrets/08-inject-ssm-parameters.sh"
 
 # step "Injecting KSOPS secrets..."
-# "$SCRIPT_DIR/install/08-inject-sops-secrets.sh"
+# "$SCRIPT_DIR/infra/secrets/08-inject-sops-secrets.sh"
 
 
 # if [ "$MODE" = "production" ]; then
@@ -262,9 +262,9 @@ fi
 #   aws ssm get-parameters-by-path --path /zerotouch/prod --region ap-south-1"
 # fi
 
-# Step 8a: Install KSOPS (SOPS + Age + Key Generation)
-step "Installing KSOPS (SOPS + Age + Key Generation)..."
-"$SCRIPT_DIR/install/08a-install-ksops.sh"
+# Step 8: Setup KSOPS (SOPS + Age + Key Generation)
+step "Setting up KSOPS (SOPS + Age + Key Generation)..."
+"$SCRIPT_DIR/install/08-setup-ksops.sh"
 
 # Step 9: Apply patches for preview mode BEFORE ArgoCD installation
 if [ "$MODE" = "preview" ]; then

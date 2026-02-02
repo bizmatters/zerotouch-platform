@@ -1,6 +1,6 @@
 #!/bin/bash
 # Bootstrap script to inject secrets into AWS Systems Manager Parameter Store
-# Usage: ./08-inject-ssm-parameters.sh [--region <region>] [--dry-run]
+# Usage: ./infra/secrets/eso/08-inject-ssm-parameters.sh [--region <region>] [--dry-run]
 #
 # This script reads key-value pairs from .env.ssm file and creates them as
 # AWS SSM parameters. It's a generic script that works for any service.
@@ -10,7 +10,7 @@
 #   /zerotouch/prod/service/secret=SecureValue
 #
 # Parameters are created as SecureString by default for security.
-# cd zerotouch-platform && set -a && source .env && set +a && /scripts/bootstrap/install/08-inject-ssm-parameters.sh
+# cd zerotouch-platform && set -a && source .env && set +a && /scripts/bootstrap/infra/secrets/eso/08-inject-ssm-parameters.sh
 
 set -e
 
