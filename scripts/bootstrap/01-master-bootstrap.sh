@@ -303,8 +303,12 @@ else
 fi
 
 # Step 13: Verify ESO
-step "Verifying ESO..."
-"$SCRIPT_DIR/validation/11-verify-eso.sh"
+# step "Verifying ESO..."
+# "$SCRIPT_DIR/validation/11-verify-eso.sh"
+
+# Step 13: Verify KSOPS
+step "Verifying KSOPS..."
+"$SCRIPT_DIR/validation/11-verify-ksops.sh"
 
 # Step 13.5: Restore cached TLS certificates
 step "Restoring cached TLS certificates..."
