@@ -55,15 +55,15 @@ jobs:
 
       - name: Setup KSOPS Tools and Keys
         run: |
-          # Install tools and generate keys only
+          # Install tools only
           ./scripts/bootstrap/infra/secrets/ksops/08a-install-ksops.sh
-          source ./scripts/bootstrap/infra/secrets/ksops/08b-generate-age-keys.sh
           
-          echo "KSOPS tools and keys ready"
+          echo "KSOPS tools ready"
 
       - name: Inject Age Keys and Deploy KSOPS
         run: |
-          # Now inject keys into existing ArgoCD namespace and deploy package
+          # Generate keys and inject in same step to preserve environment variables
+          source ./scripts/bootstrap/infra/secrets/ksops/08b-generate-age-keys.sh
           ./scripts/bootstrap/infra/secrets/ksops/08c-inject-age-key.sh
           ./scripts/bootstrap/infra/secrets/ksops/08e-deploy-ksops-package.sh
           
