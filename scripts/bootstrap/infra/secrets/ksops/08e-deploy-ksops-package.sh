@@ -35,6 +35,11 @@ echo -e "${BLUE}==> Applying KSOPS init container patch...${NC}"
 kubectl patch deployment argocd-repo-server -n argocd --patch-file "$REPO_ROOT/platform/secrets/ksops/patches/repo-server-ksops-init.yaml"
 echo -e "${GREEN}✓ KSOPS init container patch applied${NC}"
 
+# Apply KSOPS package (includes Age Key Guardian CronJob)
+echo -e "${BLUE}==> Applying KSOPS package resources...${NC}"
+kubectl apply -k "$REPO_ROOT/platform/secrets/ksops/"
+echo -e "${GREEN}✓ KSOPS package resources applied${NC}"
+
 # Wait for rollout
 echo -e "${BLUE}==> Waiting for repo-server rollout...${NC}"
 kubectl rollout status deployment/argocd-repo-server -n argocd --timeout=300s
