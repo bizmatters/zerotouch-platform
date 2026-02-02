@@ -290,6 +290,10 @@ fi
 step "Installing ArgoCD..."
 "$SCRIPT_DIR/install/09-install-argocd.sh" "$MODE" "$ENV"
 
+# Step 10.5: Deploy KSOPS Package to ArgoCD
+step "Deploying KSOPS Package to ArgoCD..."
+"$SCRIPT_DIR/infra/secrets/ksops/08e-deploy-ksops-package.sh"
+
 # Step 11: Wait for platform-bootstrap
 step "Waiting for platform-bootstrap..."
 "$SCRIPT_DIR/wait/10-wait-platform-bootstrap.sh"
