@@ -2,12 +2,12 @@
 # Bootstrap script to inject platform secrets using SOPS
 # Usage: ./08d-inject-sops-secrets.sh
 #
-# This script dynamically discovers all available secrets and creates SOPS-encrypted secrets
+# This script dynamically discovers all environment-prefixed secrets and creates SOPS-encrypted K8s secrets
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../../../.." && pwd)"
 
 # Colors
 RED='\033[0;31m'
@@ -21,86 +21,127 @@ echo -e "${BLUE}║   Platform Secrets Injection - SOPS                         
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-# Debug: Show all environment variables
-echo -e "${BLUE}=== Debug: All Environment Variables ===${NC}"
-env | sort
+# Detect environment (PR, DEV, STAGING, PRD)
+ENVIRONMENT="${ENVIRONMENT:-PR}"
+ENV_PREFIX="${ENVIRONMENT}_"
+
+echo -e "${BLUE}Environment: ${ENVIRONMENT}${NC}"
+echo -e "${BLUE}Looking for secrets with prefix: ${ENV_PREFIX}${NC}"
 echo ""
 
-# Debug: Count total environment variables
-TOTAL_ENV_VARS=$(env | wc -l)
-echo -e "${BLUE}=== Total Environment Variables: $TOTAL_ENV_VARS ===${NC}"
-echo ""
+# Find all environment variables with the environment prefix
+PREFIXED_SECRETS=$(printenv | grep "^${ENV_PREFIX}" | cut -d= -f1 | sort)
 
-# Detect if running in CI environment
-if [ -n "${GITHUB_ACTIONS:-}" ]; then
-    echo -e "${GREEN}✓ Running in GitHub Actions CI environment${NC}"
-    
-    # Filter out system environment variables and get potential secrets
-    SYSTEM_VARS="^(PATH|HOME|USER|SHELL|PWD|OLDPWD|TERM|LANG|LC_|GITHUB_|RUNNER_|CI|DEBIAN_FRONTEND|_).*"
-    
-    echo -e "${BLUE}=== Filtering GitHub Secrets ===${NC}"
-    AVAILABLE_SECRETS=$(env | grep -v -E "$SYSTEM_VARS" | cut -d'=' -f1 | sort)
-    
-    if [ -z "$AVAILABLE_SECRETS" ]; then
-        echo -e "${YELLOW}⚠️  No GitHub Secrets found in environment${NC}"
-        echo -e "${YELLOW}⚠️  Skipping secrets injection${NC}"
-        exit 0
-    fi
-    
-    echo -e "${GREEN}✓ Found GitHub Secrets:${NC}"
-    echo "$AVAILABLE_SECRETS" | while read secret_name; do
-        echo -e "  - $secret_name"
-    done
-    echo ""
-    
-    SECRET_COUNT=$(echo "$AVAILABLE_SECRETS" | wc -l)
-    echo -e "${GREEN}✓ Total secrets to process: $SECRET_COUNT${NC}"
-    echo ""
-    
-else
-    echo -e "${YELLOW}Running in local environment${NC}"
-    
-    # Check if .env.sops exists for local development
-    ENV_FILE="$REPO_ROOT/.env.sops"
-    if [ ! -f "$ENV_FILE" ]; then
-        echo -e "${RED}✗ Error: $ENV_FILE not found${NC}"
-        echo -e "${YELLOW}Create .env.sops with all platform secrets${NC}"
-        exit 1
-    fi
-    
-    echo -e "${GREEN}✓ Found $ENV_FILE${NC}"
-    
-    # Load environment variables from .env.sops
-    set -a
-    source "$ENV_FILE"
-    set +a
-    
-    # Get secrets from loaded environment
-    AVAILABLE_SECRETS=$(grep -v '^#' "$ENV_FILE" | grep '=' | cut -d'=' -f1 | sort)
-    echo -e "${GREEN}✓ Loaded secrets from .env.sops:${NC}"
-    echo "$AVAILABLE_SECRETS" | while read secret_name; do
-        echo -e "  - $secret_name"
-    done
-    echo ""
+if [ -z "$PREFIXED_SECRETS" ]; then
+    echo -e "${YELLOW}⚠️  No secrets found with prefix ${ENV_PREFIX}${NC}"
+    echo -e "${YELLOW}⚠️  Skipping secrets injection${NC}"
+    exit 0
 fi
 
-# Determine tenants repo path
-TENANTS_REPO="${TENANTS_REPO_PATH:-$REPO_ROOT/../zerotouch-tenants}"
-if [ ! -d "$TENANTS_REPO" ]; then
-    echo -e "${RED}✗ Error: Tenants repository not found at $TENANTS_REPO${NC}"
+echo -e "${GREEN}✓ Found secrets with ${ENV_PREFIX} prefix:${NC}"
+echo "$PREFIXED_SECRETS" | while read secret_name; do
+    echo -e "  - $secret_name"
+done
+echo ""
+
+SECRET_COUNT=$(echo "$PREFIXED_SECRETS" | wc -l)
+echo -e "${GREEN}✓ Total secrets to process: $SECRET_COUNT${NC}"
+echo ""
+
+# Check prerequisites
+if ! command -v sops &> /dev/null; then
+    echo -e "${RED}✗ Error: sops not found${NC}"
     exit 1
 fi
 
-export TENANTS_REPO_PATH="$TENANTS_REPO"
+if ! command -v kubectl &> /dev/null; then
+    echo -e "${RED}✗ Error: kubectl not found${NC}"
+    exit 1
+fi
 
-# For now, skip service-specific processing and just log what we found
+# Verify Age key exists
+if ! kubectl get secret sops-age -n argocd &>/dev/null; then
+    echo -e "${RED}✗ Error: sops-age secret not found in argocd namespace${NC}"
+    echo -e "${YELLOW}Run 08c-inject-age-key.sh first${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}✓ Prerequisites satisfied${NC}"
+echo ""
+
+# Create temporary directory for SOPS files
+TEMP_DIR=$(mktemp -d)
+trap "rm -rf $TEMP_DIR" EXIT
+
+# Process each secret
+CREATED_COUNT=0
+FAILED_COUNT=0
+
+echo -e "${BLUE}==> Processing secrets...${NC}"
+echo ""
+
+for prefixed_var in $PREFIXED_SECRETS; do
+    # Strip environment prefix
+    secret_name="${prefixed_var#${ENV_PREFIX}}"
+    secret_value="${!prefixed_var}"
+    
+    # Convert to lowercase and replace underscores with hyphens for K8s naming
+    k8s_secret_name=$(echo "$secret_name" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+    
+    # Determine namespace (default to 'default', can be customized based on secret name)
+    namespace="default"
+    
+    echo -e "${BLUE}Processing: ${prefixed_var} → ${k8s_secret_name} (namespace: ${namespace})${NC}"
+    
+    # Create SOPS-encrypted secret file
+    cat > "$TEMP_DIR/${k8s_secret_name}.yaml" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${k8s_secret_name}
+  namespace: ${namespace}
+type: Opaque
+stringData:
+  value: ${secret_value}
+EOF
+    
+    # Encrypt with SOPS
+    if sops -e -i "$TEMP_DIR/${k8s_secret_name}.yaml" 2>/dev/null; then
+        # Apply to cluster
+        if kubectl apply -f "$TEMP_DIR/${k8s_secret_name}.yaml" &>/dev/null; then
+            # Verify secret exists
+            if kubectl get secret "${k8s_secret_name}" -n "${namespace}" &>/dev/null; then
+                echo -e "${GREEN}✓ Created: ${k8s_secret_name}${NC}"
+                ((CREATED_COUNT++))
+            else
+                echo -e "${RED}✗ Failed to verify: ${k8s_secret_name}${NC}"
+                ((FAILED_COUNT++))
+            fi
+        else
+            echo -e "${RED}✗ Failed to apply: ${k8s_secret_name}${NC}"
+            ((FAILED_COUNT++))
+        fi
+    else
+        echo -e "${RED}✗ Failed to encrypt: ${k8s_secret_name}${NC}"
+        ((FAILED_COUNT++))
+    fi
+    echo ""
+done
+
+# Summary
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║   Summary                                                    ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
-echo -e "${GREEN}✓ Environment detection: $([ -n "${GITHUB_ACTIONS:-}" ] && echo "CI" || echo "Local")${NC}"
-echo -e "${GREEN}✓ Total secrets discovered: $(echo "$AVAILABLE_SECRETS" | wc -l)${NC}"
-echo -e "${GREEN}✓ Secrets injection setup complete${NC}"
+echo -e "${GREEN}✓ Environment: ${ENVIRONMENT}${NC}"
+echo -e "${GREEN}✓ Secrets processed: ${SECRET_COUNT}${NC}"
+echo -e "${GREEN}✓ Successfully created: ${CREATED_COUNT}${NC}"
+if [ $FAILED_COUNT -gt 0 ]; then
+    echo -e "${RED}✗ Failed: ${FAILED_COUNT}${NC}"
+    exit 1
+fi
+echo ""
+echo -e "${GREEN}✅ All secrets injected successfully${NC}"
 echo ""
 
 exit 0

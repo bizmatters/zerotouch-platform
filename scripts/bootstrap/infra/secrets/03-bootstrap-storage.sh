@@ -16,9 +16,12 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Hetzner Object Storage endpoint
-HETZNER_ENDPOINT="https://pr-secrets.fsn1.your-objectstorage.com"
-HETZNER_REGION="fsn1"
+
+# eg. https://pr-secrets.fsn1.your-objectstorage.com
+# eg fsn1
+# Hetzner Object Storage endpoint (from env or default)
+HETZNER_ENDPOINT="${HETZNER_S3_ENDPOINT}"
+HETZNER_REGION="${HETZNER_S3_REGION}"
 
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║   Hetzner Object Storage - Bootstrap Provisioning           ║${NC}"

@@ -52,6 +52,13 @@ if ! run_validation "KSOPS Package Validation" "$SECRETS_DIR/validate-ksops-pack
 fi
 echo ""
 
+# Step 1.5: Validate Secret Injection
+TOTAL_VALIDATIONS=$((TOTAL_VALIDATIONS + 1))
+if ! run_validation "Secret Injection Validation" "$SECRETS_DIR/validate-secret-injection.sh"; then
+    FAILED_VALIDATIONS=$((FAILED_VALIDATIONS + 1))
+fi
+echo ""
+
 # Step 2: Validate Age Keys and Storage
 TOTAL_VALIDATIONS=$((TOTAL_VALIDATIONS + 1))
 if ! run_validation "Age Keys and Storage Validation" "$SECRETS_DIR/validate-age-keys-and-storage.sh"; then

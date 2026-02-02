@@ -61,6 +61,12 @@ jobs:
           echo "KSOPS tools ready"
 
       - name: Inject Age Keys and Deploy KSOPS
+        env:
+          ENVIRONMENT: PR
+          PR_HETZNER_S3_ACCESS_KEY: ${{ secrets.PR_HETZNER_S3_ACCESS_KEY }}
+          PR_HETZNER_S3_SECRET_KEY: ${{ secrets.PR_HETZNER_S3_SECRET_KEY }}
+          PR_HETZNER_S3_ENDPOINT: ${{ secrets.PR_HETZNER_S3_ENDPOINT }}
+          PR_HETZNER_S3_REGION: ${{ secrets.PR_HETZNER_S3_REGION }}
         run: |
           # Generate keys and inject in same shell session to preserve environment variables
           echo "==> Step 1: Generating Age keys..."
@@ -72,7 +78,10 @@ jobs:
           echo "==> Step 3: Creating Age key backup..."
           ./scripts/bootstrap/infra/secrets/ksops/08d-create-age-backup.sh
           
-          echo "==> Step 4: Deploying KSOPS package..."
+          echo "==> Step 4: Injecting all platform secrets..."
+          ./scripts/bootstrap/infra/secrets/ksops/08d-inject-sops-secrets.sh
+          
+          echo "==> Step 5: Deploying KSOPS package..."
           ./scripts/bootstrap/infra/secrets/ksops/08e-deploy-ksops-package.sh
           
           echo ""
