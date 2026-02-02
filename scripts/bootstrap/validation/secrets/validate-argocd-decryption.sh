@@ -31,17 +31,8 @@ else
     USE_REPO_CONFIG=false
 fi
 
-# 1. Verify KSOPS plugin activated (.sops.yaml detected)
-echo -e "${BLUE}[1/6] Checking KSOPS plugin configuration...${NC}"
-if kubectl get configmap cmp-plugin -n argocd -o yaml | grep -q "test -f .sops.yaml"; then
-    echo -e "${GREEN}✓ KSOPS plugin configured to detect .sops.yaml${NC}"
-else
-    echo -e "${RED}✗ KSOPS plugin discovery not configured${NC}"
-    FAILED=1
-fi
-
-# 2. Verify KSOPS init container completed and tools available
-echo -e "${BLUE}[2/6] Checking KSOPS init container status...${NC}"
+# 1. Verify KSOPS init container completed and tools available
+echo -e "${BLUE}[1/5] Checking KSOPS init container status...${NC}"
 POD_NAME=$(kubectl get pods -n argocd -l app.kubernetes.io/name=argocd-repo-server -o jsonpath='{.items[0].metadata.name}')
 if [ -z "$POD_NAME" ]; then
     echo -e "${RED}✗ argocd-repo-server pod not found${NC}"
@@ -64,8 +55,8 @@ else
     fi
 fi
 
-# 3. Verify Age key secret exists
-echo -e "${BLUE}[3/6] Checking Age key secret...${NC}"
+# 2. Verify Age key secret exists
+echo -e "${BLUE}[2/5] Checking Age key secret...${NC}"
 if kubectl get secret sops-age -n argocd &>/dev/null; then
     AGE_KEY=$(kubectl get secret sops-age -n argocd -o jsonpath='{.data.keys\.txt}' | base64 -d | head -c 20)
     if [[ "$AGE_KEY" == "AGE-SECRET-KEY-1"* ]]; then
@@ -79,8 +70,8 @@ else
     FAILED=1
 fi
 
-# 4. Verify test secret can be encrypted
-echo -e "${BLUE}[4/6] Checking test encrypted secret...${NC}"
+# 3. Verify test secret can be encrypted
+echo -e "${BLUE}[3/5] Checking test encrypted secret...${NC}"
 TEST_DIR=$(mktemp -d)
 cat > "$TEST_DIR/test.yaml" <<EOF
 apiVersion: v1
@@ -104,8 +95,8 @@ else
 fi
 rm -rf "$TEST_DIR"
 
-# 5. Verify .sops.yaml configuration
-echo -e "${BLUE}[5/6] Checking .sops.yaml configuration...${NC}"
+# 4. Verify .sops.yaml configuration
+echo -e "${BLUE}[4/5] Checking .sops.yaml configuration...${NC}"
 if $USE_REPO_CONFIG; then
     if grep -q "encrypted_regex" "$REPO_ROOT/.sops.yaml"; then
         echo -e "${GREEN}✓ .sops.yaml configuration exists${NC}"
@@ -117,13 +108,18 @@ else
     echo -e "${YELLOW}⚠ No .sops.yaml in repository${NC}"
 fi
 
-# 6. Verify KSOPS sidecar logs
-echo -e "${BLUE}[6/6] Checking KSOPS sidecar logs...${NC}"
-SIDECAR_LOGS=$(kubectl logs -n argocd -l app.kubernetes.io/name=argocd-repo-server -c ksops --tail=100 2>/dev/null || echo "")
-if echo "$SIDECAR_LOGS" | grep -q "serving on"; then
-    echo -e "${GREEN}✓ KSOPS CMP server running${NC}"
+# 5. Verify KSOPS tools available in repo-server
+echo -e "${BLUE}[5/5] Checking KSOPS tools in repo-server...${NC}"
+if [ -n "$POD_NAME" ]; then
+    if kubectl exec -n argocd "$POD_NAME" -c argocd-repo-server -- which ksops &>/dev/null; then
+        echo -e "${GREEN}✓ KSOPS binary available in repo-server${NC}"
+    else
+        echo -e "${RED}✗ KSOPS binary not in PATH${NC}"
+        FAILED=1
+    fi
 else
-    echo -e "${YELLOW}⚠ KSOPS CMP server logs not showing expected message${NC}"
+    echo -e "${RED}✗ Cannot check KSOPS tools (pod not found)${NC}"
+    FAILED=1
 fi
 
 echo ""

@@ -45,16 +45,8 @@ else
     log_check "FAIL" "argocd-repo-server pod not found"
 fi
 
-# 2. Verify ConfigMap cmp-plugin exists in argocd namespace
-echo "2. Checking ConfigMap cmp-plugin..."
-if kubectl get configmap cmp-plugin -n argocd &>/dev/null; then
-    log_check "PASS" "ConfigMap cmp-plugin exists in argocd namespace"
-else
-    log_check "FAIL" "ConfigMap cmp-plugin does not exist in argocd namespace"
-fi
-
-# 3. Verify kustomize can use KSOPS plugin
-echo "3. Checking KSOPS plugin availability..."
+# 2. Verify kustomize can use KSOPS plugin
+echo "2. Checking KSOPS plugin availability..."
 if [[ -n "$POD_NAME" ]]; then
     if kubectl exec -n argocd "$POD_NAME" -c argocd-repo-server -- test -f /usr/local/bin/kustomize 2>/dev/null; then
         log_check "PASS" "Kustomize binary available for KSOPS plugin"
@@ -65,8 +57,8 @@ else
     log_check "FAIL" "Could not find argocd-repo-server pod"
 fi
 
-# 4. Verify environment variables set correctly
-echo "4. Checking environment variables..."
+# 3. Verify environment variables set correctly
+echo "3. Checking environment variables..."
 if [[ -n "$POD_NAME" ]]; then
     SOPS_KEY=$(kubectl exec -n argocd "$POD_NAME" -c argocd-repo-server -- env 2>/dev/null | grep SOPS_AGE_KEY_FILE || echo "")
     XDG_CONFIG=$(kubectl exec -n argocd "$POD_NAME" -c argocd-repo-server -- env 2>/dev/null | grep XDG_CONFIG_HOME || echo "")
@@ -79,8 +71,8 @@ else
     log_check "FAIL" "Could not verify environment variables (pod not found)"
 fi
 
-# 5. Verify Age key mount exists
-echo "5. Checking Age key mount..."
+# 4. Verify Age key mount exists
+echo "4. Checking Age key mount..."
 if [[ -n "$POD_NAME" ]]; then
     if kubectl exec -n argocd "$POD_NAME" -c argocd-repo-server -- test -f /.config/sops/age/keys.txt 2>/dev/null; then
         log_check "PASS" "Age key file mounted correctly"
@@ -91,17 +83,14 @@ else
     log_check "FAIL" "Could not verify Age key mount (pod not found)"
 fi
 
-# 6. Verify both KSOPS and ESO packages deployed without conflicts
-echo "6. Checking package coexistence..."
-KSOPS_CM=$(kubectl get configmap cmp-plugin -n argocd &>/dev/null && echo "exists" || echo "missing")
-ESO_CSS=$(kubectl get clustersecretstore aws-parameter-store &>/dev/null && echo "exists" || echo "missing")
+# 5. Verify KSOPS package deployed (init container pattern)
+echo "5. Checking package deployment..."
+KSOPS_INIT=$(kubectl get pod -n argocd -l app.kubernetes.io/name=argocd-repo-server -o jsonpath='{.items[0].spec.initContainers[?(@.name=="install-ksops")].name}' 2>/dev/null || echo "")
 
-if [[ "$KSOPS_CM" == "exists" ]] && [[ "$ESO_CSS" == "exists" ]]; then
-    log_check "PASS" "Both KSOPS and ESO packages deployed without conflicts"
-elif [[ "$KSOPS_CM" == "exists" ]] && [[ "$ESO_CSS" == "missing" ]]; then
-    log_check "PASS" "KSOPS package deployed (ESO not required for this checkpoint)"
+if [[ "$KSOPS_INIT" == "install-ksops" ]]; then
+    log_check "PASS" "KSOPS package deployed with init container pattern"
 else
-    log_check "FAIL" "Package deployment incomplete (KSOPS: $KSOPS_CM, ESO: $ESO_CSS)"
+    log_check "FAIL" "KSOPS init container not found in deployment"
 fi
 
 echo ""
@@ -118,8 +107,8 @@ else
         echo "Pod Status:"
         kubectl get pod -n argocd "$POD_NAME" -o wide
         echo ""
-        echo "Recent KSOPS Sidecar Logs:"
-        kubectl logs -n argocd "$POD_NAME" -c ksops --tail=50 2>/dev/null || echo "Could not retrieve logs"
+        echo "Init Container Status:"
+        kubectl get pod -n argocd "$POD_NAME" -o jsonpath='{.status.initContainerStatuses[?(@.name=="install-ksops")]}' | jq '.' 2>/dev/null || echo "Could not retrieve init container status"
     fi
     exit 1
 fi
