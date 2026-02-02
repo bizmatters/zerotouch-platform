@@ -4,306 +4,82 @@ on:
   pull_request:
     paths:
       - 'platform/packages/ksops/**'
-      - 'scripts/bootstrap/infra/secrets/**'
+      - 'scripts/bootstrap/infra/secrets/ksops/**'
+      - 'scripts/bootstrap/validation/secrets/**'
+      - 'scripts/bootstrap/validation/11-verify-ksops.sh'
       - '.github/workflows/validate-ksops.yml'
   workflow_dispatch:
 
-env:
-  # All tools pre-installed in preview cache image
-
 jobs:
   validate-ksops:
-    name: Validate KSOPS Plugin
+    name: Validate KSOPS Integration
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
-      - name: Checkout zerotouch-platform
+      - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          path: zerotouch-platform
+          python-version: '3.12'
 
-      - name: Checkout zerotouch-tenants
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.repository_owner }}/zerotouch-tenants
-          path: zerotouch-tenants
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml
 
-
+      - name: Calculate Version Hash
+        id: version
+        run: |
+          VERSION_HASH=$(sha256sum platform/versions.yaml | cut -d' ' -f1 | cut -c1-8)
+          echo "hash=$VERSION_HASH" >> $GITHUB_OUTPUT
+          echo "Using preview image version: $VERSION_HASH"
 
       - name: Setup Preview Environment
+        env:
+          KIND_NODE_IMAGE: ghcr.io/${{ github.repository_owner }}/zerotouch-preview-node:${{ steps.version.outputs.hash }}
         run: |
-          cd zerotouch-platform
-          
-          # Use existing setup-preview.sh script
+          # Use existing setup-preview.sh script (includes all CLI tools)
           ./scripts/bootstrap/preview/setup-preview.sh
           
           echo "Preview environment setup complete"
 
+      - name: Setup KSOPS Integration
+        run: |
+          # Use orchestrated KSOPS setup script
+          ./scripts/bootstrap/install/08-setup-ksops.sh
+          
+          echo "KSOPS setup complete"
+
       - name: Install ArgoCD
         run: |
-          kubectl create namespace argocd
-          kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/${{ env.ARGOCD_VERSION }}/manifests/install.yaml
+          # Use existing ArgoCD installation script
+          ./scripts/bootstrap/install/09-install-argocd.sh
           
-          echo "Waiting for ArgoCD to be ready..."
-          kubectl wait --for=condition=available --timeout=300s deployment/argocd-server -n argocd
-          kubectl wait --for=condition=available --timeout=300s deployment/argocd-repo-server -n argocd
-          
-          echo "ArgoCD installed successfully"
+          echo "ArgoCD installation complete"
 
-      - name: Generate test Age keypair
-        id: age-keys
+      - name: Run Master KSOPS Validation
         run: |
-          cd zerotouch-platform
+          # Use the master validation orchestrator
+          ./scripts/bootstrap/validation/11-verify-ksops.sh
           
-          # Use existing generate-age-keys.sh script
-          ./scripts/bootstrap/infra/secrets/generate-age-keys.sh
-          
-          # Keys are exported as environment variables by the script
-          AGE_PUBLIC_KEY="${AGE_PUBLIC_KEY}"
-          AGE_PRIVATE_KEY="${AGE_PRIVATE_KEY}"
-          
-          echo "Public Key: $AGE_PUBLIC_KEY"
-          echo "Private Key: ${AGE_PRIVATE_KEY:0:20}..."
-          
-          # Save keys for later steps
-          echo "$AGE_PRIVATE_KEY" > /tmp/age-private-key.txt
-          echo "$AGE_PUBLIC_KEY" > /tmp/age-public-key.txt
-          
-          # Export for use in other steps
-          echo "age_public_key=$AGE_PUBLIC_KEY" >> $GITHUB_OUTPUT
-
-      - name: Inject Age key into cluster
-        run: |
-          cd zerotouch-platform
-          
-          # Use existing inject-age-key.sh script
-          export AGE_PRIVATE_KEY=$(cat /tmp/age-private-key.txt)
-          ./scripts/bootstrap/infra/secrets/inject-age-key.sh
-          
-          echo "Age key injected successfully"
-          
-          # Verify secret
-          kubectl get secret sops-age -n argocd -o jsonpath='{.data.keys\.txt}' | base64 -d | grep -q "AGE-SECRET-KEY-1"
-          echo "Age key verified"
-
-      - name: Create test SOPS configuration
-        run: |
-          cd zerotouch-tenants
-          
-          AGE_PUBLIC_KEY=$(cat /tmp/age-public-key.txt)
-          
-          cat > .sops.yaml <<EOF
-          creation_rules:
-            - path_regex: tenants/.*/base/secrets/.*\.yaml
-              age: $AGE_PUBLIC_KEY
-              encrypted_regex: '^(data|stringData|binaryData)$'
-            - path_regex: tenants/.*/overlays/dev/secrets/.*\.yaml
-              age: $AGE_PUBLIC_KEY
-              encrypted_regex: '^(data|stringData|binaryData)$'
-          EOF
-          
-          echo "SOPS configuration created"
-          cat .sops.yaml
-
-      - name: Create test tenant with encrypted secret
-        run: |
-          cd zerotouch-tenants
-          
-          # Create test tenant structure
-          mkdir -p tenants/test-ksops/base/secrets
-          mkdir -p tenants/test-ksops/base
-          
-          # Create plain secret
-          cat > tenants/test-ksops/base/secrets/test.secret.yaml <<EOF
-          apiVersion: v1
-          kind: Secret
-          metadata:
-            name: test-secret
-            namespace: test-ksops
-          type: Opaque
-          stringData:
-            username: testuser
-            password: testpassword123
-            api_key: test-api-key-xyz
-          EOF
-          
-          # Encrypt with SOPS
-          sops --encrypt --in-place tenants/test-ksops/base/secrets/test.secret.yaml
-          
-          echo "Encrypted secret created"
-          cat tenants/test-ksops/base/secrets/test.secret.yaml | head -20
-
-      - name: Create test kustomization
-        run: |
-          cd zerotouch-tenants
-          
-          cat > tenants/test-ksops/base/kustomization.yaml <<EOF
-          apiVersion: kustomize.config.k8s.io/v1beta1
-          kind: Kustomization
-          
-          namespace: test-ksops
-          
-          secretGenerator:
-          - name: test-secret
-            files:
-            - secrets/test.secret.yaml
-          
-          generatorOptions:
-            disableNameSuffixHash: true
-          EOF
-          
-          echo "Kustomization created"
-
-      - name: Deploy KSOPS package
-        run: |
-          cd zerotouch-platform
-          
-          # Apply KSOPS ConfigMap
-          kubectl apply -f platform/packages/ksops/cmp-plugin.yaml
-          
-          # Apply KSOPS sidecar patch
-          kubectl patch deployment argocd-repo-server -n argocd --patch-file platform/packages/ksops/patches/repo-server-ksops-sidecar.yaml
-          
-          echo "Waiting for repo-server to restart with KSOPS sidecar..."
-          kubectl rollout status deployment/argocd-repo-server -n argocd --timeout=300s
-          
-          echo "KSOPS package deployed"
-
-      - name: Verify KSOPS plugin loaded
-        run: |
-          cd zerotouch-platform
-          
-          # Use existing validation script
-          ./scripts/bootstrap/validation/secrets/validate-ksops-package.sh
-          
-          echo "KSOPS plugin verification complete"
-
-      - name: Create test namespace
-        run: |
-          kubectl create namespace test-ksops
-
-      - name: Create ArgoCD Application for test tenant
-        run: |
-          cat <<EOF | kubectl apply -f -
-          apiVersion: argoproj.io/v1alpha1
-          kind: Application
-          metadata:
-            name: test-ksops
-            namespace: argocd
-          spec:
-            project: default
-            source:
-              repoURL: file:///tmp/zerotouch-tenants
-              targetRevision: HEAD
-              path: tenants/test-ksops/base
-            destination:
-              server: https://kubernetes.default.svc
-              namespace: test-ksops
-            syncPolicy:
-              automated:
-                prune: true
-                selfHeal: true
-          EOF
-          
-          echo "ArgoCD Application created"
-
-      - name: Test ArgoCD secret decryption
-        run: |
-          echo "Triggering ArgoCD sync..."
-          
-          # Install ArgoCD CLI
-          curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/download/${{ env.ARGOCD_VERSION }}/argocd-linux-amd64
-          chmod +x argocd
-          sudo mv argocd /usr/local/bin/
-          
-          # Port forward ArgoCD server
-          kubectl port-forward svc/argocd-server -n argocd 8080:443 &
-          sleep 5
-          
-          # Get admin password
-          ARGOCD_PASSWORD=$(kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 -d)
-          
-          # Login
-          argocd login localhost:8080 --username admin --password "$ARGOCD_PASSWORD" --insecure
-          
-          # Sync application
-          argocd app sync test-ksops --timeout 180
-          
-          # Wait for sync to complete
-          argocd app wait test-ksops --timeout 180
-          
-          echo "ArgoCD sync completed"
-
-      - name: Verify secret decrypted and applied
-        run: |
-          echo "Checking if secret exists in cluster..."
-          kubectl get secret test-secret -n test-ksops
-          
-          echo "Verifying secret values..."
-          USERNAME=$(kubectl get secret test-secret -n test-ksops -o jsonpath='{.data.username}' | base64 -d)
-          PASSWORD=$(kubectl get secret test-secret -n test-ksops -o jsonpath='{.data.password}' | base64 -d)
-          API_KEY=$(kubectl get secret test-secret -n test-ksops -o jsonpath='{.data.api_key}' | base64 -d)
-          
-          if [[ "$USERNAME" != "testuser" ]]; then
-            echo "❌ Username mismatch: expected 'testuser', got '$USERNAME'"
-            exit 1
-          fi
-          
-          if [[ "$PASSWORD" != "testpassword123" ]]; then
-            echo "❌ Password mismatch"
-            exit 1
-          fi
-          
-          if [[ "$API_KEY" != "test-api-key-xyz" ]]; then
-            echo "❌ API key mismatch"
-            exit 1
-          fi
-          
-          echo "✅ All secret values match original plaintext"
-
-      - name: Test error scenario - missing Age key
-        run: |
-          cd zerotouch-platform
-          
-          echo "Testing error scenarios..."
-          
-          # Use existing error scenario test script
-          ./scripts/bootstrap/validation/secrets/test-error-scenarios.sh
-          
-          echo "✅ Error scenarios validated"
-
-      - name: Validate SOPS configuration
-        run: |
-          cd zerotouch-platform
-          
-          # Use existing SOPS config validation script
-          ./scripts/bootstrap/validation/secrets/validate-sops-config.sh ../zerotouch-tenants/.sops.yaml
-          
-          echo "✅ SOPS configuration validated"
+          echo "Master KSOPS validation complete"
 
       - name: Cleanup test resources
         if: always()
         run: |
           echo "Cleaning up test resources..."
-          kubectl delete namespace test-ksops --ignore-not-found=true
-          kubectl delete application test-ksops -n argocd --ignore-not-found=true
-          kind delete cluster --name ksops-test || true
-          rm -f /tmp/age-private-key.txt /tmp/age-public-key.txt
+          kubectl delete namespace test-ksops --ignore-not-found=true || true
+          kubectl delete application test-ksops -n argocd --ignore-not-found=true || true
 
       - name: Summary
         if: success()
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "✅ KSOPS Validation Complete"
+          echo "✅ KSOPS Integration Validation Complete"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
-          echo "Validated:"
-          echo "  ✓ KSOPS plugin loaded in ArgoCD"
-          echo "  ✓ Age key injection"
-          echo "  ✓ SOPS-encrypted secret decryption"
-          echo "  ✓ Secret applied to cluster"
-          echo "  ✓ Secret values match plaintext"
-          echo "  ✓ Error scenarios (missing key, corrupted metadata, malformed YAML)"
+          echo "All KSOPS validations passed successfully using orchestrated scripts!"
           echo ""
