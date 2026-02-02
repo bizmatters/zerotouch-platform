@@ -94,4 +94,4 @@ echo -e "  ${GREEN}echo \$AGE_PUBLIC_KEY${NC}"
 echo -e "  ${GREEN}echo \$AGE_PRIVATE_KEY${NC}"
 echo ""
 
-exit 0
+# Note: No exit statement - this script is meant to be sourced to preserve environment variables
