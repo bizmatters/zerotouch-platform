@@ -25,23 +25,24 @@ log_check() {
     fi
 }
 
-# 1. Verify KSOPS sidecar container running in argocd-repo-server pod
-echo "1. Checking KSOPS sidecar container in argocd-repo-server pod..."
-if kubectl get pod -n argocd -l app.kubernetes.io/name=argocd-repo-server -o jsonpath='{.items[0].spec.containers[*].name}' 2>/dev/null | grep -q "ksops"; then
-    SIDECAR_RUNNING=$(kubectl get pod -n argocd -l app.kubernetes.io/name=argocd-repo-server -o jsonpath='{.items[0].status.containerStatuses[?(@.name=="ksops")].state.running}' 2>/dev/null || echo "")
-    if [[ -n "$SIDECAR_RUNNING" ]]; then
-        # Check logs for socket creation message
-        POD_NAME=$(kubectl get pod -n argocd -l app.kubernetes.io/name=argocd-repo-server -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
-        if kubectl logs -n argocd "$POD_NAME" -c ksops --tail=100 2>/dev/null | grep -q "serving on"; then
-            log_check "PASS" "KSOPS sidecar container running with CMP server socket"
+# 1. Verify KSOPS init container completed and tools available
+echo "1. Checking KSOPS init container and tools in argocd-repo-server pod..."
+POD_NAME=$(kubectl get pod -n argocd -l app.kubernetes.io/name=argocd-repo-server -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+if [[ -n "$POD_NAME" ]]; then
+    # Check init container completed
+    INIT_STATUS=$(kubectl get pod -n argocd "$POD_NAME" -o jsonpath='{.status.initContainerStatuses[?(@.name=="install-ksops")].state.terminated.reason}' 2>/dev/null || echo "")
+    if [[ "$INIT_STATUS" == "Completed" ]]; then
+        # Check KSOPS binary exists
+        if kubectl exec -n argocd "$POD_NAME" -c argocd-repo-server -- test -f /usr/local/bin/ksops 2>/dev/null; then
+            log_check "PASS" "KSOPS init container completed and tools installed"
         else
-            log_check "FAIL" "KSOPS sidecar running but CMP server not initialized"
+            log_check "FAIL" "Init container completed but KSOPS binary not found"
         fi
     else
-        log_check "FAIL" "KSOPS sidecar container exists but not running"
+        log_check "FAIL" "KSOPS init container not completed (status: $INIT_STATUS)"
     fi
 else
-    log_check "FAIL" "KSOPS sidecar container not found in argocd-repo-server pod"
+    log_check "FAIL" "argocd-repo-server pod not found"
 fi
 
 # 2. Verify ConfigMap cmp-plugin exists in argocd namespace
@@ -52,45 +53,42 @@ else
     log_check "FAIL" "ConfigMap cmp-plugin does not exist in argocd namespace"
 fi
 
-# 3. Verify sidecar logs show plugin loaded successfully
-echo "3. Checking KSOPS plugin registration in sidecar logs..."
-POD_NAME=$(kubectl get pod -n argocd -l app.kubernetes.io/name=argocd-repo-server -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+# 3. Verify kustomize can use KSOPS plugin
+echo "3. Checking KSOPS plugin availability..."
 if [[ -n "$POD_NAME" ]]; then
-    if kubectl logs -n argocd "$POD_NAME" -c ksops --tail=100 2>/dev/null | grep -q "serving on"; then
-        log_check "PASS" "KSOPS plugin loaded successfully (CMP server running)"
+    if kubectl exec -n argocd "$POD_NAME" -c argocd-repo-server -- test -f /usr/local/bin/kustomize 2>/dev/null; then
+        log_check "PASS" "Kustomize binary available for KSOPS plugin"
     else
-        log_check "FAIL" "KSOPS plugin not loaded (CMP server not found in logs)"
+        log_check "FAIL" "Kustomize binary not found"
     fi
 else
     log_check "FAIL" "Could not find argocd-repo-server pod"
 fi
 
-# 4. Verify health probes passing
-echo "4. Checking health probes..."
+# 4. Verify environment variables set correctly
+echo "4. Checking environment variables..."
 if [[ -n "$POD_NAME" ]]; then
-    LIVENESS=$(kubectl get pod -n argocd "$POD_NAME" -o jsonpath='{.status.containerStatuses[?(@.name=="ksops")].state.running}' 2>/dev/null || echo "")
-    if [[ -n "$LIVENESS" ]]; then
-        log_check "PASS" "Health probes passing (container running)"
+    SOPS_KEY=$(kubectl exec -n argocd "$POD_NAME" -c argocd-repo-server -- env 2>/dev/null | grep SOPS_AGE_KEY_FILE || echo "")
+    XDG_CONFIG=$(kubectl exec -n argocd "$POD_NAME" -c argocd-repo-server -- env 2>/dev/null | grep XDG_CONFIG_HOME || echo "")
+    if [[ -n "$SOPS_KEY" ]] && [[ -n "$XDG_CONFIG" ]]; then
+        log_check "PASS" "Environment variables configured correctly"
     else
-        log_check "FAIL" "Health probes failing (container not running)"
+        log_check "FAIL" "Environment variables not set (SOPS_AGE_KEY_FILE or XDG_CONFIG_HOME missing)"
     fi
 else
-    log_check "FAIL" "Could not verify health probes (pod not found)"
+    log_check "FAIL" "Could not verify environment variables (pod not found)"
 fi
 
-# 5. Verify resource limits applied correctly
-echo "5. Checking resource limits..."
+# 5. Verify Age key mount exists
+echo "5. Checking Age key mount..."
 if [[ -n "$POD_NAME" ]]; then
-    CPU_LIMIT=$(kubectl get pod -n argocd "$POD_NAME" -o jsonpath='{.spec.containers[?(@.name=="ksops")].resources.limits.cpu}' 2>/dev/null || echo "")
-    MEMORY_LIMIT=$(kubectl get pod -n argocd "$POD_NAME" -o jsonpath='{.spec.containers[?(@.name=="ksops")].resources.limits.memory}' 2>/dev/null || echo "")
-    
-    if [[ "$CPU_LIMIT" == "1000m" || "$CPU_LIMIT" == "1" ]] && [[ "$MEMORY_LIMIT" == "512Mi" ]]; then
-        log_check "PASS" "Resource limits applied correctly (CPU: $CPU_LIMIT, Memory: $MEMORY_LIMIT)"
+    if kubectl exec -n argocd "$POD_NAME" -c argocd-repo-server -- test -f /.config/sops/age/keys.txt 2>/dev/null; then
+        log_check "PASS" "Age key file mounted correctly"
     else
-        log_check "FAIL" "Resource limits incorrect (CPU: $CPU_LIMIT, Memory: $MEMORY_LIMIT)"
+        log_check "FAIL" "Age key file not found at expected path"
     fi
 else
-    log_check "FAIL" "Could not verify resource limits (pod not found)"
+    log_check "FAIL" "Could not verify Age key mount (pod not found)"
 fi
 
 # 6. Verify both KSOPS and ESO packages deployed without conflicts
