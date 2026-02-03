@@ -29,14 +29,14 @@ echo ""
 
 # Step 2: Inject GitHub App Authentication
 echo -e "${BLUE}[2/8] Injecting GitHub App authentication...${NC}"
-if [ -n "${APP_ID:-}" ] && [ -n "${APP_INSTALLATION_ID:-}" ] && [ -n "${APP_PRIVATE_KEY:-}" ]; then
+if [ -n "${GITHUB_APP_ID:-}" ] && [ -n "${GITHUB_APP_INSTALLATION_ID:-}" ] && [ -n "${GITHUB_APP_PRIVATE_KEY:-}" ]; then
     TEMP_KEY=$(mktemp)
-    echo "$APP_PRIVATE_KEY" > "$TEMP_KEY"
+    echo "$GITHUB_APP_PRIVATE_KEY" > "$TEMP_KEY"
     trap "rm -f $TEMP_KEY" EXIT
-    "$SECRETS_DIR/00-inject-identities.sh" "$APP_ID" "$APP_INSTALLATION_ID" "$TEMP_KEY"
+    "$SECRETS_DIR/00-inject-identities.sh" "$GITHUB_APP_ID" "$GITHUB_APP_INSTALLATION_ID" "$TEMP_KEY"
     echo -e "${GREEN}✓ GitHub App authentication injected${NC}"
 else
-    echo -e "${YELLOW}⚠️  Skipping: APP_ID, APP_INSTALLATION_ID, or APP_PRIVATE_KEY not set${NC}"
+    echo -e "${YELLOW}⚠️  Skipping: GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, or GITHUB_APP_PRIVATE_KEY not set${NC}"
 fi
 echo ""
 
