@@ -2,7 +2,7 @@
 # Local CI simulation for create-cluster workflow
 # Usage: ./create-cluster.sh <environment> [--skip-rescue-mode]
 # Example: ./create-cluster.sh dev
-# cd zerotouch-platform && set -a && source .env && set +a && ./scripts/local-ci/create-cluster.sh dev
+# cd zerotouch-platform && set -a && source .env && set +a && ./scripts/local-ci/create-cluster-workflow.sh dev
 
 set -e
     
