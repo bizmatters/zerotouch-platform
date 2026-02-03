@@ -82,16 +82,27 @@ EOF
     done < "$ENV_FILE"
     
     if [ ${#SECRET_FILES[@]} -gt 0 ]; then
+        # Create KSOPS Generator
+        cat > "$SECRETS_DIR/ksops-generator.yaml" << EOF
+apiVersion: viaduct.ai/v1
+kind: ksops
+metadata:
+  name: ${ENV}-secrets-generator
+files:
+EOF
+        for file in "${SECRET_FILES[@]}"; do
+            echo "  - ./$file" >> "$SECRETS_DIR/ksops-generator.yaml"
+        done
+        
+        # Create Kustomization with generator
         cat > "$SECRETS_DIR/kustomization.yaml" << EOF
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-resources:
+generators:
+- ksops-generator.yaml
 EOF
-        for file in "${SECRET_FILES[@]}"; do
-            echo "- $file" >> "$SECRETS_DIR/kustomization.yaml"
-        done
-        echo -e "${GREEN}  ✓ kustomization.yaml (${SECRET_COUNT} secrets)${NC}"
+        echo -e "${GREEN}  ✓ kustomization.yaml (KSOPS generator with ${SECRET_COUNT} secrets)${NC}"
     else
         echo -e "${YELLOW}  ⚠️  No ${ENV_UPPER}_* variables found${NC}"
     fi

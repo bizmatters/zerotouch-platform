@@ -131,16 +131,27 @@ for github_secret in github-app-id.secret.yaml github-app-installation-id.secret
 done
 
 if [ ${#CORE_SECRET_FILES[@]} -gt 0 ]; then
+    # Create KSOPS Generator
+    cat > "$CORE_SECRETS_DIR/ksops-generator.yaml" << EOF
+apiVersion: viaduct.ai/v1
+kind: ksops
+metadata:
+  name: core-secrets-generator
+files:
+EOF
+    for file in "${CORE_SECRET_FILES[@]}"; do
+        echo "  - ./$file" >> "$CORE_SECRETS_DIR/ksops-generator.yaml"
+    done
+    
+    # Create Kustomization with generator
     cat > "$CORE_SECRETS_DIR/kustomization.yaml" << EOF
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-resources:
+generators:
+- ksops-generator.yaml
 EOF
-    for file in "${CORE_SECRET_FILES[@]}"; do
-        echo "- $file" >> "$CORE_SECRETS_DIR/kustomization.yaml"
-    done
-    echo -e "${GREEN}  ✓ kustomization.yaml (${CORE_SECRET_COUNT} secrets)${NC}"
+    echo -e "${GREEN}  ✓ kustomization.yaml (KSOPS generator with ${CORE_SECRET_COUNT} secrets)${NC}"
 else
     echo -e "${YELLOW}  ⚠️  No core platform secrets found${NC}"
 fi

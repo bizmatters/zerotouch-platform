@@ -57,6 +57,26 @@ EOF
     
     if sops -e -i "$REGISTRY_SECRETS_DIR/repo-zerotouch-tenants.secret.yaml" 2>/dev/null; then
         echo -e "${GREEN}  ✓ repo-zerotouch-tenants.secret.yaml${NC}"
+        
+        # Create KSOPS Generator
+        cat > "$REGISTRY_SECRETS_DIR/ksops-generator.yaml" << EOF
+apiVersion: viaduct.ai/v1
+kind: ksops
+metadata:
+  name: registry-secrets-generator
+files:
+  - ./repo-zerotouch-tenants.secret.yaml
+EOF
+        
+        # Create Kustomization with generator
+        cat > "$REGISTRY_SECRETS_DIR/kustomization.yaml" << EOF
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+generators:
+- ksops-generator.yaml
+EOF
+        echo -e "${GREEN}  ✓ kustomization.yaml (KSOPS generator)${NC}"
     else
         echo -e "${RED}  ✗ Failed to encrypt: repo-zerotouch-tenants.secret.yaml${NC}"
         rm -f "$REGISTRY_SECRETS_DIR/repo-zerotouch-tenants.secret.yaml"

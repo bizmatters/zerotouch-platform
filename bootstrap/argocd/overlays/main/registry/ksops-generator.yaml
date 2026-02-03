@@ -1,0 +1,6 @@
+apiVersion: viaduct.ai/v1
+kind: ksops
+metadata:
+  name: registry-secrets-generator
+files:
+  - ./repo-zerotouch-tenants.secret.yaml

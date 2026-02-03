@@ -15,7 +15,7 @@ platform/intelligence
 platform/observability
 packages
 # Scripts
-scripts
+# scripts
 # scripts/bootstrap/helpers
 # scripts/bootstrap/preview
 # scripts/bootstrap/validation
