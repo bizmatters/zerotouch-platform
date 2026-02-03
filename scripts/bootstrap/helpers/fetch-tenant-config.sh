@@ -21,16 +21,47 @@ CACHE_DIR="$REPO_ROOT/.tenants-cache"
 ENV_FILE="$CACHE_DIR/environments/$ENV/talos-values.yaml"
 
 # Get tenant repo credentials from environment variables
-GITHUB_USERNAME="${BOT_GITHUB_USERNAME:-${GITHUB_REPOSITORY_OWNER:-arun4infra}}"
-if [[ -n "$GITHUB_USERNAME" && -n "$BOT_GITHUB_TOKEN" && -n "$TENANTS_REPO_NAME" ]]; then
-    TENANT_USERNAME="$GITHUB_USERNAME"
-    TENANT_PASSWORD="$BOT_GITHUB_TOKEN"
-    TENANT_REPO_URL="https://github.com/${GITHUB_USERNAME}/${TENANTS_REPO_NAME}.git"
-    echo "✓ Using tenant repo credentials from environment variables" >&2
+GITHUB_USERNAME="${BOT_GITHUB_USERNAME:-${GITHUB_REPOSITORY_OWNER:-${ORG_NAME:-arun4infra}}}"
+
+# Try GitHub App authentication first, fallback to PAT
+if [[ -n "$APP_ID" && -n "$APP_INSTALLATION_ID" && -n "$APP_PRIVATE_KEY" && -n "$TENANTS_REPO_NAME" ]]; then
+    echo "✓ Generating GitHub App token..." >&2
+    
+    # Generate JWT for GitHub App
+    NOW=$(date +%s)
+    IAT=$((NOW - 60))
+    EXP=$((NOW + 600))
+    
+    HEADER='{"alg":"RS256","typ":"JWT"}'
+    PAYLOAD="{\"iat\":${IAT},\"exp\":${EXP},\"iss\":\"${APP_ID}\"}"
+    
+    HEADER_B64=$(echo -n "$HEADER" | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
+    PAYLOAD_B64=$(echo -n "$PAYLOAD" | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
+    
+    SIGNATURE=$(echo -n "${HEADER_B64}.${PAYLOAD_B64}" | openssl dgst -sha256 -sign <(echo "$APP_PRIVATE_KEY") | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
+    JWT="${HEADER_B64}.${PAYLOAD_B64}.${SIGNATURE}"
+    
+    # Get installation access token
+    TOKEN_RESPONSE=$(curl -s -X POST \
+        -H "Authorization: Bearer $JWT" \
+        -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/app/installations/${APP_INSTALLATION_ID}/access_tokens")
+    
+    GITHUB_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.token // empty')
+    
+    if [[ -z "$GITHUB_TOKEN" ]]; then
+        echo "Error: Failed to generate GitHub App token" >&2
+        echo "API Response: $TOKEN_RESPONSE" >&2
+        exit 1
+    fi
+    
+    TENANT_USERNAME="x-access-token"
+    TENANT_PASSWORD="$GITHUB_TOKEN"
+    TENANT_REPO_URL="https://github.com/${ORG_NAME:-${GITHUB_USERNAME}}/${TENANTS_REPO_NAME}.git"
+    echo "✓ Using GitHub App authentication" >&2
 else
     echo "Error: Tenant repository credentials not available" >&2
-    echo "Set environment variables: BOT_GITHUB_TOKEN, TENANTS_REPO_NAME" >&2
-    echo "Optional: BOT_GITHUB_USERNAME (defaults to GITHUB_REPOSITORY_OWNER)" >&2
+    echo "Set: APP_ID, APP_INSTALLATION_ID, APP_PRIVATE_KEY, TENANTS_REPO_NAME, ORG_NAME" >&2
     exit 1
 fi
 

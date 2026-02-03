@@ -5,7 +5,7 @@
 # cd zerotouch-platform && set -a && source .env && set +a && ./scripts/local-ci/create-cluster.sh dev
 
 set -e
-
+    
 ENVIRONMENT="${1:-dev}"
 SKIP_RESCUE_MODE=false
 if [ "$2" = "--skip-rescue-mode" ]; then
