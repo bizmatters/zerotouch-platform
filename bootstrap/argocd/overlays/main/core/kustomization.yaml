@@ -16,3 +16,10 @@ resources:
 - 01-cert-manager-webhook-hetzner.yaml
 # AgentGateway HTTPRoute (main environment only, Wave 6 - after gateway-config)
 - 06-agentgateway-httproute.yaml
+
+patches:
+- path: ../../../../platform/secrets/ksops/patches/repo-server-ksops-init.yaml
+  target:
+    kind: Deployment
+    name: argocd-repo-server
+    namespace: argocd
