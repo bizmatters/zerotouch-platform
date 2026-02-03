@@ -29,7 +29,21 @@ spec:
       - port: "443"
         protocol: TCP
   
-  # Allow DNS resolution
+  # Allow DNS to external resolvers (required for CoreDNS recursive lookups)
+  - toEntities:
+    - world
+    toPorts:
+    - ports:
+      - port: "53"
+        protocol: UDP
+      - port: "53"
+        protocol: TCP
+  
+  # Allow access to Kubernetes API
+  - toEntities:
+    - kube-apiserver
+  
+  # Allow DNS resolution to CoreDNS
   - toEndpoints:
     - matchLabels:
         k8s:io.kubernetes.pod.namespace: kube-system

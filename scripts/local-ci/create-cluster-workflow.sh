@@ -17,9 +17,28 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 LOG_DIR="$SCRIPT_DIR/logs"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 LOG_FILE="$LOG_DIR/create-cluster-${ENVIRONMENT}-${TIMESTAMP}.log"
+STAGE_CACHE_FILE="$REPO_ROOT/.bootstrap-stage-cache"
 
 # Create logs directory if it doesn't exist
 mkdir -p "$LOG_DIR"
+
+# Function to check if stage is complete
+is_stage_complete() {
+    local stage_name="$1"
+    
+    if [[ ! -f "$STAGE_CACHE_FILE" ]]; then
+        return 1
+    fi
+    
+    if command -v jq &> /dev/null; then
+        local completed=$(jq -r --arg stage "$stage_name" '.stages[$stage] // empty' "$STAGE_CACHE_FILE")
+        if [[ -n "$completed" ]]; then
+            return 0
+        fi
+    fi
+    
+    return 1
+}
 
 # Function to log with timestamp
 log() {
@@ -74,7 +93,9 @@ fi
 log ""
 
 # Step 2: Enable Rescue Mode
-if [ "$SKIP_RESCUE_MODE" = false ]; then
+if is_stage_complete "rescue_mode"; then
+    log "==> Step 2-3: Skipping rescue mode (already complete in cache)"
+elif [ "$SKIP_RESCUE_MODE" = false ]; then
     log "==> Step 2: Enable Rescue Mode..."
     run_with_log "$REPO_ROOT/scripts/bootstrap/00-enable-rescue-mode.sh" "$ENVIRONMENT" -y
     

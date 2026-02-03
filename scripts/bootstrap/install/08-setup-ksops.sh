@@ -64,41 +64,26 @@ echo -e "${GREEN}✓ Age key injected${NC}"
 echo ""
 
 # Step 6: Create Age key backup
-echo -e "${BLUE}[6/8] Creating Age key backup...${NC}"
+echo -e "${BLUE}[6/6] Creating Age key backup...${NC}"
 "$SECRETS_DIR/ksops/08d-create-age-backup.sh"
 echo -e "${GREEN}✓ Age key backup created${NC}"
 echo ""
 
-# Step 7: Deploy KSOPS package
-echo -e "${BLUE}[7/8] Deploying KSOPS package...${NC}"
-"$SECRETS_DIR/ksops/08e-deploy-ksops-package.sh"
-echo -e "${GREEN}✓ KSOPS package deployed${NC}"
-echo ""
-
-# Step 8: Deploy Age Key Guardian
-echo -e "${BLUE}[8/8] Deploying Age Key Guardian...${NC}"
-if kubectl apply -f "$SCRIPT_DIR/../../platform/secrets/ksops/age-key-guardian.yaml" 2>/dev/null; then
-    kubectl wait --for=condition=available --timeout=300s deployment/age-key-guardian -n argocd 2>/dev/null || true
-    echo -e "${GREEN}✓ Age Key Guardian deployed${NC}"
-else
-    echo -e "${YELLOW}⚠️  Age Key Guardian deployment skipped${NC}"
-fi
-echo ""
-
 # Summary
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║   KSOPS Setup Complete                                       ║${NC}"
+echo -e "${BLUE}║   KSOPS Setup Complete (Pre-ArgoCD)                         ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "${GREEN}✓ GitHub App authentication configured${NC}"
 echo -e "${GREEN}✓ Hetzner Object Storage provisioned${NC}"
 echo -e "${GREEN}✓ Age keypair generated and injected${NC}"
 echo -e "${GREEN}✓ Age key backup created${NC}"
-echo -e "${GREEN}✓ KSOPS package deployed to ArgoCD${NC}"
-echo -e "${GREEN}✓ Age Key Guardian deployed${NC}"
+echo -e "${YELLOW}⚠ KSOPS package deployment deferred until after ArgoCD installation${NC}"
 echo ""
 echo -e "${YELLOW}Next steps:${NC}"
-echo -e "  1. Developers run: ${GREEN}./scripts/bootstrap/infra/secrets/ksops/generate-env-sops.sh${NC}"
+echo -e "  1. Install ArgoCD"
+echo -e "  2. Deploy KSOPS package to ArgoCD"
+echo -e "  3. Developers run: ${GREEN}./scripts/bootstrap/infra/secrets/ksops/generate-env-sops.sh${NC}"
 echo -e "  2. Commit encrypted *.secret.yaml files to Git"
 echo -e "  3. ArgoCD will automatically sync and decrypt secrets"
 echo ""

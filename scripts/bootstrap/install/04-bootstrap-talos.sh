@@ -66,27 +66,21 @@ echo ""
 # 1. Prepare Configuration
 echo -e "${BLUE}Preparing Configuration...${NC}"
 
+# DEPRECATED: AWS OIDC integration removed - platform uses Identity Service JWTs instead
 # Call helper to get OIDC patch
-HELPER_SCRIPT="$REPO_ROOT/scripts/bootstrap/helpers/prepare-oidc-patch.sh"
-if [ ! -x "$HELPER_SCRIPT" ]; then
-    chmod +x "$HELPER_SCRIPT"
-fi
+# HELPER_SCRIPT="$REPO_ROOT/scripts/bootstrap/helpers/aws/prepare-oidc-patch.sh"
+# if [ ! -x "$HELPER_SCRIPT" ]; then
+#     chmod +x "$HELPER_SCRIPT"
+# fi
+# OIDC_PATCH_FILE=$("$HELPER_SCRIPT" "$ENV")
+# if [ $? -ne 0 ] || [ -z "$OIDC_PATCH_FILE" ]; then
+#     echo -e "${RED}Failed to generate OIDC patch${NC}"
+#     exit 1
+# fi
 
-OIDC_PATCH_FILE=$("$HELPER_SCRIPT" "$ENV")
-if [ $? -ne 0 ] || [ -z "$OIDC_PATCH_FILE" ]; then
-    echo -e "${RED}Failed to generate OIDC patch${NC}"
-    exit 1
-fi
-
-# Merge Base Config + OIDC Patch
-FINAL_CONFIG="/tmp/talos-config-final.yaml"
-if command -v yq &> /dev/null; then
-    yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' "$BASE_CONFIG" "$OIDC_PATCH_FILE" > "$FINAL_CONFIG"
-    echo -e "${GREEN}✓ Configuration merged with OIDC Identity${NC}"
-else
-    echo -e "${RED}Error: yq is required for merging configurations${NC}"
-    exit 1
-fi
+# Use base config without OIDC patch
+FINAL_CONFIG="$BASE_CONFIG"
+echo -e "${GREEN}✓ Using base Talos configuration${NC}"
 
 # Wait for Talos to boot
 echo -e "${BLUE}⏳ Waiting 3 minutes for Talos to boot...${NC}"
@@ -146,7 +140,7 @@ talosctl kubeconfig \
   --force
 
 # Cleanup
-rm -f "$OIDC_PATCH_FILE" "$FINAL_CONFIG"
+# rm -f "$OIDC_PATCH_FILE" "$FINAL_CONFIG"  # DEPRECATED: OIDC patch no longer used
 
 echo ""
 echo -e "${GREEN}✓ Talos cluster bootstrapped successfully${NC}"

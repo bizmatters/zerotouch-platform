@@ -3,4 +3,6 @@ kind: Kustomization
 
 resources:
 - ../core
+- ../core/secrets
+- ./secrets
 - 99-tenants.yaml

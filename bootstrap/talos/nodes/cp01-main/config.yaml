@@ -69,7 +69,10 @@ machine:
         #         - '!10.0.0.3/32'
         #         - fdc7::/16
     # Provides machine specific network configuration options.
-    network: {}
+    network:
+        nameservers:
+            - 8.8.8.8
+            - 1.1.1.1
     # # `interfaces` is used to define the network interface configuration.
     # interfaces:
     #     - interface: enp0s1 # The interface name.
@@ -164,7 +167,7 @@ machine:
     #       # vip:
     #       #     ip: 172.16.199.55 # Specifies the IP address to be used.
 
-    # # Used to statically set the nameservers for the machine.
+    # Used to statically set the nameservers for the machine.
     # nameservers:
     #     - 8.8.8.8
     #     - 1.1.1.1
@@ -476,8 +479,8 @@ cluster:
     proxy:
         image: registry.k8s.io/kube-proxy:v1.34.2 # The container image used in the kube-proxy manifest.
         
-        # # Disable kube-proxy deployment on cluster bootstrap.
-        # disabled: false
+        # Disable kube-proxy deployment (Cilium handles service routing)
+        disabled: true
     # Scheduler server specific configuration options.
     scheduler:
         image: registry.k8s.io/kube-scheduler:v1.34.2 # The container image used in the scheduler manifest.

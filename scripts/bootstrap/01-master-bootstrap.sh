@@ -20,6 +20,10 @@ NC='\033[0m' # No Color
 TOTAL_STEPS=18
 CURRENT_STEP=0
 
+# Stage cache configuration
+SKIP_CACHE=${SKIP_CACHE:-false}
+STAGE_CACHE_FILE=".bootstrap-stage-cache"
+
 # Function to display step progress
 step() {
     CURRENT_STEP=$((CURRENT_STEP + 1))
@@ -30,6 +34,59 @@ step() {
 skip_step() {
     CURRENT_STEP=$((CURRENT_STEP + 1))
     echo -e "${BLUE}[${CURRENT_STEP}/${TOTAL_STEPS}] $1 (skipped)${NC}"
+}
+
+# Stage cache management functions
+init_stage_cache() {
+    if [[ "$SKIP_CACHE" == "true" ]]; then
+        echo -e "${BLUE}Cache disabled, removing existing cache file${NC}"
+        rm -f "$STAGE_CACHE_FILE"
+    fi
+    
+    if [[ ! -f "$STAGE_CACHE_FILE" ]]; then
+        echo -e "${BLUE}Initializing stage cache: $STAGE_CACHE_FILE${NC}"
+        echo '{"stages":{}}' > "$STAGE_CACHE_FILE"
+    fi
+}
+
+mark_stage_complete() {
+    local stage_name="$1"
+    local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    
+    if command -v jq &> /dev/null; then
+        local temp_file=$(mktemp)
+        jq --arg stage "$stage_name" --arg ts "$timestamp" \
+           '.stages[$stage] = $ts' "$STAGE_CACHE_FILE" > "$temp_file"
+        mv "$temp_file" "$STAGE_CACHE_FILE"
+        echo -e "${GREEN}✓ Stage '$stage_name' marked complete${NC}"
+    else
+        echo -e "${YELLOW}⚠ jq not available, skipping cache update${NC}"
+    fi
+}
+
+is_stage_complete() {
+    local stage_name="$1"
+    
+    if [[ ! -f "$STAGE_CACHE_FILE" ]] || [[ "$SKIP_CACHE" == "true" ]]; then
+        return 1
+    fi
+    
+    if command -v jq &> /dev/null; then
+        local completed=$(jq -r --arg stage "$stage_name" '.stages[$stage] // empty' "$STAGE_CACHE_FILE")
+        if [[ -n "$completed" ]]; then
+            echo -e "${GREEN}✓ Stage '$stage_name' already complete (cached: $completed)${NC}"
+            return 0
+        fi
+    fi
+    
+    return 1
+}
+
+clear_stage_cache() {
+    if [[ -f "$STAGE_CACHE_FILE" ]]; then
+        echo -e "${BLUE}Clearing stage cache${NC}"
+        rm -f "$STAGE_CACHE_FILE"
+    fi
 }
 
 # Default mode
@@ -142,11 +199,28 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+# Initialize stage cache
+cd "$REPO_ROOT"
+init_stage_cache
+
+# Mark rescue mode as complete (assumed done before calling master script)
+if [ "$MODE" = "production" ] && ! is_stage_complete "rescue_mode"; then
+    echo -e "${BLUE}Assuming rescue mode was already executed separately...${NC}"
+    echo -e "${BLUE}Marking rescue_mode stage as complete in cache${NC}"
+    mark_stage_complete "rescue_mode"
+    echo -e "${GREEN}✓ rescue_mode stage cached (assumed pre-executed)${NC}"
+fi
+
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║   BizMatters Infrastructure - Master Bootstrap Script      ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "${GREEN}Mode:${NC} $MODE"
+if [[ "$SKIP_CACHE" == "true" ]]; then
+    echo -e "${YELLOW}Cache:${NC} Disabled (full rebuild)"
+else
+    echo -e "${GREEN}Cache:${NC} Enabled (resume from failures)"
+fi
 echo ""
 
 # ============================================================================
@@ -189,13 +263,21 @@ fi
 # PRODUCTION MODE SETUP
 # ============================================================================
 if [ "$MODE" = "production" ]; then
-    echo -e "${BLUE}Setting up production environment...${NC}"
-    CREDENTIALS_FILE=$("$SCRIPT_DIR/helpers/setup-production.sh" "$SERVER_IP" "$ROOT_PASSWORD" "$WORKER_NODES" "$WORKER_PASSWORD" --yes)
-    echo -e "${GREEN}✓ Credentials file: $CREDENTIALS_FILE${NC}"
-    
-    if [ -z "$CREDENTIALS_FILE" ] || [ ! -f "$CREDENTIALS_FILE" ]; then
-        echo -e "${RED}Error: Failed to create credentials file${NC}"
-        exit 1
+    if is_stage_complete "production_setup"; then
+        echo -e "${BLUE}Skipping production setup (cached)${NC}"
+        # Load credentials file path from previous run
+        CREDENTIALS_FILE="$REPO_ROOT/.talos-credentials/bootstrap-credentials-$(date +%Y%m%d)-*.txt"
+        CREDENTIALS_FILE=$(ls -t $CREDENTIALS_FILE 2>/dev/null | head -1 || echo "")
+    else
+        echo -e "${BLUE}Setting up production environment...${NC}"
+        CREDENTIALS_FILE=$("$SCRIPT_DIR/helpers/setup-production.sh" "$SERVER_IP" "$ROOT_PASSWORD" "$WORKER_NODES" "$WORKER_PASSWORD" --yes)
+        echo -e "${GREEN}✓ Credentials file: $CREDENTIALS_FILE${NC}"
+        
+        if [ -z "$CREDENTIALS_FILE" ] || [ ! -f "$CREDENTIALS_FILE" ]; then
+            echo -e "${RED}Error: Failed to create credentials file${NC}"
+            exit 1
+        fi
+        mark_stage_complete "production_setup"
     fi
 fi
 
@@ -205,38 +287,68 @@ fi
 
 if [ "$MODE" = "production" ]; then
     # Step 1: Embed Gateway API CRDs and Cilium in Talos config
-    step "Embedding Gateway API CRDs and Cilium CNI..."
-    "$SCRIPT_DIR/install/02-embed-network-manifests.sh"
+    if is_stage_complete "network_manifests"; then
+        skip_step "Embedding Gateway API CRDs and Cilium CNI (cached)"
+    else
+        step "Embedding Gateway API CRDs and Cilium CNI..."
+        "$SCRIPT_DIR/install/02-embed-network-manifests.sh"
+        mark_stage_complete "network_manifests"
+    fi
 
     # Step 2: Install Talos OS
-    step "Installing Talos OS..."
-    "$SCRIPT_DIR/install/03-install-talos.sh" --server-ip "$SERVER_IP" --user root --password "$ROOT_PASSWORD" --yes
+    if is_stage_complete "talos_install"; then
+        skip_step "Installing Talos OS (cached)"
+    else
+        step "Installing Talos OS..."
+        "$SCRIPT_DIR/install/03-install-talos.sh" --server-ip "$SERVER_IP" --user root --password "$ROOT_PASSWORD" --yes
+        mark_stage_complete "talos_install"
+    fi
 
-    # Step 3: Bootstrap Talos cluster (with OIDC Identity)
-    step "Bootstrapping Talos cluster (with OIDC Identity)..."
-    "$SCRIPT_DIR/install/04-bootstrap-talos.sh" "$SERVER_IP" "$ENV"
-
-    "$SCRIPT_DIR/helpers/add-credentials.sh" "$CREDENTIALS_FILE" "TALOS CREDENTIALS" "Talos Config: bootstrap/talos/talosconfig
+    # Step 3: Bootstrap Talos cluster
+    if is_stage_complete "talos_bootstrap"; then
+        skip_step "Bootstrapping Talos cluster (cached)"
+    else
+        step "Bootstrapping Talos cluster..."
+        "$SCRIPT_DIR/install/04-bootstrap-talos.sh" "$SERVER_IP" "$ENV"
+        
+        "$SCRIPT_DIR/helpers/add-credentials.sh" "$CREDENTIALS_FILE" "TALOS CREDENTIALS" "Talos Config: bootstrap/talos/talosconfig
 Control Plane Config: bootstrap/talos/nodes/cp01-main/config.yaml
 
 Access Talos:
   talosctl --talosconfig bootstrap/talos/talosconfig -n $SERVER_IP version"
+        mark_stage_complete "talos_bootstrap"
+    fi
 
     # Step 4: Add Worker Nodes (if specified)
     if [ -n "$WORKER_NODES" ]; then
-        step "Adding worker nodes..."
-        "$SCRIPT_DIR/install/05-add-worker-nodes.sh" "$WORKER_NODES" "$WORKER_PASSWORD"
+        if is_stage_complete "worker_nodes"; then
+            skip_step "Adding worker nodes (cached)"
+        else
+            step "Adding worker nodes..."
+            "$SCRIPT_DIR/install/05-add-worker-nodes.sh" "$WORKER_NODES" "$WORKER_PASSWORD"
+            mark_stage_complete "worker_nodes"
+        fi
     else
         skip_step "No worker nodes specified - single node cluster"
     fi
 
     # Step 5: Wait for Cilium CNI
-    step "Waiting for Cilium CNI..."
-    "$SCRIPT_DIR/wait/06-wait-cilium.sh"
+    if is_stage_complete "cilium_ready"; then
+        skip_step "Waiting for Cilium CNI (cached)"
+    else
+        step "Waiting for Cilium CNI..."
+        "$SCRIPT_DIR/wait/06-wait-cilium.sh"
+        mark_stage_complete "cilium_ready"
+    fi
 
     # Step 6: Validate Gateway API readiness
-    step "Validating Gateway API readiness..."
-    "$SCRIPT_DIR/wait/06a-wait-gateway-api.sh"
+    if is_stage_complete "gateway_api_ready"; then
+        skip_step "Validating Gateway API readiness (cached)"
+    else
+        step "Validating Gateway API readiness..."
+        "$SCRIPT_DIR/wait/06a-wait-gateway-api.sh"
+        mark_stage_complete "gateway_api_ready"
+    fi
 else
     # Skip production-only steps in preview mode
     CURRENT_STEP=7
@@ -262,9 +374,15 @@ fi
 #   aws ssm get-parameters-by-path --path /zerotouch/prod --region ap-south-1"
 # fi
 
-# Step 8: Setup KSOPS (SOPS + Age + Key Generation)
-step "Setting up KSOPS (SOPS + Age + Key Generation)..."
-"$SCRIPT_DIR/install/08-setup-ksops.sh"
+# Step 8: Setup KSOPS (SOPS + Age + Key Generation) - WITHOUT package deployment
+if is_stage_complete "ksops_setup"; then
+    skip_step "Setting up KSOPS (cached)"
+else
+    step "Setting up KSOPS (SOPS + Age + Key Generation)..."
+    # Note: KSOPS package deployment happens AFTER ArgoCD installation
+    "$SCRIPT_DIR/install/08-setup-ksops.sh"
+    mark_stage_complete "ksops_setup"
+fi
 
 # Step 9: Apply patches for preview mode BEFORE ArgoCD installation
 if [ "$MODE" = "preview" ]; then
@@ -287,16 +405,31 @@ else
 fi
 
 # Step 10: Install ArgoCD (includes NATS pre-creation for preview mode)
-step "Installing ArgoCD..."
-"$SCRIPT_DIR/install/09-install-argocd.sh" "$MODE" "$ENV"
+if is_stage_complete "argocd_install"; then
+    skip_step "Installing ArgoCD (cached)"
+else
+    step "Installing ArgoCD..."
+    "$SCRIPT_DIR/install/09-install-argocd.sh" "$MODE" "$ENV"
+    mark_stage_complete "argocd_install"
+fi
 
 # Step 10.5: Deploy KSOPS Package to ArgoCD
-step "Deploying KSOPS Package to ArgoCD..."
-"$SCRIPT_DIR/infra/secrets/ksops/08e-deploy-ksops-package.sh"
+if is_stage_complete "ksops_package"; then
+    skip_step "Deploying KSOPS Package (cached)"
+else
+    step "Deploying KSOPS Package to ArgoCD..."
+    "$SCRIPT_DIR/infra/secrets/ksops/08e-deploy-ksops-package.sh"
+    mark_stage_complete "ksops_package"
+fi
 
 # Step 11: Wait for platform-bootstrap
-step "Waiting for platform-bootstrap..."
-"$SCRIPT_DIR/wait/10-wait-platform-bootstrap.sh"
+if is_stage_complete "platform_bootstrap"; then
+    skip_step "Waiting for platform-bootstrap (cached)"
+else
+    step "Waiting for platform-bootstrap..."
+    "$SCRIPT_DIR/wait/10-wait-platform-bootstrap.sh"
+    mark_stage_complete "platform_bootstrap"
+fi
 
 # Step 12: Wait for tenant repository authentication (production mode only)
 if [ "$MODE" != "preview" ]; then
@@ -311,22 +444,27 @@ fi
 # "$SCRIPT_DIR/validation/11-verify-eso.sh"
 
 # Step 13: Verify KSOPS
+# Always run validation to verify current state
 step "Verifying KSOPS..."
 "$SCRIPT_DIR/validation/11-verify-ksops.sh"
 
 # Step 13.5: Restore cached TLS certificates
+# Always run to ensure certificates are current
 step "Restoring cached TLS certificates..."
 "$SCRIPT_DIR/helpers/restore-gateway-cert.sh"
 
 # Step 14: Verify child applications
+# Always run validation to verify current state
 step "Verifying child applications..."
 "$SCRIPT_DIR/validation/12-verify-child-apps.sh"
 
 # Step 15: Verify tenant landing zones
+# Always run validation to verify current state
 step "Verifying tenant landing zones..."
 "$SCRIPT_DIR/validation/16-verify-landing-zones.sh"
 
 # Step 16: Wait for all apps to be healthy
+# Always run to verify current state
 step "Waiting for all applications to be healthy..."
 if [ "$MODE" = "preview" ]; then
     "$SCRIPT_DIR/wait/12a-wait-apps-healthy.sh" --timeout 600 --preview-mode
