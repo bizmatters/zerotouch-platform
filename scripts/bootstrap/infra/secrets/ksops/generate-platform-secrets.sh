@@ -24,6 +24,22 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 ENV_FILE="$REPO_ROOT/.env"
 OVERLAYS_DIR="$REPO_ROOT/bootstrap/argocd/overlays/main"
 
+# Function to get custom secret mapping (compatible with bash 3.x)
+get_secret_mapping() {
+    local var_name="$1"
+    case "$var_name" in
+        HETZNER_API_TOKEN|DEV_HETZNER_API_TOKEN|STAGING_HETZNER_API_TOKEN|PROD_HETZNER_API_TOKEN)
+            echo "hcloud:token"
+            ;;
+        HETZNER_DNS_TOKEN|DEV_HETZNER_DNS_TOKEN|STAGING_HETZNER_DNS_TOKEN|PROD_HETZNER_DNS_TOKEN)
+            echo "external-dns-hetzner:HETZNER_DNS_TOKEN"
+            ;;
+        *)
+            echo ""
+            ;;
+    esac
+}
+
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║   Generate Platform Secrets (KSOPS)                         ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
@@ -56,6 +72,11 @@ for ENV in dev staging prod; do
     # Create secrets directory
     mkdir -p "$SECRETS_DIR"
     
+    # Clean up old secret files (keep kustomization.yaml)
+    if [ -d "$SECRETS_DIR" ]; then
+        find "$SECRETS_DIR" -name "*.secret.yaml" -type f -delete
+    fi
+    
     # Track created secrets for kustomization
     SECRET_FILES=()
     SECRET_COUNT=0
@@ -67,7 +88,16 @@ for ENV in dev staging prod; do
         
         # Check if matches current environment prefix
         if [[ "$name" =~ ^${ENV_UPPER}_(.+)$ ]]; then
-            secret_name=$(echo "${BASH_REMATCH[1]}" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+            # Check for custom mapping
+            mapping=$(get_secret_mapping "$name")
+            if [ -n "$mapping" ]; then
+                secret_name="${mapping%%:*}"
+                secret_key="${mapping##*:}"
+            else
+                secret_name=$(echo "${BASH_REMATCH[1]}" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+                secret_key="value"
+            fi
+            
             secret_file="${secret_name}.secret.yaml"
             
             # Create secret YAML file
@@ -79,7 +109,7 @@ metadata:
   namespace: kube-system
 type: Opaque
 stringData:
-  value: ${value}
+  ${secret_key}: ${value}
 EOF
             
             # Encrypt with SOPS
@@ -118,6 +148,11 @@ echo -e "${BLUE}Processing CORE platform secrets...${NC}"
 
 mkdir -p "$CORE_SECRETS_DIR"
 
+# Clean up old secret files (keep kustomization.yaml)
+if [ -d "$CORE_SECRETS_DIR" ]; then
+    find "$CORE_SECRETS_DIR" -name "*.secret.yaml" -type f -delete
+fi
+
 CORE_SECRET_FILES=()
 CORE_SECRET_COUNT=0
 
@@ -139,7 +174,15 @@ while IFS='=' read -r name value || [ -n "$name" ]; do
     [[ -z "$value" ]] && continue
     
     # Process as core secret
-    secret_name=$(echo "$name" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+    # Check for custom mapping
+    mapping=$(get_secret_mapping "$name")
+    if [ -n "$mapping" ]; then
+        secret_name="${mapping%%:*}"
+        secret_key="${mapping##*:}"
+    else
+        secret_name=$(echo "$name" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+        secret_key="value"
+    fi
     
     # Validate secret name (must be valid Kubernetes resource name)
     if [[ ! "$secret_name" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]]; then
@@ -158,7 +201,7 @@ metadata:
   namespace: kube-system
 type: Opaque
 stringData:
-  value: ${value}
+  ${secret_key}: ${value}
 EOF
     
     # Encrypt with SOPS
