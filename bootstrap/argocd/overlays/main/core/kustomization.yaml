@@ -18,7 +18,7 @@ resources:
 - 06-agentgateway-httproute.yaml
 
 patches:
-- path: ../../../../platform/secrets/ksops/patches/repo-server-ksops-init.yaml
+- path: patches/repo-server-ksops-init.yaml
   target:
     kind: Deployment
     name: argocd-repo-server
