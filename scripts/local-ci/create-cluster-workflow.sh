@@ -3,8 +3,18 @@
 # Usage: ./create-cluster.sh <environment> [--skip-rescue-mode]
 # Example: ./create-cluster.sh dev
 # cd zerotouch-platform && set -a && source .env && set +a && ./scripts/local-ci/create-cluster-workflow.sh dev
+# ./scripts/local-ci/create-cluster-workflow.sh dev
 
 set -e
+
+# Source .env file if it exists
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+if [ -f "$REPO_ROOT/.env" ]; then
+    set -a
+    source "$REPO_ROOT/.env"
+    set +a
+fi
     
 ENVIRONMENT="${1:-dev}"
 SKIP_RESCUE_MODE=false
@@ -12,8 +22,6 @@ if [ "$2" = "--skip-rescue-mode" ]; then
     SKIP_RESCUE_MODE=true
 fi
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 LOG_DIR="$SCRIPT_DIR/logs"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 LOG_FILE="$LOG_DIR/create-cluster-${ENVIRONMENT}-${TIMESTAMP}.log"
