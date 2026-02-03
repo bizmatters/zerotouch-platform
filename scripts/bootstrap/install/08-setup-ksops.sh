@@ -57,16 +57,26 @@ echo -e "${GREEN}✓ Age keypair generated${NC}"
 echo -e "${GREEN}  Public Key: $AGE_PUBLIC_KEY${NC}"
 echo ""
 
-# Step 5: Inject Age key into cluster
-echo -e "${BLUE}[5/8] Injecting Age key into cluster...${NC}"
+# Step 5: Backup Age key to Hetzner S3
+echo -e "${BLUE}[5/8] Backing up Age key to Hetzner Object Storage...${NC}"
+if [ -n "${HETZNER_S3_ACCESS_KEY:-}" ] && [ -n "${HETZNER_S3_SECRET_KEY:-}" ]; then
+    source "$SECRETS_DIR/ksops/08b-backup-age-to-s3.sh"
+    echo -e "${GREEN}✓ Age key backed up to S3${NC}"
+else
+    echo -e "${YELLOW}⚠️  Skipping: HETZNER_S3_ACCESS_KEY or HETZNER_S3_SECRET_KEY not set${NC}"
+fi
+echo ""
+
+# Step 6: Inject Age key into cluster
+echo -e "${BLUE}[6/8] Injecting Age key into cluster...${NC}"
 "$SECRETS_DIR/ksops/08c-inject-age-key.sh"
 echo -e "${GREEN}✓ Age key injected${NC}"
 echo ""
 
-# Step 6: Create Age key backup
-echo -e "${BLUE}[6/6] Creating Age key backup...${NC}"
+# Step 7: Create in-cluster Age key backup
+echo -e "${BLUE}[7/8] Creating in-cluster Age key backup...${NC}"
 "$SECRETS_DIR/ksops/08d-create-age-backup.sh"
-echo -e "${GREEN}✓ Age key backup created${NC}"
+echo -e "${GREEN}✓ In-cluster Age key backup created${NC}"
 echo ""
 
 # Summary
@@ -76,16 +86,20 @@ echo -e "${BLUE}╚════════════════════�
 echo ""
 echo -e "${GREEN}✓ GitHub App authentication configured${NC}"
 echo -e "${GREEN}✓ Hetzner Object Storage provisioned${NC}"
-echo -e "${GREEN}✓ Age keypair generated and injected${NC}"
-echo -e "${GREEN}✓ Age key backup created${NC}"
+echo -e "${GREEN}✓ Age keypair generated and backed up to S3${NC}"
+echo -e "${GREEN}✓ Age key injected to cluster${NC}"
+echo -e "${GREEN}✓ In-cluster Age key backup created${NC}"
 echo -e "${YELLOW}⚠ KSOPS package deployment deferred until after ArgoCD installation${NC}"
 echo ""
 echo -e "${YELLOW}Next steps:${NC}"
 echo -e "  1. Install ArgoCD"
 echo -e "  2. Deploy KSOPS package to ArgoCD"
-echo -e "  3. Developers run: ${GREEN}./scripts/bootstrap/infra/secrets/ksops/generate-env-sops.sh${NC}"
-echo -e "  2. Commit encrypted *.secret.yaml files to Git"
-echo -e "  3. ArgoCD will automatically sync and decrypt secrets"
+echo -e "  3. Generate platform secrets: ${GREEN}./scripts/bootstrap/infra/secrets/ksops/generate-platform-secrets.sh${NC}"
+echo -e "  4. Commit encrypted *.secret.yaml files to Git"
+echo -e "  5. ArgoCD will automatically sync and decrypt secrets"
+echo ""
+echo -e "${BLUE}Emergency Recovery:${NC}"
+echo -e "  Break-glass script: ${GREEN}./scripts/bootstrap/infra/secrets/ksops/inject-offline-key.sh${NC}"
 echo ""
 
 exit 0
