@@ -118,8 +118,6 @@ jobs:
 
       - name: Bootstrap Cluster
         run: ./scripts/bootstrap/01-master-bootstrap.sh ${{ inputs.environment }}
-        env:
-          SKIP_TENANT_MIGRATION: "true"
 
       - name: Run Gateway Validation
         run: |
