@@ -1,22 +1,9 @@
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: argocd-application-controller-network-policy
-  namespace: argocd
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: argocd-application-controller
-  policyTypes:
-    - Ingress
-    - Egress
-  ingress:
-    - from:
-        - namespaceSelector: {}
-      ports:
-        - port: 8082
-          protocol: TCP
-  egress:
+- op: add
+  path: /spec/policyTypes/-
+  value: Egress
+- op: add
+  path: /spec/egress
+  value:
     # Allow connection to repo-server for manifest generation
     - to:
         - podSelector:

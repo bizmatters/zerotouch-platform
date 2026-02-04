@@ -5,7 +5,6 @@ namespace: argocd
 
 resources:
   - https://raw.githubusercontent.com/argoproj/argo-cd/v3.2.0/manifests/install.yaml
-  - argocd-application-controller-netpol-patch.yaml
 
 # Add control-plane tolerations to all workloads
 patches:
@@ -14,6 +13,11 @@ patches:
     target:
       kind: ConfigMap
       name: argocd-cm
+  # Add egress rules to application-controller NetworkPolicy
+  - path: argocd-application-controller-netpol-patch.yaml
+    target:
+      kind: NetworkPolicy
+      name: argocd-application-controller-network-policy
   - target:
       kind: Deployment
       name: argocd-applicationset-controller
