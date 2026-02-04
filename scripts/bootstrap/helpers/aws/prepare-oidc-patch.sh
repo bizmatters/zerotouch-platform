@@ -5,7 +5,20 @@
 
 set -e
 
-ENV="${1:-dev}"
+ENV="$1"
+
+# If ENV not provided, read from bootstrap config
+if [[ -z "$ENV" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+    source "$REPO_ROOT/scripts/bootstrap/helpers/bootstrap-config.sh"
+    ENV=$(read_bootstrap_env)
+    if [[ $? -ne 0 ]]; then
+        echo "Error: Failed to read environment from bootstrap config" >&2
+        exit 1
+    fi
+fi
+
 REGION="${2:-ap-south-1}"
 
 # Paths

@@ -35,31 +35,56 @@ fi
 echo -e "${GREEN}✓ age-keygen found${NC}"
 echo ""
 
-# Generate Age keypair
-echo -e "${BLUE}Generating 256-bit Age keypair...${NC}"
+# Check if key already exists in cluster
+if command -v kubectl &> /dev/null && kubectl get secret sops-age -n argocd &> /dev/null 2>&1; then
+    echo -e "${YELLOW}⚠ Existing sops-age secret found in cluster${NC}"
+    echo -e "${BLUE}Reusing existing Age key to maintain secret decryption...${NC}"
+    
+    # Extract existing private key from cluster
+    AGE_PRIVATE_KEY=$(kubectl get secret sops-age -n argocd -o jsonpath='{.data.keys\.txt}' 2>/dev/null | base64 -d)
+    
+    if [[ ! "$AGE_PRIVATE_KEY" =~ ^AGE-SECRET-KEY-1 ]]; then
+        echo -e "${RED}✗ Error: Invalid Age private key format in cluster secret${NC}"
+        exit 1
+    fi
+    
+    # Derive public key from private key
+    AGE_PUBLIC_KEY=$(echo "$AGE_PRIVATE_KEY" | age-keygen -y 2>/dev/null)
+    
+    if [ -z "$AGE_PUBLIC_KEY" ]; then
+        echo -e "${RED}✗ Error: Failed to derive public key from existing private key${NC}"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}✓ Existing Age key loaded from cluster${NC}"
+    echo ""
+else
+    # Generate Age keypair
+    echo -e "${BLUE}Generating 256-bit Age keypair...${NC}"
 
-# Generate keypair and capture output
-KEYGEN_OUTPUT=$(age-keygen 2>&1)
+    # Generate keypair and capture output
+    KEYGEN_OUTPUT=$(age-keygen 2>&1)
 
-# Extract public key (format: # public key: age1...)
-AGE_PUBLIC_KEY=$(echo "$KEYGEN_OUTPUT" | grep "# public key:" | sed 's/# public key: //')
+    # Extract public key (format: # public key: age1...)
+    AGE_PUBLIC_KEY=$(echo "$KEYGEN_OUTPUT" | grep "# public key:" | sed 's/# public key: //')
 
-# Extract private key (format: AGE-SECRET-KEY-1...)
-AGE_PRIVATE_KEY=$(echo "$KEYGEN_OUTPUT" | grep "^AGE-SECRET-KEY-1" | head -n 1)
+    # Extract private key (format: AGE-SECRET-KEY-1...)
+    AGE_PRIVATE_KEY=$(echo "$KEYGEN_OUTPUT" | grep "^AGE-SECRET-KEY-1" | head -n 1)
 
-# Validate keys were generated
-if [ -z "$AGE_PUBLIC_KEY" ]; then
-    echo -e "${RED}✗ Error: Failed to generate public key${NC}"
-    exit 1
+    # Validate keys were generated
+    if [ -z "$AGE_PUBLIC_KEY" ]; then
+        echo -e "${RED}✗ Error: Failed to generate public key${NC}"
+        exit 1
+    fi
+
+    if [ -z "$AGE_PRIVATE_KEY" ]; then
+        echo -e "${RED}✗ Error: Failed to generate private key${NC}"
+        exit 1
+    fi
+
+    echo -e "${GREEN}✓ Age keypair generated successfully${NC}"
+    echo ""
 fi
-
-if [ -z "$AGE_PRIVATE_KEY" ]; then
-    echo -e "${RED}✗ Error: Failed to generate private key${NC}"
-    exit 1
-fi
-
-echo -e "${GREEN}✓ Age keypair generated successfully${NC}"
-echo ""
 
 # Export keys to environment variables
 export AGE_PUBLIC_KEY
@@ -83,6 +108,24 @@ echo ""
 echo -e "${GREEN}✓ AGE_PUBLIC_KEY exported${NC}"
 echo -e "${GREEN}✓ AGE_PRIVATE_KEY exported${NC}"
 echo ""
+
+# Update .sops.yaml with current public key
+SOPS_YAML_PATH="$SCRIPT_DIR/../../../../.sops.yaml"
+if [ -f "$SOPS_YAML_PATH" ]; then
+    echo -e "${BLUE}Updating .sops.yaml with current public key...${NC}"
+    
+    # Check if public key already matches
+    if grep -q "$AGE_PUBLIC_KEY" "$SOPS_YAML_PATH"; then
+        echo -e "${GREEN}✓ .sops.yaml already contains current public key${NC}"
+    else
+        # Update the age key in .sops.yaml
+        sed -i.bak "s/age: age1[a-z0-9]*/age: $AGE_PUBLIC_KEY/" "$SOPS_YAML_PATH"
+        rm -f "$SOPS_YAML_PATH.bak"
+        echo -e "${GREEN}✓ .sops.yaml updated with public key${NC}"
+    fi
+    echo ""
+fi
+
 echo -e "${YELLOW}Next steps:${NC}"
 echo -e "  1. Run inject-age-key.sh to create Kubernetes secret"
 echo -e "  2. Configure .sops.yaml with the public key"

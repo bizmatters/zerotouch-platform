@@ -50,10 +50,23 @@ else
 fi
 echo ""
 
-# Step 4: Generate Age keypair
+# Step 4: Generate or retrieve Age keypair
 echo -e "${BLUE}[4/8] Generating Age keypair...${NC}"
-source "$SECRETS_DIR/ksops/08b-generate-age-keys.sh"
-echo -e "${GREEN}✓ Age keypair generated${NC}"
+
+# Check if age key already exists in cluster
+if kubectl get secret sops-age -n argocd &>/dev/null; then
+    echo -e "${YELLOW}Age key already exists in cluster, reusing...${NC}"
+    AGE_PRIVATE_KEY=$(kubectl get secret sops-age -n argocd -o jsonpath='{.data.keys\.txt}' | base64 -d)
+    AGE_PUBLIC_KEY=$(echo "$AGE_PRIVATE_KEY" | age-keygen -y)
+    export AGE_PUBLIC_KEY
+    export AGE_PRIVATE_KEY
+    export SOPS_AGE_KEY="$AGE_PRIVATE_KEY"
+    echo -e "${GREEN}✓ Age keypair retrieved from cluster${NC}"
+else
+    source "$SECRETS_DIR/ksops/08b-generate-age-keys.sh"
+    export SOPS_AGE_KEY="$AGE_PRIVATE_KEY"
+    echo -e "${GREEN}✓ Age keypair generated${NC}"
+fi
 echo -e "${GREEN}  Public Key: $AGE_PUBLIC_KEY${NC}"
 echo ""
 

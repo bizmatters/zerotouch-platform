@@ -46,7 +46,7 @@ kubectl_retry() {
 
 # Check arguments
 SERVER_IP="$1"
-ENV="${2:-dev}"
+ENV="$2"
 
 if [ -z "$SERVER_IP" ]; then
     echo -e "${RED}Usage: $0 <server-ip> [env]${NC}"
@@ -55,8 +55,26 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && while [[ ! -d .git && $(pwd) != "/" ]]; do cd ..; done; pwd))"
+
+# If ENV not provided, read from bootstrap config
+if [[ -z "$ENV" ]]; then
+    source "$REPO_ROOT/scripts/bootstrap/helpers/bootstrap-config.sh"
+    ENV=$(read_bootstrap_env)
+    if [[ $? -ne 0 ]]; then
+        echo -e "${RED}Failed to read environment from bootstrap config${NC}"
+        exit 1
+    fi
+fi
+
 TALOS_DIR="$REPO_ROOT/bootstrap/talos"
 BASE_CONFIG="$TALOS_DIR/nodes/cp01-main/config.yaml"
+
+# Load environment variables
+if [[ -f "$REPO_ROOT/.env" ]]; then
+    set -a
+    source "$REPO_ROOT/.env"
+    set +a
+fi
 
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║   Bootstrapping Talos Cluster ($ENV)                         ║${NC}"

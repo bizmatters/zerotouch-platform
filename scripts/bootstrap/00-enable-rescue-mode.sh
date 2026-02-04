@@ -29,7 +29,7 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 HELPERS_DIR="$SCRIPT_DIR/helpers"
-ENV="${1:-dev}"
+ENV="$1"
 AUTO_YES=false
 
 # Parse arguments
@@ -40,7 +40,9 @@ for arg in "$@"; do
             shift
             ;;
         *)
-            ENV="$arg"
+            if [[ "$arg" != "-y" && "$arg" != "--yes" ]]; then
+                ENV="$arg"
+            fi
             ;;
     esac
 done
@@ -79,8 +81,10 @@ command_exists() {
 }
 
 # Auto-load .env if it exists
-if [[ -f "$REPO_ROOT/.env" ]] && [[ -z "$HETZNER_API_TOKEN" ]]; then
+if [[ -f "$REPO_ROOT/.env" ]]; then
+    set -a
     source "$REPO_ROOT/.env"
+    set +a
 fi
 
 # Check prerequisites
@@ -89,11 +93,16 @@ log_info "Hetzner Rescue Mode Automation"
 log_info "Environment: $ENV"
 log_info "════════════════════════════════════════════════════════"
 
+# Use environment-specific token
+ENV_UPPER=$(echo "$ENV" | tr '[:lower:]' '[:upper:]')
+TOKEN_VAR="${ENV_UPPER}_HETZNER_API_TOKEN"
+HETZNER_API_TOKEN="${!TOKEN_VAR}"
+
 if [[ -z "$HETZNER_API_TOKEN" ]]; then
-    log_error "HETZNER_API_TOKEN environment variable is not set"
+    log_error "${TOKEN_VAR} environment variable is not set"
     echo ""
-    echo "Please set your Hetzner API token:"
-    echo "  export HETZNER_API_TOKEN=\"your-api-token-here\""
+    echo "Please set your Hetzner API token in .env:"
+    echo "  ${TOKEN_VAR}=\"your-api-token-here\""
     echo ""
     echo "Get your API token from: https://console.hetzner.cloud/projects"
     exit 1

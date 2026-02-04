@@ -7,6 +7,21 @@
 
 HETZNER_API_URL="https://api.hetzner.cloud/v1"
 
+# Auto-detect environment from bootstrap config
+if [[ -z "$HETZNER_API_TOKEN" ]]; then
+    REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+    BOOTSTRAP_CONFIG="$REPO_ROOT/.zerotouch-cache/bootstrap-config.json"
+    
+    if [[ -f "$BOOTSTRAP_CONFIG" ]] && command -v jq &> /dev/null; then
+        ENV=$(jq -r '.environment // empty' "$BOOTSTRAP_CONFIG")
+        if [[ -n "$ENV" ]]; then
+            ENV_UPPER=$(echo "$ENV" | tr '[:lower:]' '[:upper:]')
+            TOKEN_VAR="${ENV_UPPER}_HETZNER_API_TOKEN"
+            HETZNER_API_TOKEN="${!TOKEN_VAR}"
+        fi
+    fi
+fi
+
 # Function to make Hetzner API call
 hetzner_api() {
     local method="$1"

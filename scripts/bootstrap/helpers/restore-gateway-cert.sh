@@ -5,6 +5,15 @@
 set -e
 
 ENV="prod"
+
+# If ENV not provided or hardcoded, read from bootstrap config
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+if [[ -f "$REPO_ROOT/scripts/bootstrap/helpers/bootstrap-config.sh" ]]; then
+    source "$REPO_ROOT/scripts/bootstrap/helpers/bootstrap-config.sh"
+    ENV=$(read_bootstrap_env) || ENV="prod"
+fi
+
 SECRET_NAME="nutgraf-tls-cert"
 NAMESPACE="kube-system"
 SSM_PATH="/zerotouch/${ENV}/gateway/tls-cert"

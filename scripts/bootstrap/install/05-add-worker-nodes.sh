@@ -90,6 +90,49 @@ else
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && while [[ ! -d .git && $(pwd) != "/" ]]; do cd ..; done; pwd))"
+
+# Load environment variables
+if [[ -f "$REPO_ROOT/.env" ]]; then
+    set -a
+    source "$REPO_ROOT/.env"
+    set +a
+fi
+
+# Stage cache functions (same as master bootstrap)
+STAGE_CACHE_FILE="${REPO_ROOT}/.zerotouch-cache/bootstrap-stage-cache.json"
+
+is_stage_complete() {
+    local stage_name="$1"
+    if [[ ! -f "$STAGE_CACHE_FILE" ]]; then
+        return 1
+    fi
+    if command -v jq &> /dev/null; then
+        local completed=$(jq -r --arg stage "$stage_name" '.stages[$stage] // empty' "$STAGE_CACHE_FILE")
+        if [[ -n "$completed" ]]; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+mark_stage_complete() {
+    local stage_name="$1"
+    local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    
+    # Ensure cache file exists
+    if [[ ! -f "$STAGE_CACHE_FILE" ]]; then
+        mkdir -p "$(dirname "$STAGE_CACHE_FILE")"
+        echo '{"stages":{}}' > "$STAGE_CACHE_FILE"
+    fi
+    
+    if command -v jq &> /dev/null; then
+        local temp_file=$(mktemp)
+        jq --arg stage "$stage_name" --arg ts "$timestamp" \
+           '.stages[$stage] = $ts' "$STAGE_CACHE_FILE" > "$temp_file"
+        mv "$temp_file" "$STAGE_CACHE_FILE"
+    fi
+}
 
 # Function to add a single worker node
 add_single_worker() {
@@ -97,6 +140,11 @@ add_single_worker() {
     local NODE_IP="$2"
     local NODE_ROLE="${3:-worker}"
     local SERVER_PASSWORD="$4"
+    
+    # Stage cache for this specific worker
+    STAGE_CACHE_FILE="${REPO_ROOT}/.zerotouch-cache/bootstrap-stage-cache.json"
+    WORKER_INSTALL_STAGE="worker_${NODE_NAME}_talos_installed"
+    WORKER_CONFIG_STAGE="worker_${NODE_NAME}_configured"
     
     log_info "Adding worker node to cluster"
     log_info "Node Name: $NODE_NAME"
@@ -130,26 +178,39 @@ add_single_worker() {
         log_info "✓ Detected hostname from config: $ACTUAL_HOSTNAME"
     fi
 
-    # Step 3: Install Talos on worker
-    log_info "Step 2: Installing Talos on worker node..."
-    cd "$SCRIPT_DIR"
-    ./03-install-talos.sh \
-        --server-ip "$NODE_IP" \
-        --user root \
-        --password "$SERVER_PASSWORD" \
-        --yes
+    # Check if Talos installation already complete
+    if is_stage_complete "$WORKER_INSTALL_STAGE"; then
+        log_info "Step 2: Talos installation already complete (cached), skipping..."
+    else
+        # Step 3: Install Talos on worker
+        log_info "Step 2: Installing Talos on worker node..."
+        cd "$SCRIPT_DIR"
+        ./03-install-talos.sh \
+            --server-ip "$NODE_IP" \
+            --user root \
+            --password "$SERVER_PASSWORD" \
+            --yes
 
-    log_info "✓ Talos installation complete"
+        log_info "✓ Talos installation complete"
+        mark_stage_complete "$WORKER_INSTALL_STAGE"
 
-    # Step 4: Wait for Talos to boot
-    log_info "Step 3: Waiting 3 minutes for Talos to boot..."
-    sleep 180
+        # Step 4: Wait for Talos to boot
+        log_info "Step 3: Waiting 3 minutes for Talos to boot..."
+        sleep 180
+    fi
+
+    # Check if worker configuration already complete
+    if is_stage_complete "$WORKER_CONFIG_STAGE"; then
+        log_info "Step 4-7: Worker configuration already complete (cached), skipping..."
+        log_info "✓ Worker node already configured"
+        return 0
+    fi
 
     # Step 5: Apply worker configuration with providerID
     log_info "Step 4: Applying worker configuration..."
     cd "$REPO_ROOT/bootstrap/talos"
 
-    # Source the Hetzner API helper for server ID lookup
+    # Source the Hetzner API helper for server ID lookup (reads ENV from bootstrap config)
     source "$REPO_ROOT/scripts/bootstrap/helpers/hetzner-api.sh"
 
     # Get server ID for providerID configuration
@@ -220,6 +281,7 @@ add_single_worker() {
     fi
     
     log_info "✓ Worker node configuration complete"
+    mark_stage_complete "$WORKER_CONFIG_STAGE"
 
     # Summary
     echo ""

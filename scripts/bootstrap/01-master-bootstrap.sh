@@ -22,7 +22,17 @@ CURRENT_STEP=0
 
 # Stage cache configuration
 SKIP_CACHE=${SKIP_CACHE:-false}
-STAGE_CACHE_FILE=".bootstrap-stage-cache"
+STAGE_CACHE_FILE=".zerotouch-cache/bootstrap-stage-cache.json"
+
+# ArgoCD configuration
+ARGOCD_NAMESPACE="argocd"
+
+# Source bootstrap config helper
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/helpers/bootstrap-config.sh"
+
+# Ensure cache directory exists early
+ensure_cache_dir
 
 # Function to display step progress
 step() {
@@ -38,6 +48,9 @@ skip_step() {
 
 # Stage cache management functions
 init_stage_cache() {
+    # Ensure zerotouch cache directory exists
+    ensure_cache_dir
+    
     if [[ "$SKIP_CACHE" == "true" ]]; then
         echo -e "${BLUE}Cache disabled, removing existing cache file${NC}"
         rm -f "$STAGE_CACHE_FILE"
@@ -127,6 +140,10 @@ if [ "$1" = "--mode" ]; then
 # Check if first argument looks like an environment name (not an IP)
 elif [[ "$1" =~ ^(dev|staging|production)$ ]]; then
     ENV="$1"
+    
+    # Write bootstrap config IMMEDIATELY after ENV is determined
+    write_bootstrap_config "$ENV"
+    
     shift
     echo -e "${BLUE}Using environment: $ENV${NC}"
     echo -e "${BLUE}Fetching configuration from tenant repository...${NC}"
@@ -413,22 +430,43 @@ else
     skip_step "Applying patches (production mode)"
 fi
 
-# Step 10: Install ArgoCD (includes NATS pre-creation for preview mode)
+# Step 10: Install ArgoCD + Deploy KSOPS + Deploy Root App (4-script sequence)
+# This sequence ensures KSOPS is deployed BEFORE root app to avoid chicken-and-egg problem
+
+# Step 10.1: Install ArgoCD (CLI, server, pods, repo credentials)
 if is_stage_complete "argocd_install"; then
     skip_step "Installing ArgoCD (cached)"
 else
-    step "Installing ArgoCD..."
+    step "Installing ArgoCD (steps 1-3: CLI, server, credentials)..."
     "$SCRIPT_DIR/install/09-install-argocd.sh" "$MODE" "$ENV"
     mark_stage_complete "argocd_install"
 fi
 
-# Step 10.5: Deploy KSOPS Package to ArgoCD
+# Step 10.2: Deploy KSOPS Package to ArgoCD
 if is_stage_complete "ksops_package"; then
     skip_step "Deploying KSOPS Package (cached)"
 else
     step "Deploying KSOPS Package to ArgoCD..."
     "$SCRIPT_DIR/infra/secrets/ksops/08e-deploy-ksops-package.sh"
     mark_stage_complete "ksops_package"
+fi
+
+# Step 10.3: Wait for ArgoCD repo-server with KSOPS
+if is_stage_complete "argocd_repo_ready"; then
+    skip_step "Waiting for ArgoCD repo-server with KSOPS (cached)"
+else
+    step "Waiting for ArgoCD repo-server with KSOPS..."
+    "$SCRIPT_DIR/wait/09b-wait-argocd-repo-server.sh" --timeout 120 --namespace "$ARGOCD_NAMESPACE"
+    mark_stage_complete "argocd_repo_ready"
+fi
+
+# Step 10.4: Deploy Root Application
+if is_stage_complete "root_app_deploy"; then
+    skip_step "Deploying Root Application (cached)"
+else
+    step "Deploying Root Application..."
+    "$SCRIPT_DIR/install/10-deploy-root-app.sh" "$MODE" "$ENV"
+    mark_stage_complete "root_app_deploy"
 fi
 
 # Step 11: Wait for platform-bootstrap

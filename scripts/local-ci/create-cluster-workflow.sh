@@ -25,7 +25,7 @@ fi
 LOG_DIR="$SCRIPT_DIR/logs"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 LOG_FILE="$LOG_DIR/create-cluster-${ENVIRONMENT}-${TIMESTAMP}.log"
-STAGE_CACHE_FILE="$REPO_ROOT/.bootstrap-stage-cache"
+STAGE_CACHE_FILE="$REPO_ROOT/.zerotouch-cache/bootstrap-stage-cache.json"
 
 # Create logs directory if it doesn't exist
 mkdir -p "$LOG_DIR"

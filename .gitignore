@@ -22,6 +22,7 @@ scripts/local-ci/logs
 .talos-credentials
 .release-artifacts
 .tenants-cache/
+.zerotouch-cache/
 *.log
 .env.ssm.bkp
 **.key

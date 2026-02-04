@@ -4,21 +4,31 @@ set -euo pipefail
 # Verify Hetzner Cloud DNS Zone exists and show details
 # This script verifies a DNS zone exists and displays nameservers
 
-ZONE_NAME="${1:-nutgraf.in}"
-API_TOKEN="${HETZNER_API_TOKEN:-}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
-if [ -z "$API_TOKEN" ]; then
-    echo "Error: HETZNER_API_TOKEN environment variable is required"
-    echo "Usage: HETZNER_API_TOKEN=your_token $0 [zone_name]"
+# Load environment variables
+if [[ -f "$REPO_ROOT/.env" ]]; then
+    set -a
+    source "$REPO_ROOT/.env"
+    set +a
+fi
+
+# Source Hetzner API helper
+source "$REPO_ROOT/scripts/bootstrap/helpers/hetzner-api.sh"
+
+ZONE_NAME="${1:-nutgraf.in}"
+
+if [[ -z "$HETZNER_API_TOKEN" ]]; then
+    echo "Error: HETZNER_API_TOKEN not set"
+    echo "Ensure .env is configured with ${ENV_UPPER}_HETZNER_API_TOKEN"
     exit 1
 fi
 
 echo "Verifying DNS zone: $ZONE_NAME..."
 
-# Get zone details
-zones=$(curl -s \
-    -H "Authorization: Bearer $API_TOKEN" \
-    "https://api.hetzner.cloud/v1/zones")
+# Get zone details using helper
+zones=$(hetzner_api "GET" "/zones")
 
 zone_found=$(echo "$zones" | jq -r ".zones[] | select(.name == \"$ZONE_NAME\") | .name" 2>/dev/null || echo "")
 

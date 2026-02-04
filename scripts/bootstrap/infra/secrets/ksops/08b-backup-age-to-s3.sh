@@ -101,11 +101,14 @@ TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 echo -e "${BLUE}Checking S3 bucket...${NC}"
 if ! aws s3 ls "s3://$BUCKET_NAME" --endpoint-url "$S3_ENDPOINT" --cli-connect-timeout 10 &>/dev/null; then
     echo -e "${YELLOW}Bucket doesn't exist, creating...${NC}"
-    if ! aws s3 mb "s3://$BUCKET_NAME" --endpoint-url "$S3_ENDPOINT" --region "$DEV_HETZNER_S3_REGION" --cli-connect-timeout 10; then
-        echo -e "${RED}✗ Failed to create bucket${NC}"
-        exit 1
+    if ! aws s3 mb "s3://$BUCKET_NAME" --endpoint-url "$S3_ENDPOINT" --region "$DEV_HETZNER_S3_REGION" --cli-connect-timeout 10 2>&1 | grep -v "BucketAlreadyExists"; then
+        # Check if bucket now exists (might have been created by another process)
+        if ! aws s3 ls "s3://$BUCKET_NAME" --endpoint-url "$S3_ENDPOINT" --cli-connect-timeout 10 &>/dev/null; then
+            echo -e "${RED}✗ Failed to create bucket${NC}"
+            exit 1
+        fi
     fi
-    echo -e "${GREEN}✓ Bucket created${NC}"
+    echo -e "${GREEN}✓ Bucket ready${NC}"
 else
     echo -e "${GREEN}✓ Bucket exists${NC}"
 fi
@@ -137,6 +140,28 @@ fi
 echo -e "${GREEN}✓ Recovery key uploaded${NC}"
 echo ""
 
+# Mark as active key by creating stable reference files
+echo -e "${BLUE}Marking as active key...${NC}"
+if ! aws s3 cp "$TEMP_DIR/age-key-encrypted.txt" \
+    "s3://$BUCKET_NAME/age-keys/ACTIVE-age-key-encrypted.txt" \
+    --endpoint-url "$S3_ENDPOINT" \
+    --cli-connect-timeout 10 \
+    --cli-read-timeout 30; then
+    echo -e "${RED}✗ Failed to mark active encrypted key${NC}"
+    exit 1
+fi
+
+if ! aws s3 cp "$TEMP_DIR/recovery-key.txt" \
+    "s3://$BUCKET_NAME/age-keys/ACTIVE-recovery-key.txt" \
+    --endpoint-url "$S3_ENDPOINT" \
+    --cli-connect-timeout 10 \
+    --cli-read-timeout 30; then
+    echo -e "${RED}✗ Failed to mark active recovery key${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✓ Active key markers created${NC}"
+echo ""
+
 # Export recovery key for in-cluster backup
 export RECOVERY_PRIVATE_KEY="$RECOVERY_PRIVATE"
 
@@ -146,16 +171,19 @@ echo -e "${BLUE}╚════════════════════�
 echo ""
 echo -e "${GREEN}✓ Age key backed up to Hetzner Object Storage${NC}"
 echo -e "${GREEN}✓ Location: s3://$BUCKET_NAME/age-keys/$TIMESTAMP-*${NC}"
+echo -e "${GREEN}✓ Active key: s3://$BUCKET_NAME/age-keys/ACTIVE-*${NC}"
 echo -e "${GREEN}✓ Files:${NC}"
-echo -e "${GREEN}  - age-key-encrypted.txt (encrypted Age private key)${NC}"
-echo -e "${GREEN}  - recovery-key.txt (recovery master key)${NC}"
+echo -e "${GREEN}  - $TIMESTAMP-age-key-encrypted.txt (timestamped backup)${NC}"
+echo -e "${GREEN}  - $TIMESTAMP-recovery-key.txt (timestamped backup)${NC}"
+echo -e "${GREEN}  - ACTIVE-age-key-encrypted.txt (current active key)${NC}"
+echo -e "${GREEN}  - ACTIVE-recovery-key.txt (current active recovery)${NC}"
 echo ""
 echo -e "${YELLOW}CRITICAL: Store recovery key securely offline${NC}"
 echo -e "${YELLOW}Recovery public key: $RECOVERY_PUBLIC${NC}"
 echo ""
-echo -e "${BLUE}To recover Age key:${NC}"
-echo -e "  1. Download: ${GREEN}aws s3 cp s3://$BUCKET_NAME/age-keys/$TIMESTAMP-recovery-key.txt recovery.key --endpoint-url $S3_ENDPOINT${NC}"
-echo -e "  2. Download: ${GREEN}aws s3 cp s3://$BUCKET_NAME/age-keys/$TIMESTAMP-age-key-encrypted.txt encrypted.txt --endpoint-url $S3_ENDPOINT${NC}"
+echo -e "${BLUE}To recover Age key (using active markers):${NC}"
+echo -e "  1. Download: ${GREEN}aws s3 cp s3://$BUCKET_NAME/age-keys/ACTIVE-recovery-key.txt recovery.key --endpoint-url $S3_ENDPOINT${NC}"
+echo -e "  2. Download: ${GREEN}aws s3 cp s3://$BUCKET_NAME/age-keys/ACTIVE-age-key-encrypted.txt encrypted.txt --endpoint-url $S3_ENDPOINT${NC}"
 echo -e "  3. Decrypt: ${GREEN}age -d -i recovery.key encrypted.txt${NC}"
 echo ""
 

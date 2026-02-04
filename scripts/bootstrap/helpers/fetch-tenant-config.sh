@@ -7,17 +7,29 @@
 
 set -e
 
-ENV="${1:-dev}"
+ENV="$1"
 USE_CACHE=false
 
 if [[ "$2" == "--use-cache" ]]; then
     USE_CACHE=true
 fi
 
+# If ENV not provided, read from bootstrap config
+if [[ -z "$ENV" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && while [[ ! -d .git && $(pwd) != "/" ]]; do cd ..; done; pwd))"
+    source "$REPO_ROOT/scripts/bootstrap/helpers/bootstrap-config.sh"
+    ENV=$(read_bootstrap_env)
+    if [[ $? -ne 0 ]]; then
+        echo "Error: Failed to read environment from bootstrap config" >&2
+        exit 1
+    fi
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Find repository root by looking for .git directory
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && while [[ ! -d .git && $(pwd) != "/" ]]; do cd ..; done; pwd))"
-CACHE_DIR="$REPO_ROOT/.tenants-cache"
+CACHE_DIR="$REPO_ROOT/.zerotouch-cache/tenants-cache"
 ENV_FILE="$CACHE_DIR/environments/$ENV/talos-values.yaml"
 
 # Get tenant repo credentials from environment variables
