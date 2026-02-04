@@ -18,8 +18,9 @@ spec:
             solverName: hetzner
             groupName: acme.hetzner.com
             config:
-              secretName: hetzner-dns
-              apiUrl: https://dns.hetzner.com/api/v1
+              tokenSecretKeyRef:
+                name: hetzner-dns
+                key: api-key
 ---
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
@@ -41,5 +42,6 @@ spec:
             solverName: hetzner
             groupName: acme.hetzner.com
             config:
-              secretName: hetzner-dns
-              apiUrl: https://dns.hetzner.com/api/v1
+              tokenSecretKeyRef:
+                name: hetzner-dns
+                key: api-key
