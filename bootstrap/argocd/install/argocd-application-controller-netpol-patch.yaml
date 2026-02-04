@@ -33,9 +33,9 @@
       ports:
         - port: 53
           protocol: UDP
-    # Allow connection to Kubernetes API server
-    - to:
-        - namespaceSelector: {}
-      ports:
+    # Allow connection to Kubernetes API server and external services
+    - ports:
         - port: 443
+          protocol: TCP
+        - port: 6443
           protocol: TCP
