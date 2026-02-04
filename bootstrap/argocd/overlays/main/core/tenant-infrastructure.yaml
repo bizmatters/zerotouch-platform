@@ -10,7 +10,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/arun4infra/zerotouch-tenants.git
+    repoURL: https://github.com/bizmatters/zerotouch-tenants.git
     targetRevision: main
     path: tenants
     directory:

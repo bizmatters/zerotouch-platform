@@ -8,7 +8,7 @@ metadata:
 spec:
   generators:
     - git:
-        repoURL: https://github.com/arun4infra/zerotouch-tenants.git
+        repoURL: https://github.com/bizmatters/zerotouch-tenants.git
         revision: main
         files:
           - path: tenants/*/overlays/production/config.yaml

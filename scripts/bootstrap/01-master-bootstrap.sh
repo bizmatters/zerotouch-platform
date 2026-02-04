@@ -384,6 +384,15 @@ else
     mark_stage_complete "ksops_setup"
 fi
 
+# Step 8.5: Apply environment variable substitution to ArgoCD manifests
+if is_stage_complete "env_substitution"; then
+    skip_step "Applying environment substitution (cached)"
+else
+    step "Applying environment variable substitution..."
+    "$SCRIPT_DIR/infra/secrets/ksops/apply-env-substitution.sh"
+    mark_stage_complete "env_substitution"
+fi
+
 # Step 9: Apply patches for preview mode BEFORE ArgoCD installation
 if [ "$MODE" = "preview" ]; then
     step "Applying patches before ArgoCD installation..."

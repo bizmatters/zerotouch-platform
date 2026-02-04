@@ -33,7 +33,7 @@ echo -e "${GREEN}✓ Reading from: $ENV_FILE${NC}"
 echo ""
 
 "$SCRIPT_DIR/generate-env-secrets.sh"
-"$SCRIPT_DIR/generate-tenant-secrets.sh"
+"$SCRIPT_DIR/generate-tenant-registry-secrets.sh"
 "$SCRIPT_DIR/generate-core-secrets.sh"
 
 echo -e "${GREEN}✅ Platform secrets generated${NC}"

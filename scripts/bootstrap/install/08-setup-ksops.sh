@@ -57,6 +57,12 @@ echo -e "${GREEN}✓ Age keypair generated${NC}"
 echo -e "${GREEN}  Public Key: $AGE_PUBLIC_KEY${NC}"
 echo ""
 
+# Step 4.5: Generate platform secrets with Age key
+echo -e "${BLUE}[4.5/8] Generating platform secrets...${NC}"
+"$SECRETS_DIR/ksops/generate-sops/generate-platform-sops.sh"
+echo -e "${GREEN}✓ Platform secrets generated and encrypted${NC}"
+echo ""
+
 # Step 5: Backup Age key to Hetzner S3
 echo -e "${BLUE}[5/8] Backing up Age key to Hetzner Object Storage...${NC}"
 if [ -n "${HETZNER_S3_ACCESS_KEY:-}" ] && [ -n "${HETZNER_S3_SECRET_KEY:-}" ]; then
