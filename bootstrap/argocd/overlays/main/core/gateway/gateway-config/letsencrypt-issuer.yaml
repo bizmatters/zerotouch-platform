@@ -18,10 +18,9 @@ spec:
             solverName: hetzner
             groupName: acme.hetzner.com
             config:
-              secretNamespace: kube-system
-              tokenSecretKeyRef:
-                name: external-dns-hetzner
-                key: HETZNER_DNS_TOKEN
+              apiKeySecretRef:
+                name: hetzner-dns
+                key: api-key
 ---
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
@@ -43,7 +42,6 @@ spec:
             solverName: hetzner
             groupName: acme.hetzner.com
             config:
-              secretNamespace: kube-system
-              tokenSecretKeyRef:
-                name: external-dns-hetzner
-                key: HETZNER_DNS_TOKEN
+              apiKeySecretRef:
+                name: hetzner-dns
+                key: api-key
