@@ -18,6 +18,11 @@ patches:
     target:
       kind: NetworkPolicy
       name: argocd-application-controller-network-policy
+  # Add egress rules to repo-server NetworkPolicy
+  - path: argocd-repo-server-netpol-patch.yaml
+    target:
+      kind: NetworkPolicy
+      name: argocd-repo-server-network-policy
   - target:
       kind: Deployment
       name: argocd-applicationset-controller
