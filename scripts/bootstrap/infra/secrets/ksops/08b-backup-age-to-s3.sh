@@ -28,9 +28,18 @@ if [ -z "${AGE_PRIVATE_KEY:-}" ]; then
     exit 1
 fi
 
-if [ -z "${HETZNER_S3_ACCESS_KEY:-}" ] || [ -z "${HETZNER_S3_SECRET_KEY:-}" ]; then
-    echo -e "${RED}✗ Hetzner S3 credentials not set${NC}"
-    echo -e "${YELLOW}Set HETZNER_S3_ACCESS_KEY and HETZNER_S3_SECRET_KEY${NC}"
+if [ -z "${DEV_HETZNER_S3_ACCESS_KEY:-}" ] || [ -z "${DEV_HETZNER_S3_SECRET_KEY:-}" ]; then
+    echo -e "${RED}✗ DEV_HETZNER_S3_ACCESS_KEY or DEV_HETZNER_S3_SECRET_KEY not set${NC}"
+    exit 1
+fi
+
+if [ -z "${DEV_HETZNER_S3_ENDPOINT:-}" ] || [ -z "${DEV_HETZNER_S3_BUCKET_NAME:-}" ]; then
+    echo -e "${RED}✗ DEV_HETZNER_S3_ENDPOINT or DEV_HETZNER_S3_BUCKET_NAME not set${NC}"
+    exit 1
+fi
+
+if [ -z "${DEV_HETZNER_S3_REGION:-}" ]; then
+    echo -e "${RED}✗ DEV_HETZNER_S3_REGION not set${NC}"
     exit 1
 fi
 
@@ -80,27 +89,51 @@ echo "$ENCRYPTED_BACKUP" > "$TEMP_DIR/age-key-encrypted.txt"
 echo "$RECOVERY_PRIVATE" > "$TEMP_DIR/recovery-key.txt"
 
 # Configure AWS CLI for Hetzner
-export AWS_ACCESS_KEY_ID="$HETZNER_S3_ACCESS_KEY"
-export AWS_SECRET_ACCESS_KEY="$HETZNER_S3_SECRET_KEY"
-export AWS_DEFAULT_REGION="eu-central"
+export AWS_ACCESS_KEY_ID="$DEV_HETZNER_S3_ACCESS_KEY"
+export AWS_SECRET_ACCESS_KEY="$DEV_HETZNER_S3_SECRET_KEY"
+export AWS_DEFAULT_REGION="$DEV_HETZNER_S3_REGION"
 
-S3_ENDPOINT="https://fsn1.your-objectstorage.com"
-BUCKET_NAME="zerotouch-platform-backups"
+S3_ENDPOINT="$DEV_HETZNER_S3_ENDPOINT"
+BUCKET_NAME="$DEV_HETZNER_S3_BUCKET_NAME"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+
+# Check if bucket exists, create if not
+echo -e "${BLUE}Checking S3 bucket...${NC}"
+if ! aws s3 ls "s3://$BUCKET_NAME" --endpoint-url "$S3_ENDPOINT" --cli-connect-timeout 10 &>/dev/null; then
+    echo -e "${YELLOW}Bucket doesn't exist, creating...${NC}"
+    if ! aws s3 mb "s3://$BUCKET_NAME" --endpoint-url "$S3_ENDPOINT" --region "$DEV_HETZNER_S3_REGION" --cli-connect-timeout 10; then
+        echo -e "${RED}✗ Failed to create bucket${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✓ Bucket created${NC}"
+else
+    echo -e "${GREEN}✓ Bucket exists${NC}"
+fi
+echo ""
 
 # Upload encrypted Age key
 echo -e "${BLUE}Uploading encrypted Age key to S3...${NC}"
-aws s3 cp "$TEMP_DIR/age-key-encrypted.txt" \
+if ! aws s3 cp "$TEMP_DIR/age-key-encrypted.txt" \
     "s3://$BUCKET_NAME/age-keys/$TIMESTAMP-age-key-encrypted.txt" \
-    --endpoint-url "$S3_ENDPOINT"
+    --endpoint-url "$S3_ENDPOINT" \
+    --cli-connect-timeout 10 \
+    --cli-read-timeout 30; then
+    echo -e "${RED}✗ Failed to upload encrypted Age key${NC}"
+    exit 1
+fi
 echo -e "${GREEN}✓ Encrypted Age key uploaded${NC}"
 echo ""
 
 # Upload recovery key
 echo -e "${BLUE}Uploading recovery key to S3...${NC}"
-aws s3 cp "$TEMP_DIR/recovery-key.txt" \
+if ! aws s3 cp "$TEMP_DIR/recovery-key.txt" \
     "s3://$BUCKET_NAME/age-keys/$TIMESTAMP-recovery-key.txt" \
-    --endpoint-url "$S3_ENDPOINT"
+    --endpoint-url "$S3_ENDPOINT" \
+    --cli-connect-timeout 10 \
+    --cli-read-timeout 30; then
+    echo -e "${RED}✗ Failed to upload recovery key${NC}"
+    exit 1
+fi
 echo -e "${GREEN}✓ Recovery key uploaded${NC}"
 echo ""
 

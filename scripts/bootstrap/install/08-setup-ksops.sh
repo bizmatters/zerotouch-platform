@@ -65,7 +65,7 @@ echo ""
 
 # Step 5: Backup Age key to Hetzner S3
 echo -e "${BLUE}[5/8] Backing up Age key to Hetzner Object Storage...${NC}"
-if [ -n "${HETZNER_S3_ACCESS_KEY:-}" ] && [ -n "${HETZNER_S3_SECRET_KEY:-}" ]; then
+if [ -n "${HETZNER_S3_ACCESS_KEY:-${DEV_HETZNER_S3_ACCESS_KEY:-}}" ] && [ -n "${HETZNER_S3_SECRET_KEY:-${DEV_HETZNER_S3_SECRET_KEY:-}}" ]; then
     source "$SECRETS_DIR/ksops/08b-backup-age-to-s3.sh"
     echo -e "${GREEN}✓ Age key backed up to S3${NC}"
 else
