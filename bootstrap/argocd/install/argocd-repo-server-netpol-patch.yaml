@@ -6,6 +6,14 @@
 - op: add
   path: /spec/egress
   value:
+    # Allow connection to redis for caching
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: argocd-redis
+      ports:
+        - port: 6379
+          protocol: TCP
     # Allow DNS resolution
     - to:
         - namespaceSelector:
@@ -18,8 +26,6 @@
         - port: 53
           protocol: UDP
     # Allow HTTPS for Git/Helm/OCI operations
-    - to:
-        - namespaceSelector: {}
-      ports:
+    - ports:
         - port: 443
           protocol: TCP
