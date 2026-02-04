@@ -98,7 +98,7 @@ get_env_prefix() {
         pr) echo "PR" ;;
         dev) echo "DEV" ;;
         staging) echo "STAGING" ;;
-        production) echo "PROD" ;;
+        production|prod) echo "PROD" ;;
         *) echo "" ;;
     esac
 }
@@ -111,7 +111,7 @@ if [ -n "$ENV_FILTER" ]; then
     FILTER_PREFIX=$(get_env_prefix "$ENV_FILTER")
     if [ -z "$FILTER_PREFIX" ]; then
         echo -e "${RED}✗ Invalid environment filter: $ENV_FILTER${NC}"
-        echo -e "${YELLOW}Valid values: pr, dev, staging, production${NC}"
+        echo -e "${YELLOW}Valid values: pr, dev, staging, production, prod${NC}"
         exit 1
     fi
     SUPPORTED_PREFIXES="^${FILTER_PREFIX}_"
@@ -151,6 +151,10 @@ while IFS='=' read -r name value || [ -n "$name" ]; do
         SECRET_FILE="$ENV_SECRETS_DIR/${secret_name}.secret.yaml"
     fi
     
+    # Remove surrounding quotes from value if present
+    value="${value#\"}"
+    value="${value%\"}"
+    
     cat > "$SECRET_FILE" << EOF
 apiVersion: v1
 kind: Secret
@@ -158,7 +162,8 @@ metadata:
   name: ${secret_name}
 type: Opaque
 stringData:
-  value: ${value}
+  value: |
+    ${value}
 EOF
     
     # Encrypt with SOPS
