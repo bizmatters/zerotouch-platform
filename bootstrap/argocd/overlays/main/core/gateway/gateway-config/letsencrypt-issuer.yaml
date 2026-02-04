@@ -19,8 +19,8 @@ spec:
             groupName: acme.hetzner.com
             config:
               tokenSecretKeyRef:
-                name: hetzner
-                key: token
+                name: external-dns-hetzner
+                key: HETZNER_DNS_TOKEN
 ---
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
@@ -43,5 +43,5 @@ spec:
             groupName: acme.hetzner.com
             config:
               tokenSecretKeyRef:
-                name: hetzner
-                key: token
+                name: external-dns-hetzner
+                key: HETZNER_DNS_TOKEN
