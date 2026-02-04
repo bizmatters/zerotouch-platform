@@ -1,6 +1,8 @@
-- op: add
-  path: /spec/policyTypes/-
-  value: Egress
+- op: replace
+  path: /spec/policyTypes
+  value:
+    - Ingress
+    - Egress
 - op: add
   path: /spec/egress
   value:
