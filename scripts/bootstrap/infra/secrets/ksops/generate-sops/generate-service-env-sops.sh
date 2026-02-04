@@ -76,11 +76,16 @@ echo ""
 mkdir -p "$SECRETS_DIR"
 
 # Environment mapping: prefix -> overlay directory
-declare -A ENV_MAP
-ENV_MAP["PR"]="pr"
-ENV_MAP["DEV"]="dev"
-ENV_MAP["STAGING"]="staging"
-ENV_MAP["PROD"]="production"
+# Using case statement for bash 3.x compatibility
+get_env_dir() {
+    case "$1" in
+        PR) echo "pr" ;;
+        DEV) echo "dev" ;;
+        STAGING) echo "staging" ;;
+        PROD) echo "production" ;;
+        *) echo "" ;;
+    esac
+}
 
 # Supported environment prefixes
 SUPPORTED_PREFIXES="^(PR_|DEV_|STAGING_|PROD_)"
@@ -89,7 +94,6 @@ SUPPORTED_PREFIXES="^(PR_|DEV_|STAGING_|PROD_)"
 echo -e "${BLUE}Processing secrets with supported prefixes (PR_, DEV_, STAGING_, PROD_)...${NC}"
 
 SECRET_COUNT=0
-declare -A ENV_SECRETS_COUNT
 
 while IFS='=' read -r name value || [ -n "$name" ]; do
     # Skip empty lines and comments
@@ -104,7 +108,7 @@ while IFS='=' read -r name value || [ -n "$name" ]; do
     # PR_DATABASE_URL -> env=PR, secret=database-url
     if [[ "$name" =~ ^(PR|DEV|STAGING|PROD)_(.+)$ ]]; then
         env_prefix="${BASH_REMATCH[1]}"
-        env="${ENV_MAP[$env_prefix]}"
+        env=$(get_env_dir "$env_prefix")
         secret_name=$(echo "${BASH_REMATCH[2]}" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
     else
         continue
@@ -136,7 +140,6 @@ EOF
     if $SOPS_CMD "$SECRET_FILE" 2>/dev/null; then
         echo -e "${GREEN}✓ Created: $env/${secret_name}.secret.yaml${NC}"
         ((SECRET_COUNT++))
-        ((ENV_SECRETS_COUNT[$env]=${ENV_SECRETS_COUNT[$env]:-0}+1))
     else
         echo -e "${RED}✗ Failed to encrypt: $env/${secret_name}.secret.yaml${NC}"
         rm -f "$SECRET_FILE"
@@ -152,9 +155,6 @@ fi
 
 echo ""
 echo -e "${GREEN}✓ Created $SECRET_COUNT encrypted secret files${NC}"
-for env in "${!ENV_SECRETS_COUNT[@]}"; do
-    echo -e "  ${GREEN}$env: ${ENV_SECRETS_COUNT[$env]} secrets${NC}"
-done
 echo ""
 echo -e "${YELLOW}Next steps:${NC}"
 if [ -n "$TENANT_NAME" ]; then
