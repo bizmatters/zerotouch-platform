@@ -1,11 +1,12 @@
 #!/bin/bash
 # Generate SOPS-encrypted *.secret.yaml from .env file
-# Usage: ./generate-env-sops.sh [TENANT_NAME] [OUTPUT_BASE_DIR] [SOPS_CONFIG]
+# Usage: ./generate-env-sops.sh [TENANT_NAME] [OUTPUT_BASE_DIR] [SOPS_CONFIG] [ENV_FILTER]
 #
 # Arguments:
 #   TENANT_NAME: Optional tenant name to filter env vars (e.g., deepagents-runtime)
 #   OUTPUT_BASE_DIR: Base directory for output (default: $REPO_ROOT/secrets)
 #   SOPS_CONFIG: Path to .sops.yaml (default: auto-detect)
+#   ENV_FILTER: Filter by environment (pr, dev, staging, production) - only process matching prefix
 #
 # Supported prefixes: PR_, DEV_, STAGING_, PROD_
 
@@ -22,6 +23,7 @@ NC='\033[0m'
 TENANT_NAME="${1:-}"
 OUTPUT_BASE_DIR="${2:-}"
 SOPS_CONFIG="${3:-}"
+ENV_FILTER="${4:-}"
 
 # Detect current repo root
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
@@ -41,6 +43,9 @@ echo ""
 
 if [ -n "$TENANT_NAME" ]; then
     echo -e "${GREEN}✓ Tenant: $TENANT_NAME${NC}"
+fi
+if [ -n "$ENV_FILTER" ]; then
+    echo -e "${GREEN}✓ Environment filter: $ENV_FILTER${NC}"
 fi
 echo -e "${GREEN}✓ Repository: $REPO_ROOT${NC}"
 echo -e "${GREEN}✓ Output directory: $SECRETS_DIR${NC}"
@@ -87,12 +92,35 @@ get_env_dir() {
     esac
 }
 
+# Get prefix from env filter
+get_env_prefix() {
+    case "$1" in
+        pr) echo "PR" ;;
+        dev) echo "DEV" ;;
+        staging) echo "STAGING" ;;
+        production) echo "PROD" ;;
+        *) echo "" ;;
+    esac
+}
+
 # Supported environment prefixes
 SUPPORTED_PREFIXES="^(PR_|DEV_|STAGING_|PROD_)"
 
-# Read and process secrets
-echo -e "${BLUE}Processing secrets with supported prefixes (PR_, DEV_, STAGING_, PROD_)...${NC}"
+# If env filter provided, only process that environment
+if [ -n "$ENV_FILTER" ]; then
+    FILTER_PREFIX=$(get_env_prefix "$ENV_FILTER")
+    if [ -z "$FILTER_PREFIX" ]; then
+        echo -e "${RED}✗ Invalid environment filter: $ENV_FILTER${NC}"
+        echo -e "${YELLOW}Valid values: pr, dev, staging, production${NC}"
+        exit 1
+    fi
+    SUPPORTED_PREFIXES="^${FILTER_PREFIX}_"
+    echo -e "${BLUE}Processing only ${FILTER_PREFIX}_ prefixed secrets...${NC}"
+else
+    echo -e "${BLUE}Processing secrets with supported prefixes (PR_, DEV_, STAGING_, PROD_)...${NC}"
+fi
 
+# Read and process secrets
 SECRET_COUNT=0
 
 while IFS='=' read -r name value || [ -n "$name" ]; do
@@ -105,7 +133,6 @@ while IFS='=' read -r name value || [ -n "$name" ]; do
     fi
     
     # Extract environment and secret name
-    # PR_DATABASE_URL -> env=PR, secret=database-url
     if [[ "$name" =~ ^(PR|DEV|STAGING|PROD)_(.+)$ ]]; then
         env_prefix="${BASH_REMATCH[1]}"
         env=$(get_env_dir "$env_prefix")
@@ -114,12 +141,15 @@ while IFS='=' read -r name value || [ -n "$name" ]; do
         continue
     fi
     
-    # Create environment-specific directory
-    ENV_SECRETS_DIR="$SECRETS_DIR/$env"
-    mkdir -p "$ENV_SECRETS_DIR"
-    
-    # Create secret YAML file
-    SECRET_FILE="$ENV_SECRETS_DIR/${secret_name}.secret.yaml"
+    # Create secret YAML file directly in output directory (no env subdirectory when filtered)
+    if [ -n "$ENV_FILTER" ]; then
+        SECRET_FILE="$SECRETS_DIR/${secret_name}.secret.yaml"
+    else
+        # Create environment-specific directory when not filtered
+        ENV_SECRETS_DIR="$SECRETS_DIR/$env"
+        mkdir -p "$ENV_SECRETS_DIR"
+        SECRET_FILE="$ENV_SECRETS_DIR/${secret_name}.secret.yaml"
+    fi
     
     cat > "$SECRET_FILE" << EOF
 apiVersion: v1
@@ -138,10 +168,14 @@ EOF
     fi
     
     if $SOPS_CMD "$SECRET_FILE" 2>/dev/null; then
-        echo -e "${GREEN}✓ Created: $env/${secret_name}.secret.yaml${NC}"
+        if [ -n "$ENV_FILTER" ]; then
+            echo -e "${GREEN}✓ Created: ${secret_name}.secret.yaml${NC}"
+        else
+            echo -e "${GREEN}✓ Created: $env/${secret_name}.secret.yaml${NC}"
+        fi
         ((SECRET_COUNT++))
     else
-        echo -e "${RED}✗ Failed to encrypt: $env/${secret_name}.secret.yaml${NC}"
+        echo -e "${RED}✗ Failed to encrypt: ${secret_name}.secret.yaml${NC}"
         rm -f "$SECRET_FILE"
     fi
     
