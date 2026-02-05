@@ -6,5 +6,5 @@ resources:
 - provider-kubernetes-config.yaml
 - provider-kubernetes-rbac.yaml
 - provider-aws.yaml
-- network-policies/
+- network-policies/platform-egress.yaml
 - ghcr-token-refresher/
