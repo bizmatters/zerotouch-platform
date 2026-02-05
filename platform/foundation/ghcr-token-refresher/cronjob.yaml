@@ -74,10 +74,12 @@ spec:
               SIGNATURE=$(echo -n "${HEADER_B64}.${PAYLOAD_B64}" | openssl dgst -sha256 -sign <(echo "$GITHUB_APP_PRIVATE_KEY") | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
               JWT="${HEADER_B64}.${PAYLOAD_B64}.${SIGNATURE}"
               
-              # Get installation token
+              # Get installation token with packages read permission
               TOKEN_RESPONSE=$(curl -s -X POST \
                 -H "Authorization: Bearer $JWT" \
                 -H "Accept: application/vnd.github+json" \
+                -H "Content-Type: application/json" \
+                -d '{"permissions":{"packages":"read"}}' \
                 "https://api.github.com/app/installations/${GITHUB_APP_INSTALLATION_ID}/access_tokens")
               
               GITHUB_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.token // empty')
