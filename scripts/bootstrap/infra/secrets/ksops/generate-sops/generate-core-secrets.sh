@@ -103,6 +103,32 @@ EOF
     fi
 done < "$ENV_FILE"
 
+if [[ -n "$GITHUB_APP_ID" && -n "$GITHUB_APP_INSTALLATION_ID" && -n "$GITHUB_APP_PRIVATE_KEY" ]]; then
+    # Create GitHub App credentials secret for GHCR token refresher CronJob
+    # This secret is consumed by platform/foundation/ghcr-token-refresher/cronjob.yaml
+    # The CronJob uses these credentials to generate fresh GitHub App tokens every 30 minutes
+    # and updates ghcr-pull-secret in all tenant namespaces for image pulls
+    cat > "$CORE_SECRETS_DIR/github-app-credentials.secret.yaml" << EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: github-app-credentials
+  namespace: kube-system
+type: Opaque
+stringData:
+  github-app-id: "${GITHUB_APP_ID}"
+  github-app-installation-id: "${GITHUB_APP_INSTALLATION_ID}"
+  github-app-private-key: |
+$(echo "$GITHUB_APP_PRIVATE_KEY" | sed 's/^/    /')
+EOF
+    
+    if sops -e -i "$CORE_SECRETS_DIR/github-app-credentials.secret.yaml" 2>/dev/null; then
+        echo -e "${GREEN}  ✓ github-app-credentials.secret.yaml${NC}"
+        CORE_SECRET_FILES+=("github-app-credentials.secret.yaml")
+        ((CORE_SECRET_COUNT++))
+    fi
+fi
+
 # Add GitHub App secrets to kustomization (created by tenant script)
 for github_secret in github-app-id.secret.yaml github-app-installation-id.secret.yaml github-app-private-key.secret.yaml; do
     if [ -f "$CORE_SECRETS_DIR/$github_secret" ]; then

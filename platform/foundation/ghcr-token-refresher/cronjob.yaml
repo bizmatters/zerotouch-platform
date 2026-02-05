@@ -1,0 +1,123 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ghcr-token-refresher
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ghcr-token-refresher
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "create", "update", "patch"]
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ghcr-token-refresher
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ghcr-token-refresher
+subjects:
+- kind: ServiceAccount
+  name: ghcr-token-refresher
+  namespace: kube-system
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ghcr-token-refresher
+  namespace: kube-system
+spec:
+  schedule: "*/30 * * * *"  # Every 30 minutes
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: ghcr-token-refresher
+          restartPolicy: OnFailure
+          containers:
+          - name: token-refresher
+            image: alpine:3.19
+            command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              
+              apk add --no-cache curl jq openssl kubectl
+              
+              # Read GitHub App credentials from secret
+              GITHUB_APP_ID=$(cat /secrets/github-app-id)
+              GITHUB_APP_INSTALLATION_ID=$(cat /secrets/github-app-installation-id)
+              GITHUB_APP_PRIVATE_KEY=$(cat /secrets/github-app-private-key)
+              
+              # Generate JWT
+              NOW=$(date +%s)
+              IAT=$((NOW - 60))
+              EXP=$((NOW + 600))
+              
+              HEADER='{"alg":"RS256","typ":"JWT"}'
+              PAYLOAD="{\"iat\":${IAT},\"exp\":${EXP},\"iss\":\"${GITHUB_APP_ID}\"}"
+              
+              HEADER_B64=$(echo -n "$HEADER" | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
+              PAYLOAD_B64=$(echo -n "$PAYLOAD" | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
+              
+              SIGNATURE=$(echo -n "${HEADER_B64}.${PAYLOAD_B64}" | openssl dgst -sha256 -sign <(echo "$GITHUB_APP_PRIVATE_KEY") | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
+              JWT="${HEADER_B64}.${PAYLOAD_B64}.${SIGNATURE}"
+              
+              # Get installation token
+              TOKEN_RESPONSE=$(curl -s -X POST \
+                -H "Authorization: Bearer $JWT" \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/app/installations/${GITHUB_APP_INSTALLATION_ID}/access_tokens")
+              
+              GITHUB_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.token // empty')
+              
+              if [ -z "$GITHUB_TOKEN" ]; then
+                echo "Failed to generate GitHub App token"
+                exit 1
+              fi
+              
+              # Create dockerconfigjson
+              AUTH_STRING=$(echo -n "x-access-token:${GITHUB_TOKEN}" | base64 -w 0)
+              DOCKER_CONFIG=$(cat <<EOF
+              {
+                "auths": {
+                  "ghcr.io": {
+                    "auth": "${AUTH_STRING}"
+                  }
+                }
+              }
+              EOF
+              )
+              
+              # Update secret in all tenant namespaces
+              for NS in $(kubectl get namespaces -l tenant -o jsonpath='{.items[*].metadata.name}'); do
+                echo "Updating ghcr-pull-secret in namespace: $NS"
+                
+                kubectl create secret docker-registry ghcr-pull-secret \
+                  --docker-server=ghcr.io \
+                  --docker-username=x-access-token \
+                  --docker-password="$GITHUB_TOKEN" \
+                  --namespace="$NS" \
+                  --dry-run=client -o yaml | kubectl apply -f -
+              done
+              
+              echo "Token refresh completed successfully"
+            volumeMounts:
+            - name: github-app-credentials
+              mountPath: /secrets
+              readOnly: true
+          volumes:
+          - name: github-app-credentials
+            secret:
+              secretName: github-app-credentials

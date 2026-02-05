@@ -10,3 +10,4 @@ metadata:
         path: ksops
 files:
   - ./repo-zerotouch-tenants.secret.yaml
+  - ./ghcr-pull-secret.secret.yaml
