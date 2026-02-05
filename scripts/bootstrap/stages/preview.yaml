@@ -1,0 +1,188 @@
+# Preview Bootstrap Stages
+# GitHub Actions CI/CD testing with Kind cluster
+#
+# Expected Environment Variables (set by master bootstrap or CI):
+#   MODE - Set to "preview"
+#   ENV - Environment name (default: dev)
+#   SERVICE_NAME - Service being tested
+#   NAMESPACE - Service namespace
+#   IMAGE_TAG - Docker image tag
+#   DATABASE_URL - PostgreSQL connection string
+#   BOT_GITHUB_TOKEN - GitHub token for repo access
+#   BOT_GITHUB_USERNAME - GitHub username
+#   KIND_NODE_IMAGE - Pre-cached Kind node image (CI only)
+#   REPO_ROOT - Repository root directory
+#   ARGOCD_NAMESPACE - ArgoCD namespace (default: argocd)
+
+mode: preview
+description: GitHub Actions CI/CD testing with Kind cluster
+total_steps: 14
+
+# Production stages skipped in preview mode
+skipped_production_steps:
+  - rescue_mode
+  - network_manifests
+  - talos_install
+  - talos_bootstrap
+  - worker_nodes
+  - cilium_ready
+  - gateway_api_ready
+
+stages:
+  # Step 1: Preview environment setup
+  - name: preview_setup
+    description: Setup preview environment and load configuration
+    script: preview/setup-preview.sh
+    cache_key: null  # Always run
+    required: true
+    # Actions:
+    #   - Copy service .env to platform folder (if exists)
+    #   - Load environment variables
+    #   - Detect KIND_NODE_IMAGE (CI pre-cached or local default)
+    #   - Apply preview patches to manifests
+    #   - Create Kind cluster with local repo mount at /repo
+    #   - Label nodes: workload.bizmatters.dev/databases=true
+    # Exposes ports:
+    #   - 4222: NATS client
+    #   - 5432: PostgreSQL
+    #   - 6379: Redis (Dragonfly)
+
+  # Step 2: KSOPS setup
+  - name: ksops_setup
+    description: Setup KSOPS (SOPS + Age + Key Generation)
+    script: install/08-setup-ksops.sh
+    cache_key: ksops_setup
+    required: true
+    # ISSUE: Fails when .env file doesn't exist in CI
+    # Reads: $DATABASE_URL (should use env var instead of .env file)
+
+  # Step 3: Environment substitution
+  - name: env_substitution
+    description: Apply environment variable substitution to ArgoCD manifests
+    script: infra/secrets/ksops/apply-env-substitution.sh
+    cache_key: env_substitution
+    required: true
+
+  # Step 4: Apply patches before ArgoCD
+  - name: apply_patches_before_argocd
+    description: Apply preview patches to mounted filesystem in Kind container
+    script: preview/patches/00-apply-all-patches.sh
+    cache_key: null  # Always run
+    required: true
+    # Patches applied:
+    #   - 01-disable-argocd-autosync.sh
+    #   - 01-patch-urls.sh (file:///repo instead of Git URLs)
+    #   - 03-patch-tolerations.sh
+    #   - 04-exclude-local-path.sh
+    #   - 05-verify-storage-provisioner.sh
+    #   - 06-optimize-preview-resources.sh
+    #   - 07-disable-cilium-for-kind.sh
+    #   - 08-optimize-nats-resources.sh (memory-only, no persistence)
+    #   - 09-optimize-crossplane-resources.sh
+    #   - 10-optimize-keda-resources.sh
+    #   - 11-optimize-kagent-resources.sh
+    #   - 12-remove-dragonfly-security-context.sh
+
+  # Step 5: ArgoCD installation
+  - name: argocd_install
+    description: Install ArgoCD with preview mode configuration
+    script: install/09-install-argocd.sh
+    cache_key: argocd_install
+    required: true
+    args: ["preview", "dev"]
+
+  # Step 6: KSOPS package deployment
+  - name: ksops_package
+    description: Deploy KSOPS package to ArgoCD
+    script: infra/secrets/ksops/08e-deploy-ksops-package.sh
+    cache_key: ksops_package
+    required: true
+
+  # Step 7: ArgoCD repo server readiness
+  - name: argocd_repo_ready
+    description: Wait for ArgoCD repo-server with KSOPS plugin
+    script: wait/09b-wait-argocd-repo-server.sh
+    cache_key: argocd_repo_ready
+    required: true
+    args: ["--timeout", "120", "--namespace", "argocd"]
+
+  # Step 8: Root application deployment
+  - name: root_app_deploy
+    description: Deploy ArgoCD root application (preview overlay)
+    script: install/10-deploy-root-app.sh
+    cache_key: root_app_deploy
+    required: true
+    # Reads: $MODE (preview), $ENV (dev)
+    # Uses overlay: bootstrap/argocd/overlays/preview
+    # Repo URL: file:///repo (local mount, not Git)
+
+  # Step 9: Platform bootstrap sync
+  - name: platform_bootstrap
+    description: Wait for platform-bootstrap application sync
+    script: wait/10-wait-platform-bootstrap.sh
+    cache_key: platform_bootstrap
+    required: true
+
+  # Step 10: KSOPS verification (always run)
+  - name: verify_ksops
+    description: Verify KSOPS secret decryption
+    script: validation/11-verify-ksops.sh
+    cache_key: null  # Always run
+    required: true
+
+  # Step 11: TLS certificate restoration (always run)
+  - name: restore_tls_certs
+    description: Restore cached TLS certificates
+    script: helpers/restore-gateway-cert.sh
+    cache_key: null  # Always run
+    required: true
+
+  # Step 12: Child applications verification (always run)
+  - name: verify_child_apps
+    description: Verify ArgoCD child applications
+    script: validation/12-verify-child-apps.sh
+    cache_key: null  # Always run
+    required: true
+
+  # Step 13: Landing zones verification (always run)
+  - name: verify_landing_zones
+    description: Verify tenant landing zones
+    script: validation/16-verify-landing-zones.sh
+    cache_key: null  # Always run
+    required: true
+
+  # Step 14: Wait for applications (always run)
+  - name: wait_apps_healthy
+    description: Wait for all applications to be healthy (preview mode)
+    script: wait/12a-wait-apps-healthy.sh
+    cache_key: null  # Always run
+    required: true
+    timeout: 600
+    args: ["--timeout", "600", "--preview-mode"]
+
+# Post-validation steps (always run, not cached)
+post_validation:
+  - name: wait_service_dependencies
+    description: Wait for platform services to be ready (preview mode)
+    script: wait/13-wait-service-dependencies.sh
+    timeout: 300
+    args: ["--timeout", "300", "--preview-mode"]
+
+# Validations skipped in preview mode
+skipped_validations:
+  - tenant_repository_authentication  # No tenant repo in preview
+  - configure_repo_credentials        # Credentials from env vars
+  - validate_cluster                  # Production-only validation
+  - validate_external_gateway         # No external DNS in Kind
+
+# Key differences from production mode
+key_differences:
+  infrastructure: Kind (Docker) instead of Talos (bare-metal)
+  networking: kindnet instead of Cilium CNI
+  storage: Kind built-in instead of Rook/local-path
+  tenants: Excluded from deployment
+  config_source: Environment variables instead of tenant repo
+  repo_mount: Local filesystem at /repo instead of Git clone
+  resource_limits: Reduced for CI environment
+  autosync: Disabled for controlled testing
+  persistence: NATS uses memory-only (no PVC)

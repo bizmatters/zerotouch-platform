@@ -1,0 +1,179 @@
+# Production Bootstrap Stages
+# Bare-metal Talos cluster deployment with full platform stack
+#
+# Expected Environment Variables (set by master bootstrap):
+#   SERVER_IP - Control plane server IP address
+#   ROOT_PASSWORD - Root password for rescue mode
+#   WORKER_NODES - Comma-separated worker nodes (name:ip format)
+#   WORKER_PASSWORD - Worker node rescue password
+#   ENV - Environment name (dev/staging/production)
+#   CREDENTIALS_FILE - Path to credentials file
+#   REPO_ROOT - Repository root directory
+#   ARGOCD_NAMESPACE - ArgoCD namespace (default: argocd)
+
+mode: production
+total_steps: 18
+
+stages:
+  # Step 1: Rescue mode (pre-executed, marked complete in cache)
+  - name: rescue_mode
+    description: Server booted into rescue mode (assumed pre-executed)
+    script: null
+    cache_key: rescue_mode
+    required: true
+
+  # Step 2: Network manifests
+  - name: network_manifests
+    description: Embed Gateway API CRDs and Cilium CNI in Talos config
+    script: install/02-embed-network-manifests.sh
+    cache_key: network_manifests
+    required: true
+
+  # Step 3: Talos installation
+  - name: talos_install
+    description: Install Talos OS on bare-metal server
+    script: install/03-install-talos.sh
+    cache_key: talos_install
+    required: true
+    args: ["--server-ip", "$SERVER_IP", "--user", "root", "--password", "$ROOT_PASSWORD", "--yes"]
+    # Note: Password passed as arg (script requirement). Eval risk mitigated by validation in master bootstrap.
+
+  # Step 4: Talos bootstrap
+  - name: talos_bootstrap
+    description: Bootstrap Talos cluster and generate credentials
+    script: install/04-bootstrap-talos.sh
+    cache_key: talos_bootstrap
+    required: true
+    args: ["$SERVER_IP", "$ENV"]
+
+  # Step 5: Worker nodes (optional)
+  - name: worker_nodes
+    description: Add worker nodes to cluster
+    script: install/05-add-worker-nodes.sh
+    cache_key: worker_nodes
+    required: false
+    args: ["$WORKER_NODES", "$WORKER_PASSWORD"]
+    skip_if_empty: WORKER_NODES
+    # Note: Password passed as arg (script requirement). Eval risk mitigated by validation in master bootstrap.
+
+  # Step 6: Cilium readiness
+  - name: cilium_ready
+    description: Wait for Cilium CNI to be ready
+    script: wait/06-wait-cilium.sh
+    cache_key: cilium_ready
+    required: true
+
+  # Step 7: Gateway API readiness
+  - name: gateway_api_ready
+    description: Validate Gateway API CRDs readiness
+    script: wait/06a-wait-gateway-api.sh
+    cache_key: gateway_api_ready
+    required: true
+
+  # Step 8: KSOPS setup
+  - name: ksops_setup
+    description: Setup KSOPS (SOPS + Age + Key Generation)
+    script: install/08-setup-ksops.sh
+    cache_key: ksops_setup
+    required: true
+    # Generates Age keypair and platform secrets
+
+  # Step 9: Environment substitution
+  - name: env_substitution
+    description: Apply environment variable substitution to ArgoCD manifests
+    script: infra/secrets/ksops/apply-env-substitution.sh
+    cache_key: env_substitution
+    required: true
+
+  # Step 10: ArgoCD installation
+  - name: argocd_install
+    description: Install ArgoCD (CLI, server, pods, repo credentials)
+    script: install/09-install-argocd.sh
+    cache_key: argocd_install
+    required: true
+    args: ["$MODE", "$ENV"]
+
+  # Step 11: KSOPS package deployment
+  - name: ksops_package
+    description: Deploy KSOPS package to ArgoCD
+    script: infra/secrets/ksops/08e-deploy-ksops-package.sh
+    cache_key: ksops_package
+    required: true
+
+  # Step 12: ArgoCD repo server readiness
+  - name: argocd_repo_ready
+    description: Wait for ArgoCD repo-server with KSOPS plugin
+    script: wait/09b-wait-argocd-repo-server.sh
+    cache_key: argocd_repo_ready
+    required: true
+    args: ["--timeout", "120", "--namespace", "$ARGOCD_NAMESPACE"]
+
+  # Step 13: Root application deployment
+  - name: root_app_deploy
+    description: Deploy ArgoCD root application
+    script: install/10-deploy-root-app.sh
+    cache_key: root_app_deploy
+    required: true
+    args: ["$MODE", "$ENV"]
+
+  # Step 14: Platform bootstrap sync
+  - name: platform_bootstrap
+    description: Wait for platform-bootstrap application sync
+    script: wait/10-wait-platform-bootstrap.sh
+    cache_key: platform_bootstrap
+    required: true
+
+  # Step 15: KSOPS verification (always run)
+  - name: verify_ksops
+    description: Verify KSOPS secret decryption
+    script: validation/11-verify-ksops.sh
+    cache_key: null  # Always run
+    required: true
+
+  # Step 16: TLS certificate restoration (always run)
+  - name: restore_tls_certs
+    description: Restore cached TLS certificates
+    script: helpers/restore-gateway-cert.sh
+    cache_key: null  # Always run
+    required: true
+
+  # Step 17: Child applications verification (always run)
+  - name: verify_child_apps
+    description: Verify ArgoCD child applications
+    script: validation/12-verify-child-apps.sh
+    cache_key: null  # Always run
+    required: true
+
+  # Step 18: Landing zones verification (always run)
+  - name: verify_landing_zones
+    description: Verify tenant landing zones
+    script: validation/16-verify-landing-zones.sh
+    cache_key: null  # Always run
+    required: true
+
+# Post-validation steps (always run, not cached)
+post_validation:
+  - name: wait_apps_healthy
+    description: Wait for all applications to be healthy
+    script: wait/12a-wait-apps-healthy.sh
+    timeout: 600
+    args: ["--timeout", "600"]
+
+  - name: wait_service_dependencies
+    description: Wait for platform services to be ready
+    script: wait/13-wait-service-dependencies.sh
+    timeout: 300
+    args: ["--timeout", "300"]
+
+  - name: configure_repo_credentials
+    description: Configure repository credentials
+    script: install/13-configure-repo-credentials.sh
+    # Updates: $CREDENTIALS_FILE
+
+  - name: validate_cluster
+    description: Final cluster validation
+    script: validation/99-validate-cluster.sh
+
+  - name: validate_external_gateway
+    description: External gateway validation
+    script: validation/external-dns/00-validate-external-gateway.sh
