@@ -1,25 +1,26 @@
 #!/bin/bash
 # Generate GHCR pull secret using GitHub App credentials
-# Usage: ./generate-ghcr-pull-secret.sh <OUTPUT_FILE> <NAMESPACE> <SOPS_CONFIG>
+# Usage: ./generate-ghcr-pull-secret.sh <OUTPUT_FILE> <NAMESPACE> <SOPS_CONFIG> [ENV_FILE]
 
 set -e
 
 OUTPUT_FILE="${1:-}"
 NAMESPACE="${2:-}"
 SOPS_CONFIG="${3:-}"
+ENV_FILE="${4:-.env}"
 
 if [ -z "$OUTPUT_FILE" ] || [ -z "$NAMESPACE" ]; then
-    echo "Usage: $0 <OUTPUT_FILE> <NAMESPACE> [SOPS_CONFIG]"
+    echo "Usage: $0 <OUTPUT_FILE> <NAMESPACE> [SOPS_CONFIG] [ENV_FILE]"
     exit 1
 fi
 
 # Read GitHub App credentials from .env
-if [ ! -f ".env" ]; then
-    echo "Error: .env file not found"
+if [ ! -f "$ENV_FILE" ]; then
+    echo "Error: $ENV_FILE file not found"
     exit 1
 fi
 
-source .env
+source "$ENV_FILE"
 
 if [ -z "$GITHUB_APP_ID" ] || [ -z "$GITHUB_APP_INSTALLATION_ID" ] || [ -z "$GITHUB_APP_PRIVATE_KEY" ]; then
     echo "Error: Missing GitHub App credentials in .env"
