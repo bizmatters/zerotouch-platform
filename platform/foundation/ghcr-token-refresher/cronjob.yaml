@@ -100,8 +100,8 @@ spec:
               EOF
               )
               
-              # Update secret in all tenant namespaces
-              for NS in $(kubectl get namespaces -l tenant -o jsonpath='{.items[*].metadata.name}'); do
+              # Update secret in all tenant namespaces (using zerotouch.io/tenant label)
+              for NS in $(kubectl get namespaces -l zerotouch.io/tenant -o jsonpath='{.items[*].metadata.name}'); do
                 echo "Updating ghcr-pull-secret in namespace: $NS"
                 
                 kubectl create secret docker-registry ghcr-pull-secret \
