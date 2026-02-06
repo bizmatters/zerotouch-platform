@@ -45,6 +45,7 @@ echo -e "${BLUE}Namespace: $ARGOCD_NAMESPACE${NC}"
 echo ""
 
 ELAPSED=0
+GRACE_PERIOD=60  # Allow 60s for ReplicaSets to create pods before failing
 
 while [ $ELAPSED -lt $TIMEOUT ]; do
     echo -e "${BLUE}=== Checking ArgoCD pods (${ELAPSED}s / ${TIMEOUT}s) ===${NC}"
@@ -55,6 +56,17 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
         sleep $CHECK_INTERVAL
         ELAPSED=$((ELAPSED + CHECK_INTERVAL))
         continue
+    fi
+    
+    # Check if ReplicaSets are creating pods (detect stuck controllers) - only after grace period
+    if [[ $ELAPSED -ge $GRACE_PERIOD ]]; then
+        STUCK_RS=$(kubectl get rs -n "$ARGOCD_NAMESPACE" -o json 2>/dev/null | jq -r '.items[] | select(.spec.replicas > 0 and .status.replicas == 0) | .metadata.name' | head -5)
+        if [[ -n "$STUCK_RS" ]]; then
+            echo -e "${RED}✗ ReplicaSets not creating pods after ${GRACE_PERIOD}s (controller stuck):${NC}"
+            echo "$STUCK_RS" | while read rs; do echo "  - $rs"; done
+            echo -e "${RED}✗ ArgoCD deployment failed - ReplicaSet controller issue${NC}"
+            exit 1
+        fi
     fi
     
     # Count running workload pods (Deployments/StatefulSets)

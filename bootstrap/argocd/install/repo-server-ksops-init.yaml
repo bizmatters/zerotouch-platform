@@ -29,6 +29,17 @@
 - op: add
   path: /spec/template/spec/containers/0/volumeMounts/-
   value:
+    mountPath: /custom-tools
+    name: custom-tools
+- op: add
+  path: /spec/template/spec/containers/0/volumeMounts/-
+  value:
+    mountPath: /usr/local/bin/kustomize
+    name: custom-tools
+    subPath: kustomize
+- op: add
+  path: /spec/template/spec/containers/0/volumeMounts/-
+  value:
     mountPath: /.config/kustomize/plugin
     name: custom-tools
     subPath: kustomize/plugin
