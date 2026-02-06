@@ -3,7 +3,7 @@
 # Reads stage definitions from YAML and executes them in order
 #
 # Usage: ./stage-executor.sh <stage-file.yaml>
-# Example: ./stage-executor.sh stages/preview.yaml
+# Example: ./stage-executor.sh pipeline/preview.yaml
 #
 # Expected Environment Variables:
 #   All variables documented in the stage YAML file
@@ -60,10 +60,9 @@ log_step() { echo -e "${YELLOW}[$1/$2]${NC} $3"; }
 
 # Cache management functions
 init_stage_cache() {
-    if [[ "$SKIP_CACHE" == "true" ]]; then
-        log_info "Cache disabled, removing existing cache file"
-        rm -f "$STAGE_CACHE_FILE"
-    fi
+    # Note: Cache deletion is handled by workflow at startup when SKIP_CACHE=true
+    # Stage-executor should never delete cache to preserve entries added by workflow (e.g., rescue_mode)
+    # Only initialize if cache file doesn't exist
     
     if [[ ! -f "$STAGE_CACHE_FILE" ]]; then
         log_info "Initializing stage cache: $STAGE_CACHE_FILE"
@@ -86,11 +85,18 @@ mark_stage_complete() {
 is_stage_complete() {
     local stage_name="$1"
     
+    log_info "DEBUG: Checking cache for stage '$stage_name'"
+    log_info "DEBUG: STAGE_CACHE_FILE=$STAGE_CACHE_FILE"
+    log_info "DEBUG: SKIP_CACHE=$SKIP_CACHE"
+    log_info "DEBUG: File exists: $([ -f "$STAGE_CACHE_FILE" ] && echo "yes" || echo "no")"
+    
     if [[ ! -f "$STAGE_CACHE_FILE" ]] || [[ "$SKIP_CACHE" == "true" ]]; then
         return 1
     fi
     
     local completed=$(jq -r --arg stage "$stage_name" '.stages[$stage] // empty' "$STAGE_CACHE_FILE")
+    log_info "DEBUG: Cache value for '$stage_name': '$completed'"
+    
     if [[ -n "$completed" ]]; then
         log_info "Stage '$stage_name' already complete (cached: $completed)"
         return 0
@@ -145,10 +151,8 @@ for i in $(seq 0 $((STAGE_COUNT - 1))); do
     
     # Handle null script (e.g., rescue_mode - assumed pre-executed)
     if [[ "$STAGE_SCRIPT" == "null" ]]; then
-        log_info "Stage '$STAGE_NAME' has no script (assumed pre-executed)"
-        if [[ "$STAGE_CACHE_KEY" != "null" ]] && ! is_stage_complete "$STAGE_CACHE_KEY"; then
-            mark_stage_complete "$STAGE_CACHE_KEY"
-        fi
+        log_info "Stage '$STAGE_NAME' has no script (pre-executed externally)"
+        # Don't auto-mark complete - only skip if already cached
         echo ""
         continue
     fi
@@ -193,8 +197,15 @@ for i in $(seq 0 $((STAGE_COUNT - 1))); do
     fi
     
     # Execute stage script with args
-    log_info "Executing: $STAGE_SCRIPT ${SCRIPT_ARGS[*]}"
-    if "$SCRIPT_PATH" "${SCRIPT_ARGS[@]}"; then
+    if [[ ${#SCRIPT_ARGS[@]} -gt 0 ]]; then
+        log_info "Executing: $STAGE_SCRIPT ${SCRIPT_ARGS[*]}"
+        "$SCRIPT_PATH" "${SCRIPT_ARGS[@]}"
+    else
+        log_info "Executing: $STAGE_SCRIPT"
+        "$SCRIPT_PATH"
+    fi
+    
+    if [[ $? -eq 0 ]]; then
         log_success "Stage '$STAGE_NAME' completed successfully"
         
         # Mark stage complete if cache_key is set
@@ -253,9 +264,15 @@ if [[ "$POST_VALIDATION_COUNT" -gt 0 ]]; then
         fi
         
         # Execute post-validation script
-        log_info "Executing: $POST_SCRIPT ${POST_SCRIPT_ARGS[*]}"
+        if [[ ${#POST_SCRIPT_ARGS[@]} -gt 0 ]]; then
+            log_info "Executing: $POST_SCRIPT ${POST_SCRIPT_ARGS[*]}"
+            "$SCRIPT_PATH" "${POST_SCRIPT_ARGS[@]}"
+        else
+            log_info "Executing: $POST_SCRIPT"
+            "$SCRIPT_PATH"
+        fi
         
-        if "$SCRIPT_PATH" "${POST_SCRIPT_ARGS[@]}"; then
+        if [[ $? -eq 0 ]]; then
             log_success "Post-validation '$POST_NAME' completed"
         else
             log_warn "Post-validation '$POST_NAME' had issues (non-fatal)"

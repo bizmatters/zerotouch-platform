@@ -9,6 +9,13 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SECRETS_DIR="$SCRIPT_DIR/../infra/secrets"
 
+# Get ENV from bootstrap context (exported by master bootstrap script)
+if [ -z "${ENV:-}" ]; then
+    echo "Error: ENV environment variable is required"
+    exit 1
+fi
+ENV_UPPER=$(echo "$ENV" | tr '[:lower:]' '[:upper:]')
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -19,6 +26,40 @@ NC='\033[0m'
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║   KSOPS Setup - Master Script                               ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+
+# Validate critical environment variables upfront
+echo -e "${BLUE}Validating environment variables...${NC}"
+MISSING_VARS=()
+
+if [ -z "${GITHUB_APP_ID:-}" ]; then MISSING_VARS+=("GITHUB_APP_ID"); fi
+if [ -z "${GITHUB_APP_INSTALLATION_ID:-}" ]; then MISSING_VARS+=("GITHUB_APP_INSTALLATION_ID"); fi
+if [ -z "${GITHUB_APP_PRIVATE_KEY:-}" ]; then MISSING_VARS+=("GITHUB_APP_PRIVATE_KEY"); fi
+
+# Check for environment-specific S3 credentials dynamically
+S3_ACCESS_KEY_VAR="${ENV_UPPER}_HETZNER_S3_ACCESS_KEY"
+S3_SECRET_KEY_VAR="${ENV_UPPER}_HETZNER_S3_SECRET_KEY"
+S3_ACCESS_KEY="${!S3_ACCESS_KEY_VAR:-${HETZNER_S3_ACCESS_KEY:-}}"
+S3_SECRET_KEY="${!S3_SECRET_KEY_VAR:-${HETZNER_S3_SECRET_KEY:-}}"
+
+if [ -z "$S3_ACCESS_KEY" ]; then 
+    MISSING_VARS+=("${S3_ACCESS_KEY_VAR} or HETZNER_S3_ACCESS_KEY"); 
+fi
+if [ -z "$S3_SECRET_KEY" ]; then 
+    MISSING_VARS+=("${S3_SECRET_KEY_VAR} or HETZNER_S3_SECRET_KEY"); 
+fi
+
+if [ ${#MISSING_VARS[@]} -gt 0 ]; then
+    echo -e "${RED}✗ Error: Missing required environment variables:${NC}"
+    for var in "${MISSING_VARS[@]}"; do
+        echo -e "${RED}  - $var${NC}"
+    done
+    echo ""
+    echo -e "${YELLOW}Please set these variables in .env file${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}✓ All required environment variables present${NC}"
 echo ""
 
 # Step 1: Install KSOPS tools (SOPS + Age)
@@ -42,12 +83,15 @@ echo ""
 
 # Step 3: Bootstrap Hetzner Object Storage
 echo -e "${BLUE}[3/8] Bootstrapping Hetzner Object Storage...${NC}"
-if [ -n "${HETZNER_S3_ACCESS_KEY:-}" ] && [ -n "${HETZNER_S3_SECRET_KEY:-}" ]; then
-    "$SECRETS_DIR/03-bootstrap-storage.sh"
-    echo -e "${GREEN}✓ Hetzner Object Storage bootstrapped${NC}"
-else
-    echo -e "${YELLOW}⚠️  Skipping: HETZNER_S3_ACCESS_KEY or HETZNER_S3_SECRET_KEY not set${NC}"
-fi
+# Export environment-specific S3 credentials for the bootstrap script
+S3_ENDPOINT_VAR="${ENV_UPPER}_HETZNER_S3_ENDPOINT"
+S3_REGION_VAR="${ENV_UPPER}_HETZNER_S3_REGION"
+export HETZNER_S3_ACCESS_KEY="$S3_ACCESS_KEY"
+export HETZNER_S3_SECRET_KEY="$S3_SECRET_KEY"
+export HETZNER_S3_ENDPOINT="${!S3_ENDPOINT_VAR}"
+export HETZNER_S3_REGION="${!S3_REGION_VAR}"
+"$SECRETS_DIR/03-bootstrap-storage.sh"
+echo -e "${GREEN}✓ Hetzner Object Storage bootstrapped${NC}"
 echo ""
 
 # Step 4: Generate or retrieve Age keypair
@@ -78,12 +122,9 @@ echo ""
 
 # Step 5: Backup Age key to Hetzner S3
 echo -e "${BLUE}[5/8] Backing up Age key to Hetzner Object Storage...${NC}"
-if [ -n "${HETZNER_S3_ACCESS_KEY:-${DEV_HETZNER_S3_ACCESS_KEY:-}}" ] && [ -n "${HETZNER_S3_SECRET_KEY:-${DEV_HETZNER_S3_SECRET_KEY:-}}" ]; then
-    source "$SECRETS_DIR/ksops/08b-backup-age-to-s3.sh"
-    echo -e "${GREEN}✓ Age key backed up to S3${NC}"
-else
-    echo -e "${YELLOW}⚠️  Skipping: HETZNER_S3_ACCESS_KEY or HETZNER_S3_SECRET_KEY not set${NC}"
-fi
+# S3 credentials already exported in step 3
+source "$SECRETS_DIR/ksops/08b-backup-age-to-s3.sh"
+echo -e "${GREEN}✓ Age key backed up to S3${NC}"
 echo ""
 
 # Step 6: Inject Age key into cluster

@@ -9,9 +9,9 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-ENV_FILE="$REPO_ROOT/.env"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../../../../.." && pwd)"
+ENV_FILE="$REPO_ROOT/.env"
 
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║   Generate Platform Secrets (KSOPS)                         ║${NC}"

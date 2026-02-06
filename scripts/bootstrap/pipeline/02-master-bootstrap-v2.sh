@@ -21,10 +21,10 @@ ARGOCD_NAMESPACE="argocd"
 
 # Get script directory and repo root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 # Source bootstrap config helper
-source "$SCRIPT_DIR/helpers/bootstrap-config.sh"
+source "$REPO_ROOT/scripts/bootstrap/helpers/bootstrap-config.sh"
 
 # Ensure cache directory exists early
 ensure_cache_dir
@@ -81,8 +81,14 @@ elif [[ "$1" =~ ^(dev|staging|production)$ ]]; then
     log_info "Using environment: $ENV"
     log_info "Fetching configuration from tenant repository..."
     
+    # Save SCRIPT_DIR before sourcing (parse-tenant-config will overwrite it)
+    _SAVED_SCRIPT_DIR="$SCRIPT_DIR"
+    
     # Parse tenant config using helper
-    source "$SCRIPT_DIR/helpers/parse-tenant-config.sh" "$ENV"
+    source "$SCRIPT_DIR/../helpers/parse-tenant-config.sh" "$ENV"
+    
+    # Restore SCRIPT_DIR
+    SCRIPT_DIR="$_SAVED_SCRIPT_DIR"
     
     log_success "Configuration loaded from tenant repo"
 else
@@ -209,7 +215,7 @@ if [ "$MODE" = "production" ]; then
     fi
     
     log_info "Setting up production credentials..."
-    CREDENTIALS_FILE=$("$SCRIPT_DIR/helpers/setup-production.sh" "$SERVER_IP" "$ROOT_PASSWORD" "$WORKER_NODES" "$WORKER_PASSWORD" --yes)
+    CREDENTIALS_FILE=$("$REPO_ROOT/scripts/bootstrap/helpers/setup-production.sh" "$SERVER_IP" "$ROOT_PASSWORD" "$WORKER_NODES" "$WORKER_PASSWORD" --yes)
     
     if [ -z "$CREDENTIALS_FILE" ] || [ ! -f "$CREDENTIALS_FILE" ]; then
         log_error "Failed to create credentials file"
@@ -225,7 +231,12 @@ fi
 # All mode-specific logic is now in stage definitions
 # ============================================================================
 
-STAGE_FILE="$SCRIPT_DIR/stages/${MODE}.yaml"
+# Map mode to stage file name
+if [ "$MODE" = "production" ]; then
+    STAGE_FILE="$SCRIPT_DIR/production.yaml"
+else
+    STAGE_FILE="$SCRIPT_DIR/${MODE}.yaml"
+fi
 
 if [[ ! -f "$STAGE_FILE" ]]; then
     log_error "Stage file not found: $STAGE_FILE"
@@ -238,7 +249,9 @@ log_info "═══════════════════════�
 echo ""
 
 # Execute stage executor
-"$SCRIPT_DIR/helpers/stage-executor.sh" "$STAGE_FILE"
+log_info "DEBUG: SCRIPT_DIR=$SCRIPT_DIR"
+log_info "DEBUG: STAGE_FILE=$STAGE_FILE"
+"$SCRIPT_DIR/stage-executor.sh" "$STAGE_FILE"
 
 # ============================================================================
 # POST-BOOTSTRAP TASKS
@@ -248,7 +261,7 @@ echo ""
 ARGOCD_PASSWORD=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" 2>/dev/null | base64 -d || echo "NOT_GENERATED")
 
 if [ "$MODE" = "production" ]; then
-    "$SCRIPT_DIR/helpers/add-credentials.sh" "$CREDENTIALS_FILE" "ARGOCD CREDENTIALS" "Username: admin
+    "$REPO_ROOT/scripts/bootstrap/helpers/add-credentials.sh" "$CREDENTIALS_FILE" "ARGOCD CREDENTIALS" "Username: admin
 Password: $ARGOCD_PASSWORD
 
 Access ArgoCD UI:
