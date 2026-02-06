@@ -1,5 +1,6 @@
 #!/bin/bash
 # Master script to generate all platform secrets
+# cd zerotouch-platform && set -a && source .env && set +a && ./scripts/bootstrap/infra/secrets/ksops/generate-sops/generate-platform-sops.sh
 
 set -e
 

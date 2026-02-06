@@ -9,6 +9,7 @@
 #   ENV_FILTER: Filter by environment (pr, dev, staging, production) - only process matching prefix
 #
 # Supported prefixes: PR_, DEV_, STAGING_, PROD_
+# cd zerotouch-platform && set -a && source .env && set +a && ./scripts/bootstrap/infra/secrets/ksops/generate-sops/generate-service-env-sops.sh
 
 set -e
 
@@ -137,6 +138,7 @@ while IFS='=' read -r name value || [ -n "$name" ]; do
         env_prefix="${BASH_REMATCH[1]}"
         env=$(get_env_dir "$env_prefix")
         secret_name=$(echo "${BASH_REMATCH[2]}" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+        secret_key="${BASH_REMATCH[2]}"  # Keep original env var name as key
     else
         continue
     fi
@@ -162,7 +164,7 @@ metadata:
   name: ${secret_name}
 type: Opaque
 stringData:
-  value: |
+  ${secret_key}: |
     ${value}
 EOF
     
