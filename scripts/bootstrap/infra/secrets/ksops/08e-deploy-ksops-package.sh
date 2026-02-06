@@ -26,24 +26,18 @@ if ! kubectl get deployment argocd-repo-server -n argocd &>/dev/null; then
 fi
 echo -e "${GREEN}✓ ArgoCD repo-server found${NC}"
 
-# NOTE: Init container pattern does not use CMP ConfigMap
-# The ConfigMap would trigger ArgoCD to create a sidecar, which we don't want
-# echo -e "${BLUE}==> Skipping CMP ConfigMap (init container pattern)...${NC}"
-
-# Apply KSOPS init container patch
-echo -e "${BLUE}==> Applying KSOPS init container patch...${NC}"
-kubectl patch deployment argocd-repo-server -n argocd --patch-file "$REPO_ROOT/platform/secrets/ksops/patches/repo-server-ksops-init.yaml"
-echo -e "${GREEN}✓ KSOPS init container patch applied${NC}"
+# NOTE: KSOPS init container patch is already applied during ArgoCD installation
+# via bootstrap/argocd/install/kustomization.yaml (JSON patches)
+# No need to patch again here
+echo -e "${BLUE}==> Skipping KSOPS patch (already applied at install time)...${NC}"
 
 # Apply KSOPS package (includes Age Key Guardian CronJob)
 echo -e "${BLUE}==> Applying KSOPS package resources...${NC}"
 kubectl apply -k "$REPO_ROOT/platform/secrets/ksops/"
 echo -e "${GREEN}✓ KSOPS package resources applied${NC}"
 
-# Wait for rollout
-echo -e "${BLUE}==> Waiting for repo-server rollout...${NC}"
-kubectl rollout status deployment/argocd-repo-server -n argocd --timeout=300s
-echo -e "${GREEN}✓ ArgoCD repo-server restarted with KSOPS init container${NC}"
+# No rollout needed - deployment not changed
+echo -e "${GREEN}✓ ArgoCD repo-server already configured with KSOPS${NC}"
 
 # Wait for init container to complete and repo-server to be ready
 echo -e "${BLUE}==> Waiting for init container and repo-server...${NC}"
