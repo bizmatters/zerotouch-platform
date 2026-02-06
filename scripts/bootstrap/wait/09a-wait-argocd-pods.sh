@@ -102,9 +102,9 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
         exit 0
     fi
     
-    # Show which pods are not ready
+    # Show which pods are not ready (exclude completed Jobs)
     echo -e "${YELLOW}Not ready pods:${NC}"
-    kubectl get pods -n "$ARGOCD_NAMESPACE" -o json 2>/dev/null | jq -r '.items[] | select(.status.phase=="Running" and (.status.conditions[]? | select(.type=="Ready" and .status!="True"))) | "  - \(.metadata.name) (\(.status.phase))"' | head -5
+    kubectl get pods -n "$ARGOCD_NAMESPACE" -o json 2>/dev/null | jq -r '.items[] | select(.status.phase != "Succeeded" and (.status.phase != "Running" or (.status.containerStatuses[]? | select(.ready == false)))) | "  - \(.metadata.name): \(.status.phase) - Ready: \(.status.containerStatuses[]?.ready // "N/A") - \(.status.containerStatuses[]?.state | keys[0] // .status.conditions[]? | select(.type=="PodScheduled" and .status=="False") | .reason // "Starting")"' | head -10
     
     echo ""
     sleep $CHECK_INTERVAL
