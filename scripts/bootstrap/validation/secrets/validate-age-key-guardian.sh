@@ -2,9 +2,32 @@
 set -euo pipefail
 
 # ==============================================================================
-# CHECKPOINT 5: Age Key Guardian Validation Script
+# CHECKPOINT 5: Age Key Guardian Validation Script (DISABLED)
 # ==============================================================================
 # Purpose: Validate Age Key Guardian automated recovery functionality
+# Status: DISABLED - Not compatible with S3-first retrieval workflow
+# ==============================================================================
+#
+# This validation is disabled because the current workflow uses S3-first
+# Age key retrieval, not cluster-based CronJob recovery.
+#
+# The Age Key Guardian CronJob is not part of the active workflow.
+# ==============================================================================
+
+echo "╔══════════════════════════════════════════════════════════════╗"
+echo "║   CHECKPOINT 5: Age Key Guardian Validation (SKIPPED)       ║"
+echo "╚══════════════════════════════════════════════════════════════╝"
+echo ""
+echo "⚠ This validation is disabled"
+echo ""
+echo "Reason: Current workflow uses S3-first Age key retrieval."
+echo "        Age Key Guardian CronJob is not part of active workflow."
+echo ""
+echo "✓ CHECKPOINT 5 SKIPPED"
+exit 0
+
+# ==============================================================================
+# Original validation code below (preserved for reference)
 # ==============================================================================
 
 echo "╔══════════════════════════════════════════════════════════════╗"

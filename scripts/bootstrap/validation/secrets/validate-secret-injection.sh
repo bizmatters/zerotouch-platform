@@ -1,101 +1,103 @@
 #!/bin/bash
-set -euo pipefail
+# Validation script for CHECKPOINT 2: Secret Injection
+# Usage: ./validate-secret-injection.sh
+#
+# This script validates that secrets exist in Git and are properly injected into cluster
 
-# ==============================================================================
-# Secret Injection Validation Script
-# ==============================================================================
-# Purpose: Validate that all environment-prefixed secrets were injected to cluster
-# Validates: Secret discovery, encryption, and cluster deployment
-# ==============================================================================
+set -e
 
-echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║   CHECKPOINT 1.5: Secret Injection Validation               ║"
-echo "╚══════════════════════════════════════════════════════════════╝"
-echo ""
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
-VALIDATION_FAILED=0
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
 
-# Detect environment
-ENVIRONMENT="${ENVIRONMENT:-PR}"
-ENV_PREFIX="${ENVIRONMENT}_"
+# Validation counters
+PASSED=0
+FAILED=0
+TOTAL=0
 
-echo "Environment: ${ENVIRONMENT}"
-echo "Secret prefix: ${ENV_PREFIX}"
-echo ""
-
-# Discover all environment-prefixed secrets
-PREFIXED_SECRETS=$(printenv | grep "^${ENV_PREFIX}" | cut -d= -f1 | sort || true)
-
-if [ -z "$PREFIXED_SECRETS" ]; then
-    echo "⚠️  No secrets found with prefix ${ENV_PREFIX}"
-    echo "✓ CHECKPOINT 1.5 SKIPPED: No secrets to validate"
-    exit 0
-fi
-
-EXPECTED_COUNT=$(echo "$PREFIXED_SECRETS" | wc -l | tr -d ' ')
-
-echo "[1/3] Discovered secrets with ${ENV_PREFIX} prefix:"
-echo "$PREFIXED_SECRETS" | while read secret_name; do
-    echo "  - $secret_name"
-done
-echo ""
-echo "Expected secret count: $EXPECTED_COUNT"
-echo ""
-
-# Verify each secret exists in cluster
-echo "[2/3] Verifying secrets in cluster..."
-FOUND_COUNT=0
-MISSING_SECRETS=()
-
-for prefixed_var in $PREFIXED_SECRETS; do
-    # Strip environment prefix and convert to K8s naming
-    secret_name="${prefixed_var#${ENV_PREFIX}}"
-    k8s_secret_name=$(echo "$secret_name" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
-    namespace="default"
+# Function to run validation check
+validate() {
+    local test_name=$1
+    local test_command=$2
     
-    if kubectl get secret "${k8s_secret_name}" -n "${namespace}" &>/dev/null; then
-        echo "  ✓ ${k8s_secret_name} (from ${prefixed_var})"
-        ((FOUND_COUNT++))
+    TOTAL=$((TOTAL + 1))
+    echo -e "${BLUE}[${TOTAL}] Testing: $test_name${NC}"
+    
+    if eval "$test_command"; then
+        echo -e "${GREEN}✓ PASSED: $test_name${NC}"
+        PASSED=$((PASSED + 1))
+        echo ""
+        return 0
     else
-        echo "  ✗ ${k8s_secret_name} (from ${prefixed_var}) - NOT FOUND"
-        MISSING_SECRETS+=("${k8s_secret_name}")
-        VALIDATION_FAILED=1
+        echo -e "${RED}✗ FAILED: $test_name${NC}"
+        FAILED=$((FAILED + 1))
+        echo ""
+        return 1
     fi
-done
+}
+
+echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║   CHECKPOINT 2: Secret Injection Validation                 ║${NC}"
+echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
+
+# Get environment from ENV variable or default to dev
+ENV="${ENV:-dev}"
+echo -e "${BLUE}Environment: $ENV${NC}"
+echo ""
+
+# Validation 1: Check encrypted secrets exist in Git
+cd "$REPO_ROOT"
+validate "Encrypted secrets exist in Git repository" \
+    "find bootstrap/argocd/overlays/main -name '*.secret.yaml' 2>/dev/null | grep -q '.'"
+
+# Validation 2: Check sops-age secret exists in cluster
+validate "sops-age secret exists in argocd namespace" \
+    "kubectl get secret sops-age -n argocd &>/dev/null"
+
+# Validation 3: Check sops-age secret has correct format
+validate "sops-age secret has keys.txt field" \
+    "kubectl get secret sops-age -n argocd -o jsonpath='{.data.keys\.txt}' | base64 -d | grep -q '^AGE-SECRET-KEY-1'"
+
+# Validation 4: Check GitHub App secret exists
+validate "github-app-credentials secret exists in kube-system namespace" \
+    "kubectl get secret github-app-credentials -n kube-system &>/dev/null"
+
+# Validation 5: Check GitHub App secret has required fields
+validate "github-app-credentials has all required fields" \
+    "kubectl get secret github-app-credentials -n kube-system -o jsonpath='{.data.github-app-id}' | base64 -d | grep -q '.' && \
+     kubectl get secret github-app-credentials -n kube-system -o jsonpath='{.data.github-app-installation-id}' | base64 -d | grep -q '.' && \
+     kubectl get secret github-app-credentials -n kube-system -o jsonpath='{.data.github-app-private-key}' | base64 -d | grep -q 'BEGIN'"
 
 # Summary
-echo "[3/3] Validation Summary:"
-echo "  Expected secrets: $EXPECTED_COUNT"
-echo "  Found in cluster: $FOUND_COUNT"
-echo "  Missing: $((EXPECTED_COUNT - FOUND_COUNT))"
+echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║   Validation Summary                                         ║${NC}"
+echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+echo -e "${GREEN}Passed: $PASSED / $TOTAL${NC}"
+if [ $FAILED -gt 0 ]; then
+    echo -e "${RED}Failed: $FAILED / $TOTAL${NC}"
+fi
 echo ""
 
-if [ ${#MISSING_SECRETS[@]} -gt 0 ]; then
-    echo "❌ Missing secrets:"
-    for secret in "${MISSING_SECRETS[@]}"; do
-        echo "  - $secret"
-    done
+if [ $FAILED -eq 0 ]; then
+    echo -e "${GREEN}✓ CHECKPOINT 2 VALIDATION PASSED${NC}"
     echo ""
-fi
-
-echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║   Validation Summary                                         ║"
-echo "╚══════════════════════════════════════════════════════════════╝"
-
-if [[ $VALIDATION_FAILED -eq 0 ]]; then
-    echo "✓ CHECKPOINT 1.5 PASSED: All secrets injected successfully"
+    echo -e "${YELLOW}Success Criteria Met:${NC}"
+    echo -e "  ✓ Encrypted secrets exist in Git"
+    echo -e "  ✓ Required secrets injected to cluster"
+    echo -e "  ✓ Secrets have correct format"
+    echo -e "  ✓ Ready for ArgoCD sync"
     echo ""
-    echo "Verified:"
-    echo "  ✓ $EXPECTED_COUNT secrets discovered from environment"
-    echo "  ✓ $FOUND_COUNT secrets exist in cluster"
-    echo "  ✓ 100% injection success rate"
     exit 0
 else
-    echo "✗ CHECKPOINT 1.5 FAILED: Secret injection incomplete"
+    echo -e "${RED}✗ CHECKPOINT 2 VALIDATION FAILED${NC}"
     echo ""
-    echo "Issues:"
-    echo "  ✗ $((EXPECTED_COUNT - FOUND_COUNT)) secrets missing from cluster"
-    echo "  ✗ Injection success rate: $((FOUND_COUNT * 100 / EXPECTED_COUNT))%"
     exit 1
 fi

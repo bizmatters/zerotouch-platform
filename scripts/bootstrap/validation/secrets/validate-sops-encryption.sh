@@ -54,32 +54,69 @@ if [[ -f "$REPO_ROOT/.sops.yaml" ]]; then
     SOPS_CONFIG="$REPO_ROOT/.sops.yaml"
     cd "$REPO_ROOT"
 else
-    echo -e "${YELLOW}⚠ No .sops.yaml found in repository${NC}"
-    echo -e "${BLUE}Creating test configuration using platform Age keys...${NC}"
-    
-    # Create test workspace
-    TEST_DIR="/tmp/ksops-encryption-test"
-    mkdir -p "$TEST_DIR"
-    cd "$TEST_DIR"
-    
-    # Get Age public key from platform secret
-    AGE_PRIVATE_KEY=$(kubectl get secret sops-age -n argocd -o jsonpath='{.data.keys\.txt}' | base64 -d | head -1)
-    AGE_PUBLIC_KEY=$(echo "$AGE_PRIVATE_KEY" | age-keygen -y)
-    
-    if [[ -z "$AGE_PUBLIC_KEY" ]]; then
-        echo -e "${RED}✗ Error: Could not retrieve platform Age key${NC}"
-        exit 1
-    fi
-    
-    # Create test .sops.yaml
-    cat > .sops.yaml <<EOF
-creation_rules:
-  - path_regex: .*\.yaml$
-    age: $AGE_PUBLIC_KEY
-    encrypted_regex: '^(data|stringData)$'
-EOF
-    SOPS_CONFIG=".sops.yaml"
+    echo -e "${RED}✗ No .sops.yaml found in repository${NC}"
+    echo -e "${YELLOW}.sops.yaml is mandatory - it is the source of truth for Age public key${NC}"
+    exit 1
 fi
+
+# Extract Age public key from .sops.yaml
+AGE_PUBLIC_KEY=$(grep "age:" "$SOPS_CONFIG" | sed -E 's/.*age:[[:space:]]*(age1[a-z0-9]+).*/\1/' | head -1)
+if [[ -z "$AGE_PUBLIC_KEY" ]]; then
+    echo -e "${RED}✗ No Age public key found in .sops.yaml${NC}"
+    exit 1
+fi
+
+# Retrieve Age private key from S3 (not from cluster)
+echo -e "${BLUE}Retrieving Age key from S3 backup...${NC}"
+
+ENV="${ENV:-dev}"
+ENV_UPPER=$(echo "$ENV" | tr '[:lower:]' '[:upper:]')
+
+S3_ACCESS_KEY_VAR="${ENV_UPPER}_HETZNER_S3_ACCESS_KEY"
+S3_SECRET_KEY_VAR="${ENV_UPPER}_HETZNER_S3_SECRET_KEY"
+S3_ENDPOINT_VAR="${ENV_UPPER}_HETZNER_S3_ENDPOINT"
+S3_REGION_VAR="${ENV_UPPER}_HETZNER_S3_REGION"
+BUCKET_NAME_VAR="${ENV_UPPER}_HETZNER_S3_BUCKET_NAME"
+
+S3_ACCESS_KEY="${!S3_ACCESS_KEY_VAR:-${HETZNER_S3_ACCESS_KEY:-}}"
+S3_SECRET_KEY="${!S3_SECRET_KEY_VAR:-${HETZNER_S3_SECRET_KEY:-}}"
+S3_ENDPOINT="${!S3_ENDPOINT_VAR:-${HETZNER_S3_ENDPOINT:-}}"
+S3_REGION="${!S3_REGION_VAR:-${HETZNER_S3_REGION:-}}"
+BUCKET_NAME="${!BUCKET_NAME_VAR:-${HETZNER_S3_BUCKET_NAME:-}}"
+
+if [ -z "$S3_ACCESS_KEY" ] || [ -z "$S3_SECRET_KEY" ]; then
+    echo -e "${RED}✗ S3 credentials not available${NC}"
+    exit 1
+fi
+
+TEMP_DIR=$(mktemp -d)
+trap "rm -rf $TEMP_DIR" EXIT
+
+export AWS_ACCESS_KEY_ID="$S3_ACCESS_KEY"
+export AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY"
+export AWS_DEFAULT_REGION="$S3_REGION"
+
+if ! aws s3 cp "s3://${BUCKET_NAME}/age-keys/ACTIVE-age-key-encrypted.txt" \
+    "$TEMP_DIR/encrypted.txt" \
+    --endpoint-url "$S3_ENDPOINT" \
+    --cli-connect-timeout 10 2>/dev/null || \
+   ! aws s3 cp "s3://${BUCKET_NAME}/age-keys/ACTIVE-recovery-key.txt" \
+    "$TEMP_DIR/recovery.key" \
+    --endpoint-url "$S3_ENDPOINT" \
+    --cli-connect-timeout 10 2>/dev/null; then
+    echo -e "${RED}✗ Failed to retrieve Age key from S3${NC}"
+    exit 1
+fi
+
+AGE_PRIVATE_KEY=$(age -d -i "$TEMP_DIR/recovery.key" "$TEMP_DIR/encrypted.txt" 2>&1)
+if [[ -z "$AGE_PRIVATE_KEY" ]]; then
+    echo -e "${RED}✗ Failed to decrypt Age key${NC}"
+    exit 1
+fi
+
+export SOPS_AGE_KEY="$AGE_PRIVATE_KEY"
+echo -e "${GREEN}✓ Age key retrieved from S3${NC}"
+echo -e "${GREEN}  Public Key: $AGE_PUBLIC_KEY${NC}$'
 
 # Check required tools
 if ! command -v sops &> /dev/null; then

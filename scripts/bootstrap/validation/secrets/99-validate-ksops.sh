@@ -37,8 +37,8 @@ else
     # Check init container completed
     INIT_STATUS=$(kubectl get pod -n argocd "$POD_NAME" -o jsonpath='{.status.initContainerStatuses[?(@.name=="install-ksops")].state.terminated.reason}' 2>/dev/null || echo "")
     if [[ "$INIT_STATUS" == "Completed" ]]; then
-        # Check KSOPS binary exists
-        if kubectl exec -n argocd "$POD_NAME" -c argocd-repo-server -- test -f /usr/local/bin/ksops 2>/dev/null; then
+        # Check KSOPS binary exists (in PATH)
+        if kubectl exec -n argocd "$POD_NAME" -c argocd-repo-server -- which ksops 2>/dev/null | grep -q ksops; then
             log_check "PASS" "KSOPS init container completed and tools available"
         else
             log_check "FAIL" "Init container completed but KSOPS tools not found"

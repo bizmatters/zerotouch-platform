@@ -80,14 +80,7 @@ if ! run_validation "SOPS Encryption Validation" "$SECRETS_DIR/validate-sops-enc
 fi
 echo ""
 
-# Step 5: Validate ArgoCD Decryption
-TOTAL_VALIDATIONS=$((TOTAL_VALIDATIONS + 1))
-if ! run_validation "ArgoCD Decryption Validation" "$SECRETS_DIR/validate-argocd-decryption.sh"; then
-    FAILED_VALIDATIONS=$((FAILED_VALIDATIONS + 1))
-fi
-echo ""
-
-# Step 6: Test Error Scenarios - REMOVED (too complex for platform validation)
+# Step 5: Test Error Scenarios - REMOVED (too complex for platform validation)
 # Error scenarios should be tested in integration tests with proper git repos
 echo -e "${YELLOW}==> Error Scenarios Testing - SKIPPED${NC}"
 echo -e "${YELLOW}Note: Error scenario testing requires proper git repository setup${NC}"
@@ -102,9 +95,15 @@ echo ""
 # fi
 # echo ""
 
-# Step 8: Validate Age Key Guardian
+# Step 8: Validate Age Key Guardian (SKIPPED - not compatible with S3-first workflow)
+echo -e "${YELLOW}==> Age Key Guardian Validation - SKIPPED${NC}"
+echo -e "${YELLOW}Note: Not compatible with S3-first Age key retrieval workflow${NC}"
 TOTAL_VALIDATIONS=$((TOTAL_VALIDATIONS + 1))
-if ! run_validation "Age Key Guardian Validation" "$SECRETS_DIR/validate-age-key-guardian.sh"; then
+echo ""
+
+# Step 8.5: Validate ACTIVE Age Key Can Decrypt Cluster Secrets
+TOTAL_VALIDATIONS=$((TOTAL_VALIDATIONS + 1))
+if ! run_validation "ACTIVE Age Key Decryption Validation" "$SECRETS_DIR/validate-age-key-decryption.sh"; then
     FAILED_VALIDATIONS=$((FAILED_VALIDATIONS + 1))
 fi
 echo ""
