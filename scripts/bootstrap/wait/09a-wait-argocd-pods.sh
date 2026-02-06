@@ -57,24 +57,42 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
         continue
     fi
     
-    # Get pod counts
-    TOTAL_PODS=$(kubectl get pods -n "$ARGOCD_NAMESPACE" --no-headers 2>/dev/null | wc -l | tr -d ' ')
+    # Count running workload pods (Deployments/StatefulSets)
+    RUNNING_PODS=$(kubectl get pods -n "$ARGOCD_NAMESPACE" --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l | tr -d ' ')
     
-    if [[ "$TOTAL_PODS" -eq 0 ]]; then
-        echo -e "${YELLOW}⏳ No ArgoCD pods found yet${NC}"
+    if [[ "$RUNNING_PODS" -eq 0 ]]; then
+        echo -e "${YELLOW}⏳ No running ArgoCD pods found yet${NC}"
         sleep $CHECK_INTERVAL
         ELAPSED=$((ELAPSED + CHECK_INTERVAL))
         continue
     fi
     
-    # Check ready pods
-    READY_PODS=$(kubectl get pods -n "$ARGOCD_NAMESPACE" -o json 2>/dev/null | jq '[.items[] | select(.status.conditions[] | select(.type=="Ready" and .status=="True"))] | length' 2>/dev/null || echo "0")
+    # Check ready pods (only Running phase)
+    READY_PODS=$(kubectl get pods -n "$ARGOCD_NAMESPACE" -o json 2>/dev/null | jq '[.items[] | select(.status.phase=="Running" and .status.conditions[]? | select(.type=="Ready" and .status=="True"))] | length' 2>/dev/null || echo "0")
     
-    echo -e "${BLUE}ArgoCD pods: $READY_PODS/$TOTAL_PODS ready${NC}"
+    # Check Job/CronJob pods
+    COMPLETED_JOBS=$(kubectl get pods -n "$ARGOCD_NAMESPACE" -o json 2>/dev/null | jq '[.items[] | select(.metadata.ownerReferences[]?.kind=="Job" and .status.phase=="Succeeded")] | length' 2>/dev/null || echo "0")
+    FAILED_JOBS=$(kubectl get pods -n "$ARGOCD_NAMESPACE" -o json 2>/dev/null | jq '[.items[] | select(.metadata.ownerReferences[]?.kind=="Job" and (.status.phase=="Failed" or .status.phase=="Error"))] | length' 2>/dev/null || echo "0")
     
-    if [[ "$READY_PODS" -eq "$TOTAL_PODS" ]]; then
+    echo -e "${BLUE}Running pods: $READY_PODS/$RUNNING_PODS ready${NC}"
+    echo -e "${BLUE}Job pods: $COMPLETED_JOBS completed, $FAILED_JOBS failed${NC}"
+    
+    # Fail immediately if any Job failed
+    if [[ "$FAILED_JOBS" -gt 0 ]]; then
         echo ""
-        echo -e "${GREEN}✓ All ArgoCD pods are ready!${NC}"
+        echo -e "${RED}✗ Job/CronJob pods failed:${NC}"
+        kubectl get pods -n "$ARGOCD_NAMESPACE" -o json 2>/dev/null | jq -r '.items[] | select(.metadata.ownerReferences[]?.kind=="Job" and (.status.phase=="Failed" or .status.phase=="Error")) | "  - \(.metadata.name) (\(.status.phase))"'
+        echo ""
+        echo -e "${RED}✗ ArgoCD deployment failed due to job failures${NC}"
+        exit 1
+    fi
+    
+    if [[ "$READY_PODS" -eq "$RUNNING_PODS" ]]; then
+        echo ""
+        echo -e "${GREEN}✓ All ArgoCD running pods are ready!${NC}"
+        if [[ "$COMPLETED_JOBS" -gt 0 ]]; then
+            echo -e "${GREEN}✓ $COMPLETED_JOBS job(s) completed successfully${NC}"
+        fi
         echo ""
         
         # Show final status
@@ -86,7 +104,7 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
     
     # Show which pods are not ready
     echo -e "${YELLOW}Not ready pods:${NC}"
-    kubectl get pods -n "$ARGOCD_NAMESPACE" -o json 2>/dev/null | jq -r '.items[] | select(.status.conditions[] | select(.type=="Ready" and .status!="True")) | "  - \(.metadata.name) (\(.status.phase))"' | head -5
+    kubectl get pods -n "$ARGOCD_NAMESPACE" -o json 2>/dev/null | jq -r '.items[] | select(.status.phase=="Running" and (.status.conditions[]? | select(.type=="Ready" and .status!="True"))) | "  - \(.metadata.name) (\(.status.phase))"' | head -5
     
     echo ""
     sleep $CHECK_INTERVAL
