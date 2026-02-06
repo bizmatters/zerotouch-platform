@@ -26,6 +26,15 @@ kubectl patch namespace argocd -p '{"metadata":{"finalizers":null}}' --type=merg
 ```bash
 kubectl get namespace argocd -o json | jq '.spec.finalizers = []' | kubectl replace --raw "/api/v1/namespaces/argocd/finalize" -f -
 ```
+
+```bash
+kubectl get namespace argocd -o json 2>&1 | jq -r '.status.phase, .spec.finalizers[]?' 2>&1
+```
+
+```bash
+kubectl patch application.argoproj.io/platform-bootstrap -n argocd -p '{"metadata":{"finalizers":[]}}' --type=merge 2>&1
+```
+
 --------------
 
 # Argocd apps OOSync issue:
