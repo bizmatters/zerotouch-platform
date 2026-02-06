@@ -23,6 +23,7 @@ get_secret_mapping() {
             ;;
         HETZNER_DNS_TOKEN|DEV_HETZNER_DNS_TOKEN|STAGING_HETZNER_DNS_TOKEN|PROD_HETZNER_DNS_TOKEN)
             echo "hetzner-dns:api-key:cert-manager"
+            echo "external-dns-hetzner:HETZNER_DNS_TOKEN:kube-system"
             ;;
         *)
             echo ""
@@ -51,51 +52,75 @@ for ENV in dev staging prod; do
         if [[ "$name" =~ ^${ENV_UPPER}_(.+)$ ]]; then
             mapping=$(get_secret_mapping "$name")
             if [ -n "$mapping" ]; then
-                IFS=':' read -r secret_name secret_key secret_namespace <<< "$mapping"
-                secret_namespace="${secret_namespace:-kube-system}"
-            else
-                secret_name=$(echo "${BASH_REMATCH[1]}" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
-                secret_key="value"
-                secret_namespace="kube-system"
-            fi
-            
-            secret_file="${secret_name}.secret.yaml"
-            
-            # Determine sync wave based on namespace
-            sync_wave=""
-            if [ "$secret_namespace" = "cert-manager" ]; then
-                sync_wave="4"  # After cert-manager (wave 1) creates namespace
-            fi
-            
-            cat > "$SECRETS_DIR/$secret_file" << EOF
+                # Process each mapping (some vars create multiple secrets)
+                while IFS= read -r map; do
+                    [ -z "$map" ] && continue
+                    IFS=':' read -r secret_name secret_key secret_namespace <<< "$map"
+                    secret_namespace="${secret_namespace:-kube-system}"
+                    
+                    secret_file="${secret_name}.secret.yaml"
+                    
+                    # Determine sync wave based on namespace
+                    sync_wave=""
+                    if [ "$secret_namespace" = "cert-manager" ]; then
+                        sync_wave="4"
+                    fi
+                    
+                    cat > "$SECRETS_DIR/$secret_file" << EOF
 apiVersion: v1
 kind: Secret
 metadata:
   name: ${secret_name}
   namespace: ${secret_namespace}
 EOF
-            
-            # Add sync-wave annotation if needed
-            if [ -n "$sync_wave" ]; then
-                cat >> "$SECRETS_DIR/$secret_file" << EOF
+                    
+                    if [ -n "$sync_wave" ]; then
+                        cat >> "$SECRETS_DIR/$secret_file" << EOF
   annotations:
     argocd.argoproj.io/sync-wave: "${sync_wave}"
 EOF
-            fi
-            
-            cat >> "$SECRETS_DIR/$secret_file" << EOF
+                    fi
+                    
+                    cat >> "$SECRETS_DIR/$secret_file" << EOF
 type: Opaque
 stringData:
   ${secret_key}: ${value}
 EOF
-            
-            if sops -e -i "$SECRETS_DIR/$secret_file" 2>/dev/null; then
-                echo -e "${GREEN}  ✓ ${secret_file}${NC}"
-                SECRET_FILES+=("$secret_file")
-                ((SECRET_COUNT++))
+                    
+                    if sops -e -i "$SECRETS_DIR/$secret_file" 2>/dev/null; then
+                        echo -e "${GREEN}  ✓ ${secret_file}${NC}"
+                        SECRET_FILES+=("$secret_file")
+                        ((SECRET_COUNT++))
+                    else
+                        echo -e "${RED}  ✗ Failed to encrypt: ${secret_file}${NC}"
+                        rm -f "$SECRETS_DIR/$secret_file"
+                    fi
+                done <<< "$mapping"
             else
-                echo -e "${RED}  ✗ Failed to encrypt: ${secret_file}${NC}"
-                rm -f "$SECRETS_DIR/$secret_file"
+                secret_name=$(echo "${BASH_REMATCH[1]}" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+                secret_key="value"
+                secret_namespace="kube-system"
+                secret_file="${secret_name}.secret.yaml"
+                
+                cat > "$SECRETS_DIR/$secret_file" << EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${secret_name}
+  namespace: ${secret_namespace}
+type: Opaque
+stringData:
+  ${secret_key}: ${value}
+EOF
+                
+                if sops -e -i "$SECRETS_DIR/$secret_file" 2>/dev/null; then
+                    echo -e "${GREEN}  ✓ ${secret_file}${NC}"
+                    SECRET_FILES+=("$secret_file")
+                    ((SECRET_COUNT++))
+                else
+                    echo -e "${RED}  ✗ Failed to encrypt: ${secret_file}${NC}"
+                    rm -f "$SECRETS_DIR/$secret_file"
+                fi
             fi
         fi
     done < "$ENV_FILE"
