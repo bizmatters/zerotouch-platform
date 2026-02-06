@@ -95,7 +95,7 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
     
     # Check if KSOPS tools are available
     echo -e "${BLUE}Checking KSOPS tools...${NC}"
-    if kubectl exec "$REPO_POD" -n "$ARGOCD_NAMESPACE" -c argocd-repo-server -- test -f /usr/local/bin/ksops 2>/dev/null; then
+    if kubectl exec "$REPO_POD" -n "$ARGOCD_NAMESPACE" -c argocd-repo-server -- test -f /.config/kustomize/plugin/viaduct.ai/v1/ksops/ksops 2>/dev/null; then
         echo -e "${GREEN}✓ KSOPS binary exists${NC}"
     else
         echo -e "${YELLOW}⏳ KSOPS binary not found${NC}"
