@@ -23,11 +23,6 @@ patches:
     target:
       kind: NetworkPolicy
       name: argocd-repo-server-network-policy
-  # Add KSOPS init container to repo-server
-  - path: repo-server-ksops-init.yaml
-    target:
-      kind: Deployment
-      name: argocd-repo-server
   - target:
       kind: Deployment
       name: argocd-applicationset-controller
@@ -104,3 +99,12 @@ patches:
           - key: node-role.kubernetes.io/control-plane
             operator: Exists
             effect: NoSchedule
+
+patchesJson6902:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: argocd-repo-server
+      namespace: argocd
+    path: repo-server-ksops-init.yaml
