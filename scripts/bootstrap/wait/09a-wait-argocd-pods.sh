@@ -68,7 +68,7 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
     fi
     
     # Check ready pods (only Running phase)
-    READY_PODS=$(kubectl get pods -n "$ARGOCD_NAMESPACE" -o json 2>/dev/null | jq '[.items[] | select(.status.phase=="Running" and .status.conditions[]? | select(.type=="Ready" and .status=="True"))] | length' 2>/dev/null || echo "0")
+    READY_PODS=$(kubectl get pods -n "$ARGOCD_NAMESPACE" -o json 2>/dev/null | jq '[.items[] | select(.status.phase=="Running") | select(.status.conditions[]? | select(.type=="Ready" and .status=="True"))] | length' 2>/dev/null || echo "0")
     
     # Check Job/CronJob pods
     COMPLETED_JOBS=$(kubectl get pods -n "$ARGOCD_NAMESPACE" -o json 2>/dev/null | jq '[.items[] | select(.metadata.ownerReferences[]?.kind=="Job" and .status.phase=="Succeeded")] | length' 2>/dev/null || echo "0")
@@ -104,7 +104,23 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
     
     # Show which pods are not ready (exclude completed Jobs)
     echo -e "${YELLOW}Not ready pods:${NC}"
-    kubectl get pods -n "$ARGOCD_NAMESPACE" -o json 2>/dev/null | jq -r '.items[] | select(.status.phase != "Succeeded" and (.status.phase != "Running" or (.status.containerStatuses[]? | select(.ready == false)))) | "  - \(.metadata.name): \(.status.phase) - Ready: \(.status.containerStatuses[]?.ready // "N/A") - \(.status.containerStatuses[]?.state | keys[0] // .status.conditions[]? | select(.type=="PodScheduled" and .status=="False") | .reason // "Starting")"' | head -10
+    kubectl get pods -n "$ARGOCD_NAMESPACE" --no-headers 2>/dev/null | while read pod_name ready_count pod_status restarts age; do
+        if [[ "$pod_status" != "Completed" && "$pod_status" != "Succeeded" ]]; then
+            if [[ "$pod_status" != "Running" ]] || [[ "$ready_count" != *"/"* ]] || [[ "${ready_count%/*}" != "${ready_count#*/}" ]]; then
+                echo "  - $pod_name: $pod_status (Ready: $ready_count)"
+            fi
+        fi
+    done | head -10
+    # Show "None" if no output
+    if ! kubectl get pods -n "$ARGOCD_NAMESPACE" --no-headers 2>/dev/null | while read pod_name ready_count pod_status restarts age; do
+        if [[ "$pod_status" != "Completed" && "$pod_status" != "Succeeded" ]]; then
+            if [[ "$pod_status" != "Running" ]] || [[ "$ready_count" != *"/"* ]] || [[ "${ready_count%/*}" != "${ready_count#*/}" ]]; then
+                exit 0
+            fi
+        fi
+    done; then
+        echo "  (all pods ready or completed)"
+    fi
     
     echo ""
     sleep $CHECK_INTERVAL
