@@ -16,9 +16,5 @@ resources:
 # AgentGateway HTTPRoute (main environment only, Wave 6 - after gateway-config)
 - 06-agentgateway-httproute.yaml
 
-patches:
-- path: patches/repo-server-ksops-init.yaml
-  target:
-    kind: Deployment
-    name: argocd-repo-server
-    namespace: argocd
+# Patches removed - KSOPS init container is applied during ArgoCD installation
+# via bootstrap/argocd/install/kustomization.yaml (JSON patches)
