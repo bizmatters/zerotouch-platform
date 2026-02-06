@@ -1,5 +1,6 @@
 #!/bin/bash
 # Generate environment-specific secrets (DEV_*, STAGING_*, PROD_*)
+# cd zerotouch-platform && set -a && source .env && set +a && ./scripts/bootstrap/infra/secrets/ksops/generate-sops/generate-env-secrets.sh
 
 set -e
 
@@ -60,12 +61,29 @@ for ENV in dev staging prod; do
             
             secret_file="${secret_name}.secret.yaml"
             
+            # Determine sync wave based on namespace
+            sync_wave=""
+            if [ "$secret_namespace" = "cert-manager" ]; then
+                sync_wave="4"  # After cert-manager (wave 1) creates namespace
+            fi
+            
             cat > "$SECRETS_DIR/$secret_file" << EOF
 apiVersion: v1
 kind: Secret
 metadata:
   name: ${secret_name}
   namespace: ${secret_namespace}
+EOF
+            
+            # Add sync-wave annotation if needed
+            if [ -n "$sync_wave" ]; then
+                cat >> "$SECRETS_DIR/$secret_file" << EOF
+  annotations:
+    argocd.argoproj.io/sync-wave: "${sync_wave}"
+EOF
+            fi
+            
+            cat >> "$SECRETS_DIR/$secret_file" << EOF
 type: Opaque
 stringData:
   ${secret_key}: ${value}

@@ -240,10 +240,32 @@ export SOPS_AGE_KEY="$AGE_PRIVATE_KEY"
 echo -e "${GREEN}  Public Key: $AGE_PUBLIC_KEY${NC}"
 echo ""
 
-# Step 4.5: Generate platform secrets with Age key
-echo -e "${BLUE}[4.5/8] Generating platform secrets...${NC}"
-"$SECRETS_DIR/ksops/generate-sops/generate-platform-sops.sh"
-echo -e "${GREEN}✓ Platform secrets generated and encrypted${NC}"
+# Validate: Age key matches .sops.yaml
+if [ -n "$EXPECTED_PUBLIC_KEY" ] && [ "$AGE_PUBLIC_KEY" != "$EXPECTED_PUBLIC_KEY" ]; then
+    echo -e "${RED}✗ Age key mismatch detected${NC}"
+    echo -e "${RED}Expected (from .sops.yaml): $EXPECTED_PUBLIC_KEY${NC}"
+    echo -e "${RED}Got (from S3/generated): $AGE_PUBLIC_KEY${NC}"
+    echo -e "${YELLOW}Fix: Update .sops.yaml or re-encrypt secrets with current key${NC}"
+    exit 1
+fi
+
+# Validate: Encrypted secrets exist and can be decrypted
+echo -e "${BLUE}Validating encrypted secrets in Git...${NC}"
+TEST_SECRET="$REPO_ROOT/bootstrap/argocd/overlays/main/core/secrets/org-name.secret.yaml"
+if [ ! -f "$TEST_SECRET" ]; then
+    echo -e "${RED}✗ Encrypted secrets not found in Git${NC}"
+    echo -e "${YELLOW}Run: ./scripts/bootstrap/infra/secrets/ksops/generate-sops/generate-platform-sops.sh${NC}"
+    echo -e "${YELLOW}Then commit and push to Git before cluster creation${NC}"
+    exit 1
+fi
+
+if ! sops -d "$TEST_SECRET" >/dev/null 2>&1; then
+    echo -e "${RED}✗ Cannot decrypt secrets in Git with current Age key${NC}"
+    echo -e "${YELLOW}Secrets were encrypted with a different Age key${NC}"
+    echo -e "${YELLOW}Fix: Re-generate secrets or retrieve correct Age key from S3${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✓ Encrypted secrets validated${NC}"
 echo ""
 
 # Step 5: Backup Age key to Hetzner S3
@@ -272,7 +294,9 @@ echo -e "${BLUE}╚════════════════════�
 echo ""
 echo -e "${GREEN}✓ GitHub App authentication configured${NC}"
 echo -e "${GREEN}✓ Hetzner Object Storage provisioned${NC}"
-echo -e "${GREEN}✓ Age keypair generated and backed up to S3${NC}"
+echo -e "${GREEN}✓ Age keypair retrieved/generated and validated${NC}"
+echo -e "${GREEN}✓ Encrypted secrets in Git validated${NC}"
+echo -e "${GREEN}✓ Age key backed up to S3${NC}"
 echo -e "${GREEN}✓ Age key injected to cluster${NC}"
 echo -e "${GREEN}✓ In-cluster Age key backup created${NC}"
 echo -e "${YELLOW}⚠ KSOPS package deployment deferred until after ArgoCD installation${NC}"
@@ -280,9 +304,7 @@ echo ""
 echo -e "${YELLOW}Next steps:${NC}"
 echo -e "  1. Install ArgoCD"
 echo -e "  2. Deploy KSOPS package to ArgoCD"
-echo -e "  3. Generate platform secrets: ${GREEN}./scripts/bootstrap/infra/secrets/ksops/generate-platform-secrets.sh${NC}"
-echo -e "  4. Commit encrypted *.secret.yaml files to Git"
-echo -e "  5. ArgoCD will automatically sync and decrypt secrets"
+echo -e "  3. ArgoCD will sync and decrypt secrets from Git"
 echo ""
 echo -e "${BLUE}Emergency Recovery:${NC}"
 echo -e "  Break-glass script: ${GREEN}./scripts/bootstrap/infra/secrets/ksops/inject-offline-key.sh${NC}"
