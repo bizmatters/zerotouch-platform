@@ -42,8 +42,8 @@ runs:
         # Decrypt GitHub App credentials from SOPS secrets
         SECRETS_DIR="bootstrap/argocd/overlays/main/${ENV}/secrets"
         
-        GIT_APP_ID=$(sops -d "${SECRETS_DIR}/git-app-id.secret.yaml" | grep "value:" | awk '{print $2}')
-        GIT_APP_INSTALLATION_ID=$(sops -d "${SECRETS_DIR}/git-app-installation-id.secret.yaml" | grep "value:" | awk '{print $2}')
+        GIT_APP_ID=$(sops -d "${SECRETS_DIR}/git-app-id.secret.yaml" | grep "value:" | awk '{print $2}' | tr -d '"')
+        GIT_APP_INSTALLATION_ID=$(sops -d "${SECRETS_DIR}/git-app-installation-id.secret.yaml" | grep "value:" | awk '{print $2}' | tr -d '"')
         GIT_APP_PRIVATE_KEY=$(sops -d "${SECRETS_DIR}/github-app-credentials.secret.yaml" | yq eval '.stringData.git-app-private-key' -)
         
         # Output credentials
