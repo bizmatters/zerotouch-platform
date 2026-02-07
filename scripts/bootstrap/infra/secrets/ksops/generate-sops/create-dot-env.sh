@@ -205,19 +205,25 @@ process_secrets_dir() {
         echo -e "${GREEN}  ✓ Decrypted successfully${NC}"
         
         # Extract secret name and data
+        echo -e "${BLUE}  Extracting secret name...${NC}"
         secret_name=$(echo "$decrypted" | grep "name:" | head -1 | sed 's/.*name: *//')
+        echo -e "${BLUE}  Secret name: $secret_name${NC}"
         
         # Extract all stringData keys and values
+        echo -e "${BLUE}  Parsing stringData...${NC}"
         in_string_data=false
+        local key_count=0
         while IFS= read -r line; do
             if [[ "$line" =~ ^stringData: ]]; then
                 in_string_data=true
+                echo -e "${BLUE}  Found stringData section${NC}"
                 continue
             fi
             
             if [[ "$in_string_data" == true ]]; then
                 # Stop if we hit another top-level key
                 if [[ "$line" =~ ^[a-zA-Z] ]]; then
+                    echo -e "${BLUE}  End of stringData section${NC}"
                     break
                 fi
                 
@@ -225,6 +231,8 @@ process_secrets_dir() {
                 if [[ "$line" =~ ^[[:space:]]+([^:]+):[[:space:]]*(.+)$ ]]; then
                     key="${BASH_REMATCH[1]}"
                     value="${BASH_REMATCH[2]}"
+                    
+                    echo -e "${BLUE}    Found key: $key${NC}"
                     
                     # Remove quotes if present
                     value="${value#\"}"
@@ -239,12 +247,17 @@ process_secrets_dir() {
                         env_var_name="${env_var_name}_${key_upper}"
                     fi
                     
+                    echo -e "${BLUE}    Writing: ${prefix}${env_var_name}${NC}"
+                    
                     # Write to .env with prefix
                     echo "${prefix}${env_var_name}=${value}" >> "$ENV_FILE"
                     ((SECRET_COUNT++))
+                    ((key_count++))
                 fi
             fi
         done <<< "$decrypted"
+        
+        echo -e "${GREEN}  ✓ Extracted $key_count keys${NC}"
         
     done < <(find "$dir" -name "*.secret.yaml" -type f)
 }
