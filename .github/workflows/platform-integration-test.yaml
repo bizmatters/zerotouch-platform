@@ -49,7 +49,7 @@ jobs:
 
       - name: Generate .env from encrypted secrets
         env:
-          ENV: preview
+          ENV: pr
           SOPS_AGE_KEY: ${{ secrets.AGE_PRIVATE_KEY }}
         run: |
           if [ ! -f .env ]; then
