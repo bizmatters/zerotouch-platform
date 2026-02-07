@@ -1,13 +1,13 @@
 #!/bin/bash
 # Bootstrap script to generate Age keypair for SOPS encryption
-# Usage: ./generate-age-keys.sh
+# Usage: ENV=dev ./generate-age-keys.sh
 #
-# This script generates a 256-bit Age keypair and outputs the keys
-# to environment variables for use by subsequent scripts.
+# This script checks S3 first for existing Age key, generates new if not found
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HELPERS_DIR="$SCRIPT_DIR/../../../helpers"
 
 # Colors for output
 RED='\033[0;31m'
@@ -19,6 +19,17 @@ NC='\033[0m' # No Color
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║   Age Keypair Generation for SOPS Encryption                ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+
+# Validate ENV is set
+if [ -z "${ENV:-}" ]; then
+    echo -e "${RED}✗ Error: ENV environment variable not set${NC}"
+    echo -e "${YELLOW}Usage: ENV=dev $0${NC}"
+    exit 1
+fi
+
+ENV_UPPER=$(echo "$ENV" | tr '[:lower:]' '[:upper:]')
+echo -e "${GREEN}✓ Environment: $ENV_UPPER${NC}"
 echo ""
 
 # Check if age-keygen is installed
@@ -35,16 +46,41 @@ fi
 echo -e "${GREEN}✓ age-keygen found${NC}"
 echo ""
 
-# Check if key already exists in cluster
-if command -v kubectl &> /dev/null && kubectl get secret sops-age -n argocd &> /dev/null 2>&1; then
-    echo -e "${YELLOW}⚠ Existing sops-age secret found in cluster${NC}"
-    echo -e "${BLUE}Reusing existing Age key to maintain secret decryption...${NC}"
+# Source S3 helpers
+if [ ! -f "$HELPERS_DIR/s3-helpers.sh" ]; then
+    echo -e "${RED}✗ Error: s3-helpers.sh not found${NC}"
+    exit 1
+fi
+
+source "$HELPERS_DIR/s3-helpers.sh"
+
+# Configure S3 credentials
+echo -e "${BLUE}Configuring S3 credentials...${NC}"
+if ! configure_s3_credentials "$ENV"; then
+    echo -e "${RED}✗ Error: Failed to configure S3 credentials${NC}"
+    echo -e "${YELLOW}Required variables: ${ENV_UPPER}_HETZNER_S3_*${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✓ S3 credentials configured${NC}"
+echo ""
+
+# Check if Age key exists in S3
+echo -e "${BLUE}Checking S3 for existing Age key...${NC}"
+if s3_age_key_exists; then
+    echo -e "${YELLOW}⚠ Existing Age key found in S3${NC}"
+    echo -e "${BLUE}Retrieving existing Age key to maintain secret decryption...${NC}"
     
-    # Extract existing private key from cluster
-    AGE_PRIVATE_KEY=$(kubectl get secret sops-age -n argocd -o jsonpath='{.data.keys\.txt}' 2>/dev/null | base64 -d)
+    # Retrieve Age key from S3
+    if ! AGE_PRIVATE_KEY=$(s3_retrieve_age_key); then
+        echo -e "${RED}✗ Error: Failed to retrieve Age key from S3${NC}"
+        exit 1
+    fi
+    
+    # Trim whitespace
+    AGE_PRIVATE_KEY=$(echo "$AGE_PRIVATE_KEY" | tr -d '[:space:]' | grep -o 'AGE-SECRET-KEY-1[A-Z0-9]*')
     
     if [[ ! "$AGE_PRIVATE_KEY" =~ ^AGE-SECRET-KEY-1 ]]; then
-        echo -e "${RED}✗ Error: Invalid Age private key format in cluster secret${NC}"
+        echo -e "${RED}✗ Error: Invalid Age private key format from S3${NC}"
         exit 1
     fi
     
@@ -56,11 +92,12 @@ if command -v kubectl &> /dev/null && kubectl get secret sops-age -n argocd &> /
         exit 1
     fi
     
-    echo -e "${GREEN}✓ Existing Age key loaded from cluster${NC}"
+    echo -e "${GREEN}✓ Existing Age key retrieved from S3${NC}"
     echo ""
+    KEY_SOURCE="s3"
 else
-    # Generate Age keypair
-    echo -e "${BLUE}Generating 256-bit Age keypair...${NC}"
+    echo -e "${BLUE}No existing Age key in S3, generating new keypair...${NC}"
+    KEY_SOURCE="generated"
 
     # Generate keypair and capture output
     KEYGEN_OUTPUT=$(age-keygen 2>&1)
@@ -83,6 +120,25 @@ else
     fi
 
     echo -e "${GREEN}✓ Age keypair generated successfully${NC}"
+    echo ""
+    
+    # Auto-backup to S3
+    echo -e "${BLUE}Backing up new Age key to S3...${NC}"
+    
+    # Generate recovery master key
+    RECOVERY_KEY=$(age-keygen 2>/dev/null)
+    RECOVERY_PUBLIC=$(echo "$RECOVERY_KEY" | grep "public key:" | cut -d: -f2 | xargs)
+    RECOVERY_PRIVATE=$(echo "$RECOVERY_KEY" | grep "AGE-SECRET-KEY-" | xargs)
+    
+    # Use centralized S3 backup function
+    if ! s3_backup_age_key "$AGE_PRIVATE_KEY" "$RECOVERY_PRIVATE" "$RECOVERY_PUBLIC"; then
+        echo -e "${RED}✗ Failed to backup Age key to S3${NC}"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}✓ Age key backed up to S3${NC}"
+    echo -e "${YELLOW}CRITICAL: Store recovery key securely offline${NC}"
+    echo -e "${YELLOW}Recovery public key: $RECOVERY_PUBLIC${NC}"
     echo ""
 fi
 
@@ -109,21 +165,25 @@ echo -e "${GREEN}✓ AGE_PUBLIC_KEY exported${NC}"
 echo -e "${GREEN}✓ AGE_PRIVATE_KEY exported${NC}"
 echo ""
 
-# Update .sops.yaml with current public key
-SOPS_YAML_PATH="$SCRIPT_DIR/../../../../.sops.yaml"
-if [ -f "$SOPS_YAML_PATH" ]; then
-    echo -e "${BLUE}Updating .sops.yaml with current public key...${NC}"
-    
-    # Check if public key already matches
-    if grep -q "$AGE_PUBLIC_KEY" "$SOPS_YAML_PATH"; then
-        echo -e "${GREEN}✓ .sops.yaml already contains current public key${NC}"
-    else
-        # Update the age key in .sops.yaml
-        sed -i.bak "s/age: age1[a-z0-9]*/age: $AGE_PUBLIC_KEY/" "$SOPS_YAML_PATH"
-        rm -f "$SOPS_YAML_PATH.bak"
-        echo -e "${GREEN}✓ .sops.yaml updated with public key${NC}"
+# Update .sops.yaml with current public key (only for newly generated keys)
+if [ "${KEY_SOURCE:-}" = "generated" ]; then
+    SOPS_YAML_PATH="$SCRIPT_DIR/../../../../../.sops.yaml"
+    if [ -f "$SOPS_YAML_PATH" ]; then
+        echo -e "${BLUE}Updating .sops.yaml with new public key...${NC}"
+        
+        # Check if public key already matches
+        if grep -q "$AGE_PUBLIC_KEY" "$SOPS_YAML_PATH"; then
+            echo -e "${GREEN}✓ .sops.yaml already contains current public key${NC}"
+        else
+            # Update the age key in .sops.yaml
+            sed -i.bak "s/age: age1[a-z0-9]*/age: $AGE_PUBLIC_KEY/" "$SOPS_YAML_PATH"
+            rm -f "$SOPS_YAML_PATH.bak"
+            echo -e "${GREEN}✓ .sops.yaml updated with public key${NC}"
+            echo -e "${YELLOW}⚠ IMPORTANT: Re-encrypt all secrets with new key:${NC}"
+            echo -e "  ${GREEN}./scripts/bootstrap/infra/secrets/ksops/generate-sops/generate-platform-sops.sh${NC}"
+        fi
+        echo ""
     fi
-    echo ""
 fi
 
 echo -e "${YELLOW}Next steps:${NC}"

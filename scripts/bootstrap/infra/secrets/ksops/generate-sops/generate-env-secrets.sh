@@ -31,7 +31,7 @@ get_secret_mapping() {
     esac
 }
 
-for ENV in dev staging prod; do
+for ENV in pr dev staging prod; do
     ENV_UPPER=$(echo "$ENV" | tr '[:lower:]' '[:upper:]')
     SECRETS_DIR="$OVERLAYS_DIR/$ENV/secrets"
     
