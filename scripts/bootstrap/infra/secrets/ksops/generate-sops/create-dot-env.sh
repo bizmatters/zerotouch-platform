@@ -63,17 +63,16 @@ done
 echo -e "${GREEN}✓ Required tools installed${NC}"
 echo ""
 
-# Step 1: Get Age key (from SOPS_AGE_KEY env var or S3)
+# Step 1: Get Age key (from AGE_PRIVATE_KEY env var or S3)
 echo -e "${BLUE}[1/4] Retrieving Age key...${NC}"
 
-# Debug: Check if SOPS_AGE_KEY is set (without revealing the key)
-if [ -n "${SOPS_AGE_KEY:-}" ]; then
-    echo -e "${GREEN}✓ SOPS_AGE_KEY detected (length: ${#SOPS_AGE_KEY})${NC}"
+# Debug: Check if AGE_PRIVATE_KEY is set (without revealing the key)
+if [ -n "${AGE_PRIVATE_KEY:-}" ]; then
+    echo -e "${GREEN}✓ AGE_PRIVATE_KEY detected (length: ${#AGE_PRIVATE_KEY})${NC}"
 fi
 
-if [ -n "${SOPS_AGE_KEY:-}" ]; then
+if [ -n "${AGE_PRIVATE_KEY:-}" ]; then
     # Use Age key from environment (CI mode)
-    AGE_PRIVATE_KEY="$SOPS_AGE_KEY"
     echo -e "${GREEN}✓ Age key loaded from environment${NC}"
 else
     # Retrieve from S3 (local mode)
@@ -156,9 +155,7 @@ fi
 echo -e "${GREEN}✓ Secrets directory found: $SECRETS_DIR${NC}"
 
 # Ensure SOPS_AGE_KEY is set for sops decryption
-if [ -z "${SOPS_AGE_KEY:-}" ]; then
-    export SOPS_AGE_KEY="$AGE_PRIVATE_KEY"
-fi
+export SOPS_AGE_KEY="$AGE_PRIVATE_KEY"
 
 echo -e "${GREEN}✓ SOPS_AGE_KEY configured for decryption${NC}"
 
@@ -360,6 +357,14 @@ fi
 if [ $SECRET_COUNT -eq 0 ]; then
     echo -e "${RED}✗ No secrets decrypted${NC}"
     exit 1
+fi
+
+# Add AGE_PRIVATE_KEY to .env if not already there
+if ! grep -q "^AGE_PRIVATE_KEY=" "$ENV_FILE" 2>/dev/null; then
+    if [ -n "${AGE_PRIVATE_KEY:-}" ]; then
+        echo "AGE_PRIVATE_KEY=$AGE_PRIVATE_KEY" >> "$ENV_FILE"
+        echo -e "${GREEN}✓ Added AGE_PRIVATE_KEY to .env${NC}"
+    fi
 fi
 
 echo -e "${GREEN}✓ Decrypted $SECRET_COUNT secret values${NC}"
