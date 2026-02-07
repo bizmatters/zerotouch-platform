@@ -78,7 +78,7 @@ MISSING_VARS=()
 
 if [ -z "${GIT_APP_ID:-}" ]; then MISSING_VARS+=("GIT_APP_ID"); fi
 if [ -z "${GIT_APP_INSTALLATION_ID:-}" ]; then MISSING_VARS+=("GIT_APP_INSTALLATION_ID"); fi
-if [ -z "${GIT_APP_PRIVATE_KEY:-}" ]; then MISSING_VARS+=("GIT_APP_PRIVATE_KEY"); fi
+if [ -z "${GIT_APP_PRIVATE_KEY:-}${GIT_APP_PRIVATE_KEY_B64:-}" ]; then MISSING_VARS+=("GIT_APP_PRIVATE_KEY"); fi
 
 # Check for environment-specific S3 credentials dynamically
 S3_ACCESS_KEY_VAR="${ENV_UPPER}_HETZNER_S3_ACCESS_KEY"
@@ -114,7 +114,7 @@ echo ""
 
 # Step 2: Inject GitHub App Authentication
 echo -e "${BLUE}[2/8] Injecting GitHub App authentication...${NC}"
-if [ -n "${GIT_APP_ID:-}" ] && [ -n "${GIT_APP_INSTALLATION_ID:-}" ] && [ -n "${GIT_APP_PRIVATE_KEY:-}${GIT_APP_PRIVATE_KEY_B64:-}" ]; then
+if [ -n "${GIT_APP_ID:-}" ] && [ -n "${GIT_APP_INSTALLATION_ID:-}" ] && [ -n "${GIT_APP_PRIVATE_KEY:-}" ]; then
     # Get private key (decode if base64 encoded)
     PRIVATE_KEY=$(get_env_var "GIT_APP_PRIVATE_KEY")
     

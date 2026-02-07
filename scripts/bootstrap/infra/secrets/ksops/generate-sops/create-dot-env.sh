@@ -309,6 +309,12 @@ if [ -d "$CORE_SECRETS_DIR" ]; then
             fi
         fi
         
+        # Skip age-private-key (used for SOPS, not for .env)
+        if [[ "$basename_file" == "age-private-key.secret.yaml" ]]; then
+            echo -e "${YELLOW}  ⊘ Skipped (SOPS key, not for .env)${NC}"
+            continue
+        fi
+        
         # Decrypt
         set +e
         decrypted=$(sops -d "$secret_file" 2>&1)

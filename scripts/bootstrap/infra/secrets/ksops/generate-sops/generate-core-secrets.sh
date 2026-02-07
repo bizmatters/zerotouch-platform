@@ -71,6 +71,7 @@ while IFS='=' read -r name value || [ -n "$name" ]; do
     [[ "$name" =~ ^(DEV|STAGING|PROD|PR)_ ]] && continue
     [[ "$value" =~ $'\n' ]] && continue
     [[ "$name" =~ ^GIT_APP_PRIVATE_KEY$ ]] && continue
+    [[ "$name" =~ ^AGE_PRIVATE_KEY$ ]] && continue
     [[ ${#value} -gt 500 ]] && continue
     [[ -z "$value" ]] && continue
     
