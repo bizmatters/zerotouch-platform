@@ -299,7 +299,9 @@ if [ -d "$CORE_SECRETS_DIR" ]; then
         echo -e "${BLUE}  Processing: $basename_file${NC}"
         
         # Skip individual files if combined github-app-credentials exists
-        if [[ "$basename_file" =~ ^(git-app-id|git-app-installation-id|org-name|tenants-repo-name)\.secret\.yaml$ ]]; then
+        # Only git-app-id and git-app-installation-id are in github-app-credentials
+        # org-name and tenants-repo-name are separate secrets
+        if [[ "$basename_file" =~ ^(git-app-id|git-app-installation-id)\.secret\.yaml$ ]]; then
             if [ -f "$CORE_SECRETS_DIR/github-app-credentials.secret.yaml" ]; then
                 echo -e "${YELLOW}  ⊘ Skipped (included in github-app-credentials)${NC}"
                 continue
@@ -338,9 +340,17 @@ if [ -d "$CORE_SECRETS_DIR" ]; then
                 value=$(echo "$decrypted" | yq eval ".stringData.\"$key\"" - 2>/dev/null)
                 
                 # Build env var name
-                # github-app-credentials: use key name directly (git-app-id → GIT_APP_ID)
                 if [ "$secret_name" = "github-app-credentials" ]; then
+                    # github-app-credentials: use key name directly (git-app-id → GIT_APP_ID)
                     env_var_name=$(echo "$key" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+                else
+                    # Other secrets: use secret name (org-name → ORG_NAME)
+                    env_var_name=$(echo "$secret_name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+                    # If key is not "value", append it
+                    if [ "$key" != "value" ]; then
+                        key_upper=$(echo "$key" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+                        env_var_name="${env_var_name}_${key_upper}"
+                    fi
                 fi
                 
                 # Write to .env (handles multi-line with base64 encoding)

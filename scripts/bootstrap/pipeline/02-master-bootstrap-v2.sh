@@ -175,6 +175,41 @@ fi
 echo ""
 
 # ============================================================================
+# ENVIRONMENT FILE SETUP
+# Generate .env from encrypted secrets if not present
+# ============================================================================
+
+PLATFORM_ENV_FILE="$REPO_ROOT/.env"
+
+if [ ! -f "$PLATFORM_ENV_FILE" ]; then
+    log_info "Generating .env from encrypted secrets..."
+    
+    # Check if AGE_PRIVATE_KEY is set (CI mode)
+    if [ -z "${AGE_PRIVATE_KEY:-}" ]; then
+        log_error "AGE_PRIVATE_KEY not set and .env not found"
+        log_error "Either provide AGE_PRIVATE_KEY or run create-dot-env.sh manually"
+        exit 1
+    fi
+    
+    # Run create-dot-env.sh
+    CREATE_DOT_ENV_SCRIPT="$REPO_ROOT/scripts/bootstrap/infra/secrets/ksops/generate-sops/create-dot-env.sh"
+    if [ ! -f "$CREATE_DOT_ENV_SCRIPT" ]; then
+        log_error "create-dot-env.sh not found at $CREATE_DOT_ENV_SCRIPT"
+        exit 1
+    fi
+    
+    chmod +x "$CREATE_DOT_ENV_SCRIPT"
+    if ! "$CREATE_DOT_ENV_SCRIPT"; then
+        log_error "Failed to generate .env from encrypted secrets"
+        exit 1
+    fi
+    
+    log_success ".env generated successfully"
+else
+    log_info ".env file already exists, skipping generation"
+fi
+
+# ============================================================================
 # PREVIEW MODE ENVIRONMENT SETUP
 # Copy service .env and export KIND_NODE_IMAGE for CI
 # ============================================================================
@@ -182,7 +217,6 @@ echo ""
 if [ "$MODE" = "preview" ]; then
     # Copy service .env file to REPO_ROOT for downstream scripts
     SERVICE_ENV_FILE="$(cd "$SCRIPT_DIR/../../.." && pwd)/.env"
-    PLATFORM_ENV_FILE="$REPO_ROOT/.env"
     
     if [[ -f "$SERVICE_ENV_FILE" ]] && [[ "$SERVICE_ENV_FILE" != "$PLATFORM_ENV_FILE" ]]; then
         log_info "Copying service .env file to platform root..."
