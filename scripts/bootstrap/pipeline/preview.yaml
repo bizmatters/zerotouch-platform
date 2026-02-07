@@ -110,9 +110,9 @@ stages:
   - name: root_app_deploy
     description: Deploy ArgoCD root application (preview overlay)
     script: install/10-deploy-root-app.sh
+    args: ["preview", "pr"]
     cache_key: root_app_deploy
     required: true
-    # Reads: $MODE (preview), $ENV (dev)
     # Uses overlay: bootstrap/argocd/overlays/preview
     # Repo URL: file:///repo (local mount, not Git)
 
