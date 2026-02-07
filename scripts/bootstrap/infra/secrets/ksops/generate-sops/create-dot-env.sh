@@ -160,7 +160,13 @@ fi
 echo -e "${GREEN}✓ SOPS_AGE_KEY configured for decryption${NC}"
 
 ENV_FILE="$REPO_ROOT/.env"
-> "$ENV_FILE"  # Clear file
+
+echo -e "${BLUE}Creating .env file: $ENV_FILE${NC}"
+if ! > "$ENV_FILE" 2>&1; then
+    echo -e "${RED}✗ Failed to create .env file${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✓ .env file created${NC}"
 
 SECRET_COUNT=0
 
