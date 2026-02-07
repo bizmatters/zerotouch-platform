@@ -152,7 +152,12 @@ fi
 
 echo -e "${GREEN}✓ Secrets directory found: $SECRETS_DIR${NC}"
 
-export SOPS_AGE_KEY="$AGE_PRIVATE_KEY"
+# Ensure SOPS_AGE_KEY is set for sops decryption
+if [ -z "${SOPS_AGE_KEY:-}" ]; then
+    export SOPS_AGE_KEY="$AGE_PRIVATE_KEY"
+fi
+
+echo -e "${GREEN}✓ SOPS_AGE_KEY configured for decryption${NC}"
 
 ENV_FILE="$REPO_ROOT/.env"
 > "$ENV_FILE"  # Clear file
@@ -231,6 +236,10 @@ process_secrets_dir() {
 }
 
 # Process environment-specific secrets (with PR_ prefix)
+echo -e "${BLUE}Finding secret files in: $SECRETS_DIR${NC}"
+SECRET_FILES=$(find "$SECRETS_DIR" -name "*.secret.yaml" -type f)
+echo -e "${GREEN}Found $(echo "$SECRET_FILES" | wc -l) secret files${NC}"
+
 process_secrets_dir "$SECRETS_DIR" "${ENV_UPPER}_"
 
 # Process core secrets (no prefix)
