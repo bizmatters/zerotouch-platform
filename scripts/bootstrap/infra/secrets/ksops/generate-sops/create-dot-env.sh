@@ -176,9 +176,12 @@ process_secrets_dir() {
         fi
         
         # Decrypt secret
+        local decrypted
+        local decrypt_error
         if ! decrypted=$(sops -d "$secret_file" 2>&1); then
+            decrypt_error="$decrypted"
             echo -e "${RED}✗ Failed to decrypt: $(basename "$secret_file")${NC}"
-            echo -e "${RED}Error: $decrypted${NC}"
+            echo -e "${RED}$decrypt_error${NC}"
             exit 1
         fi
         
