@@ -37,9 +37,16 @@ jobs:
           chmod +x sops
           sudo mv sops /usr/local/bin/
           
+          # Install yq
+          YQ_VERSION=4.35.1
+          curl -Lo yq "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64"
+          chmod +x yq
+          sudo mv yq /usr/local/bin/
+          
           # Verify installations
           age --version
           sops --version
+          yq --version
 
       - name: Set up Python
         uses: actions/setup-python@v5

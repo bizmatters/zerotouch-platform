@@ -5,7 +5,7 @@
 set -e
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-ENV_FILE="$REPO_ROOT/.env"
+ENV_FILE="$REPO_ROOT/.env.local"
 OVERLAYS_DIR="$REPO_ROOT/bootstrap/argocd/overlays/main"
 
 # Colors

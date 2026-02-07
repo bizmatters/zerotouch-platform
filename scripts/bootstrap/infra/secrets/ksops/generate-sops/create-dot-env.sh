@@ -290,9 +290,62 @@ echo -e "${GREEN}Found $(echo "$SECRET_FILES" | wc -l) secret files${NC}"
 
 process_secrets_dir "$SECRETS_DIR" "${ENV_UPPER}_"
 
-# Process core secrets (no prefix)
+# Process core secrets (no prefix) - use yq for proper YAML parsing
 if [ -d "$CORE_SECRETS_DIR" ]; then
-    process_secrets_dir "$CORE_SECRETS_DIR" ""
+    echo -e "${BLUE}Processing CORE secrets with yq...${NC}"
+    
+    while IFS= read -r secret_file; do
+        basename_file=$(basename "$secret_file")
+        echo -e "${BLUE}  Processing: $basename_file${NC}"
+        
+        # Skip individual files if combined github-app-credentials exists
+        if [[ "$basename_file" =~ ^(git-app-id|git-app-installation-id|org-name|tenants-repo-name)\.secret\.yaml$ ]]; then
+            if [ -f "$CORE_SECRETS_DIR/github-app-credentials.secret.yaml" ]; then
+                echo -e "${YELLOW}  ⊘ Skipped (included in github-app-credentials)${NC}"
+                continue
+            fi
+        fi
+        
+        # Decrypt
+        set +e
+        decrypted=$(sops -d "$secret_file" 2>&1)
+        exit_code=$?
+        set -e
+        
+        if [ $exit_code -ne 0 ]; then
+            echo -e "${RED}✗ Failed to decrypt: $(basename "$secret_file")${NC}"
+            continue
+        fi
+        
+        # Extract secret name
+        secret_name=$(echo "$decrypted" | grep "name:" | head -1 | sed 's/.*name: *//')
+        
+        # Use yq to extract stringData keys
+        if command -v yq &> /dev/null; then
+            # Get all keys in stringData
+            keys=$(echo "$decrypted" | yq eval '.stringData | keys | .[]' - 2>/dev/null)
+            
+            while IFS= read -r key; do
+                [ -z "$key" ] && continue
+                
+                # Extract value for this key (preserves multi-line)
+                value=$(echo "$decrypted" | yq eval ".stringData.\"$key\"" - 2>/dev/null)
+                
+                # Build env var name
+                # github-app-credentials: use key name directly (git-app-id → GIT_APP_ID)
+                if [ "$secret_name" = "github-app-credentials" ]; then
+                    env_var_name=$(echo "$key" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+                fi
+                
+                # Write to .env (printf handles multi-line)
+                printf '%s=%s\n' "$env_var_name" "$value" >> "$ENV_FILE"
+                ((++SECRET_COUNT))
+            done <<< "$keys"
+        else
+            echo -e "${YELLOW}⚠ yq not found, using fallback parser (may not handle multi-line)${NC}"
+            process_secrets_dir "$CORE_SECRETS_DIR" ""
+        fi
+    done < <(find "$CORE_SECRETS_DIR" -name "*.secret.yaml" -type f)
 fi
 
 if [ $SECRET_COUNT -eq 0 ]; then

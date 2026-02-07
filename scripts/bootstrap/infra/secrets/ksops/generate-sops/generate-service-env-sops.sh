@@ -28,7 +28,7 @@ ENV_FILTER="${4:-}"
 
 # Detect current repo root
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-ENV_FILE="$REPO_ROOT/.env"
+ENV_FILE="$REPO_ROOT/.env.local"
 
 # Set default output directory if not provided
 if [ -z "$OUTPUT_BASE_DIR" ]; then

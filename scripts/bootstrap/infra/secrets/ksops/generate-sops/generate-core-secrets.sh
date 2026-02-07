@@ -4,7 +4,7 @@
 set -e
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-ENV_FILE="$REPO_ROOT/.env"
+ENV_FILE="$REPO_ROOT/.env.local"
 OVERLAYS_DIR="$REPO_ROOT/bootstrap/argocd/overlays/main"
 
 # Colors
@@ -117,9 +117,9 @@ metadata:
   namespace: kube-system
 type: Opaque
 stringData:
-  github-app-id: "${GIT_APP_ID}"
-  github-app-installation-id: "${GIT_APP_INSTALLATION_ID}"
-  github-app-private-key: |
+  git-app-id: "${GIT_APP_ID}"
+  git-app-installation-id: "${GIT_APP_INSTALLATION_ID}"
+  git-app-private-key: |
 $(echo "$GIT_APP_PRIVATE_KEY" | sed 's/^/    /')
 EOF
     
