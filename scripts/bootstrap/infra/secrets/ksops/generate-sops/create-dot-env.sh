@@ -254,11 +254,26 @@ process_secrets_dir() {
                     fi
                     
                     echo -e "${BLUE}    Writing: ${prefix}${env_var_name}${NC}"
+                    echo -e "${BLUE}    Value length: ${#value}${NC}"
                     
                     # Write to .env with prefix (use printf to handle special chars)
-                    printf '%s=%s\n' "${prefix}${env_var_name}" "$value" >> "$ENV_FILE"
-                    ((SECRET_COUNT++))
-                    ((key_count++))
+                    set +e
+                    local write_output
+                    write_output=$(printf '%s=%s\n' "${prefix}${env_var_name}" "$value" >> "$ENV_FILE" 2>&1)
+                    local write_exit=$?
+                    set -e
+                    
+                    if [ $write_exit -ne 0 ]; then
+                        echo -e "${RED}✗ Failed to write to .env${NC}"
+                        echo -e "${RED}Exit code: $write_exit${NC}"
+                        echo -e "${RED}Output: $write_output${NC}"
+                        echo -e "${RED}Value preview: ${value:0:50}...${NC}"
+                        exit 1
+                    fi
+                    
+                    echo -e "${GREEN}    ✓ Written successfully${NC}"
+                    ((++SECRET_COUNT))
+                    ((++key_count))
                 fi
             fi
         done <<< "$decrypted"
