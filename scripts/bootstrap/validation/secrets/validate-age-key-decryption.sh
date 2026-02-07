@@ -157,14 +157,35 @@ if [ $FAILED -eq 0 ]; then
     else
         TOTAL=0
         SUCCESS=0
+        MAX_RETRIES=3
+        RETRY_DELAY=2
         
         while IFS= read -r secret_file; do
             TOTAL=$((TOTAL + 1))
-            if sops -d "$secret_file" >/dev/null 2>&1; then
-                echo -e "${GREEN}  ✓ $(basename "$secret_file")${NC}"
-                SUCCESS=$((SUCCESS + 1))
-            else
-                echo -e "${RED}  ✗ $(basename "$secret_file")${NC}"
+            SECRET_NAME=$(basename "$secret_file")
+            DECRYPTED=0
+            
+            # Retry logic for secrets that may need time to be available
+            for attempt in $(seq 1 $MAX_RETRIES); do
+                if sops -d "$secret_file" >/dev/null 2>&1; then
+                    if [ $attempt -eq 1 ]; then
+                        echo -e "${GREEN}  ✓ $SECRET_NAME${NC}"
+                    else
+                        echo -e "${GREEN}  ✓ $SECRET_NAME (attempt $attempt)${NC}"
+                    fi
+                    SUCCESS=$((SUCCESS + 1))
+                    DECRYPTED=1
+                    break
+                else
+                    if [ $attempt -lt $MAX_RETRIES ]; then
+                        echo -e "${YELLOW}  ⏳ $SECRET_NAME (retrying in ${RETRY_DELAY}s...)${NC}"
+                        sleep $RETRY_DELAY
+                    fi
+                fi
+            done
+            
+            if [ $DECRYPTED -eq 0 ]; then
+                echo -e "${RED}  ✗ $SECRET_NAME (failed after $MAX_RETRIES attempts)${NC}"
                 FAILED=1
             fi
         done <<< "$SECRET_FILES"

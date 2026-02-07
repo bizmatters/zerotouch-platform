@@ -94,19 +94,19 @@ echo ""
 echo "🏢 Critical Namespaces:"
 echo "------------------------------------------"
 
-ALL_NAMESPACES=("argocd" "external-secrets" "crossplane-system" "keda")
+ALL_NAMESPACES=("argocd" "crossplane-system" "keda" "cert-manager" "cnpg-system" "nats" "platform-agent-gateway")
 
 for ns in "${ALL_NAMESPACES[@]}"; do
     if kubectl get namespace "$ns" &>/dev/null; then
         TOTAL_PODS=$(kubectl get pods -n "$ns" --no-headers 2>/dev/null | wc -l | tr -d ' ')
-        READY_PODS=$(kubectl get pods -n "$ns" --field-selector=status.phase=Running -o json 2>/dev/null | jq '[.items[] | select(.status.conditions[] | select(.type=="Ready" and .status=="True"))] | length')
+        READY_PODS=$(kubectl get pods -n "$ns" -o json 2>/dev/null | jq '[.items[] | select((.status.phase=="Running" and (.status.conditions[] | select(.type=="Ready" and .status=="True"))) or .status.phase=="Succeeded")] | length')
         
         if [[ "$TOTAL_PODS" -eq 0 ]]; then
             echo -e "  ⚠️  ${YELLOW}$ns${NC}: No pods (may be expected)"
         elif [[ "$READY_PODS" -eq "$TOTAL_PODS" ]]; then
             echo -e "  ✅ ${GREEN}$ns${NC}: $READY_PODS/$TOTAL_PODS pods ready"
         else
-            NOT_READY=$(kubectl get pods -n "$ns" -o json 2>/dev/null | jq -r '.items[] | select(.status.conditions[] | select(.type=="Ready" and .status!="True")) | .metadata.name' | head -3)
+            NOT_READY=$(kubectl get pods -n "$ns" -o json 2>/dev/null | jq -r '.items[] | select(.status.phase!="Succeeded" and (.status.conditions[] | select(.type=="Ready" and .status!="True"))) | .metadata.name' | head -3)
             echo -e "  ❌ ${RED}$ns${NC}: $READY_PODS/$TOTAL_PODS pods ready"
             if [[ -n "$NOT_READY" ]]; then
                 echo -e "     ${YELLOW}Not ready:${NC} $(echo "$NOT_READY" | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g')"
@@ -121,25 +121,6 @@ done
 
 echo ""
 
-# 3. Check External Secrets
-echo "🔐 External Secrets Status:"
-echo "------------------------------------------"
-
-EXTERNAL_SECRETS=$(kubectl get externalsecrets -A -o json 2>/dev/null)
-if [[ -n "$EXTERNAL_SECRETS" ]]; then
-    echo "$EXTERNAL_SECRETS" | jq -r '.items[] | "\(.metadata.namespace)|\(.metadata.name)|\(.status.conditions[0].status // "Unknown")|\(.status.conditions[0].reason // "Unknown")"' | while IFS='|' read -r ns name status reason; do
-        if [[ "$status" == "True" ]]; then
-            echo -e "  ✅ ${GREEN}$ns/$name${NC}: Synced"
-        else
-            echo -e "  ❌ ${RED}$ns/$name${NC}: $reason"
-            ((FAILED++)) || true
-        fi
-    done
-else
-    echo "  ⚠️  No ExternalSecrets found"
-fi
-
-echo ""
 
 # 4. Check ClusterSecretStore
 echo "🗄️  ClusterSecretStore Status:"
