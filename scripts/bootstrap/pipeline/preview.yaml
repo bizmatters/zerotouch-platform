@@ -123,21 +123,14 @@ stages:
     cache_key: platform_bootstrap
     required: true
 
-  # Step 10: KSOPS verification (always run)
-  - name: verify_ksops
-    description: Verify KSOPS secret decryption
-    script: validation/11-verify-ksops.sh
-    cache_key: null  # Always run
-    required: true
-
-  # Step 11: TLS certificate restoration (always run)
+  # Step 10: TLS certificate restoration (always run)
   - name: restore_tls_certs
     description: Restore cached TLS certificates
     script: helpers/restore-gateway-cert.sh
     cache_key: null  # Always run
     required: true
 
-  # Step 12: Child applications verification (always run)
+  # Step 11: Child applications verification (always run)
   - name: verify_child_apps
     description: Verify ArgoCD child applications
     script: validation/12-verify-child-apps.sh
@@ -162,6 +155,11 @@ stages:
 
 # Post-validation steps (always run, not cached)
 post_validation:
+  - name: verify_ksops
+    description: Verify KSOPS secret decryption and injection
+    script: validation/11-verify-ksops.sh
+    timeout: 120
+
   - name: wait_service_dependencies
     description: Wait for platform services to be ready (preview mode)
     script: wait/13-wait-service-dependencies.sh

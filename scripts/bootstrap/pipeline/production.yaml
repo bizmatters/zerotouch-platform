@@ -123,13 +123,6 @@ stages:
     cache_key: platform_bootstrap
     required: true
 
-  # Step 15: KSOPS verification (always run)
-  - name: verify_ksops
-    description: Verify KSOPS secret decryption
-    script: validation/11-verify-ksops.sh
-    cache_key: null  # Always run
-    required: true
-
   # Step 16: TLS certificate restoration (always run)
   - name: restore_tls_certs
     description: Restore cached TLS certificates
@@ -153,6 +146,13 @@ stages:
 
 # Post-validation steps (always run, not cached)
 post_validation:
+  # Step 15: KSOPS verification (always run)
+  - name: verify_ksops
+    description: Verify KSOPS secret decryption
+    script: validation/11-verify-ksops.sh
+    cache_key: null  # Always run
+    required: true
+
   - name: wait_apps_healthy
     description: Wait for all applications to be healthy
     script: wait/12a-wait-apps-healthy.sh
