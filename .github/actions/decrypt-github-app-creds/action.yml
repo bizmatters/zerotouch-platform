@@ -1,0 +1,54 @@
+name: 'Decrypt GitHub App Credentials'
+description: 'Decrypts GitHub App credentials from SOPS secrets using Age key'
+
+inputs:
+  environment:
+    description: 'Environment name (dev, staging, production)'
+    required: true
+  age-key:
+    description: 'Age private key for SOPS decryption'
+    required: true
+
+outputs:
+  app-id:
+    description: 'GitHub App ID'
+    value: ${{ steps.decrypt.outputs.app-id }}
+  installation-id:
+    description: 'GitHub App Installation ID'
+    value: ${{ steps.decrypt.outputs.installation-id }}
+  private-key:
+    description: 'GitHub App Private Key'
+    value: ${{ steps.decrypt.outputs.private-key }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install sops
+      shell: bash
+      run: |
+        # Install sops
+        SOPS_VERSION=3.8.1
+        curl -Lo sops "https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.linux.amd64"
+        chmod +x sops
+        sudo mv sops /usr/local/bin/
+
+    - name: Decrypt credentials from SOPS
+      id: decrypt
+      shell: bash
+      env:
+        ENV: ${{ inputs.environment }}
+        SOPS_AGE_KEY: ${{ inputs.age-key }}
+      run: |
+        # Decrypt GitHub App credentials from SOPS secrets
+        SECRETS_DIR="bootstrap/argocd/overlays/main/${ENV}/secrets"
+        
+        GIT_APP_ID=$(sops -d "${SECRETS_DIR}/git-app-id.secret.yaml" | grep "value:" | awk '{print $2}')
+        GIT_APP_INSTALLATION_ID=$(sops -d "${SECRETS_DIR}/git-app-installation-id.secret.yaml" | grep "value:" | awk '{print $2}')
+        GIT_APP_PRIVATE_KEY=$(sops -d "${SECRETS_DIR}/github-app-credentials.secret.yaml" | yq eval '.stringData.git-app-private-key' -)
+        
+        # Output credentials
+        echo "app-id=$GIT_APP_ID" >> $GITHUB_OUTPUT
+        echo "installation-id=$GIT_APP_INSTALLATION_ID" >> $GITHUB_OUTPUT
+        echo "private-key<<EOF" >> $GITHUB_OUTPUT
+        echo "$GIT_APP_PRIVATE_KEY" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT

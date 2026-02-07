@@ -51,24 +51,29 @@ jobs:
       CI: true
     
     steps:
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ vars.GIT_APP_ID }}
-          private-key: ${{ secrets.GIT_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: zerotouch-platform,zerotouch-tenants
-
       - name: Checkout platform repository
         uses: actions/checkout@v4
-        with:
-          token: ${{ steps.app-token.outputs.token }}
 
       - name: Setup Infrastructure Dependencies
         run: |
           chmod +x scripts/bootstrap/infra/00-setup-infra-deps.sh
           ./scripts/bootstrap/infra/00-setup-infra-deps.sh
+
+      - name: Decrypt GitHub App credentials
+        id: decrypt-creds
+        uses: ./.github/actions/decrypt-github-app-creds
+        with:
+          environment: ${{ inputs.environment }}
+          age-key: ${{ secrets.AGE_PRIVATE_KEY }}
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ steps.decrypt-creds.outputs.app-id }}
+          private-key: ${{ steps.decrypt-creds.outputs.private-key }}
+          owner: ${{ github.repository_owner }}
+          repositories: zerotouch-platform,zerotouch-tenants
 
       - name: Checkout tenants repository
         uses: actions/checkout@v4
