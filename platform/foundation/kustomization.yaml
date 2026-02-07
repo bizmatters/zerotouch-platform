@@ -6,4 +6,4 @@ resources:
 - provider-kubernetes-config.yaml
 - provider-kubernetes-rbac.yaml
 - network-policies/platform-egress.yaml
-- ghcr-token-refresher/
+- ghcr-token-refresher/cronjob.yaml
