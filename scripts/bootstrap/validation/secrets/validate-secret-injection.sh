@@ -66,14 +66,14 @@ validate "sops-age secret has keys.txt field" \
     "kubectl get secret sops-age -n argocd -o jsonpath='{.data.keys\.txt}' | base64 -d | grep -q '^AGE-SECRET-KEY-1'"
 
 # Validation 4: Check GitHub App secret exists
-validate "github-app-credentials secret exists in kube-system namespace" \
-    "kubectl get secret github-app-credentials -n kube-system &>/dev/null"
+validate "argocd-github-app-creds secret exists in argocd namespace" \
+    "kubectl get secret argocd-github-app-creds -n argocd &>/dev/null"
 
 # Validation 5: Check GitHub App secret has required fields (keys are git-app-* not github-app-*)
-validate "github-app-credentials has all required fields" \
-    "kubectl get secret github-app-credentials -n kube-system -o jsonpath='{.data.git-app-id}' | base64 -d | grep -q '.' && \
-     kubectl get secret github-app-credentials -n kube-system -o jsonpath='{.data.git-app-installation-id}' | base64 -d | grep -q '.' && \
-     kubectl get secret github-app-credentials -n kube-system -o jsonpath='{.data.git-app-private-key}' | base64 -d | grep -q 'BEGIN'"
+validate "argocd-github-app-creds has all required fields" \
+    "kubectl get secret argocd-github-app-creds -n argocd -o jsonpath='{.data.git-app-id}' | base64 -d | grep -q '.' && \
+     kubectl get secret argocd-github-app-creds -n argocd -o jsonpath='{.data.git-app-installation-id}' | base64 -d | grep -q '.' && \
+     kubectl get secret argocd-github-app-creds -n argocd -o jsonpath='{.data.git-app-private-key}' | base64 -d | grep -q 'BEGIN'"
 
 # Summary
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
