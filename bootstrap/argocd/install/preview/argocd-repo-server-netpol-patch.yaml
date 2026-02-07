@@ -1,0 +1,31 @@
+- op: replace
+  path: /spec/policyTypes
+  value:
+    - Ingress
+    - Egress
+- op: add
+  path: /spec/egress
+  value:
+    # Allow connection to redis for caching
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: argocd-redis
+      ports:
+        - port: 6379
+          protocol: TCP
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+    # Allow HTTPS for Git/Helm/OCI operations
+    - ports:
+        - port: 443
+          protocol: TCP

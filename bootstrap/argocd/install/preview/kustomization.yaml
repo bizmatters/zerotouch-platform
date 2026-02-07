@@ -8,15 +8,15 @@ resources:
 
 # Preview mode: Add local repo mount for Kind clusters
 patches:
-  - path: ../argocd-cm-patch.yaml
+  - path: argocd-cm-patch.yaml
     target:
       kind: ConfigMap
       name: argocd-cm
-  - path: ../argocd-application-controller-netpol-patch.yaml
+  - path: argocd-application-controller-netpol-patch.yaml
     target:
       kind: NetworkPolicy
       name: argocd-application-controller-network-policy
-  - path: ../argocd-repo-server-netpol-patch.yaml
+  - path: argocd-repo-server-netpol-patch.yaml
     target:
       kind: NetworkPolicy
       name: argocd-repo-server-network-policy
