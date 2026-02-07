@@ -49,6 +49,10 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SECRETS_DIR="$SCRIPT_DIR/../infra/secrets"
 
+# Source env helpers for multi-line value handling
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+source "$REPO_ROOT/scripts/bootstrap/helpers/env-helpers.sh"
+
 # Get ENV from bootstrap context (exported by master bootstrap script)
 if [ -z "${ENV:-}" ]; then
     echo "Error: ENV environment variable is required"
@@ -110,9 +114,12 @@ echo ""
 
 # Step 2: Inject GitHub App Authentication
 echo -e "${BLUE}[2/8] Injecting GitHub App authentication...${NC}"
-if [ -n "${GIT_APP_ID:-}" ] && [ -n "${GIT_APP_INSTALLATION_ID:-}" ] && [ -n "${GIT_APP_PRIVATE_KEY:-}" ]; then
+if [ -n "${GIT_APP_ID:-}" ] && [ -n "${GIT_APP_INSTALLATION_ID:-}" ] && [ -n "${GIT_APP_PRIVATE_KEY:-}${GIT_APP_PRIVATE_KEY_B64:-}" ]; then
+    # Get private key (decode if base64 encoded)
+    PRIVATE_KEY=$(get_env_var "GIT_APP_PRIVATE_KEY")
+    
     TEMP_KEY=$(mktemp)
-    echo "$GIT_APP_PRIVATE_KEY" > "$TEMP_KEY"
+    echo "$PRIVATE_KEY" > "$TEMP_KEY"
     trap "rm -f $TEMP_KEY" EXIT
     "$SECRETS_DIR/00-inject-identities.sh" "$GIT_APP_ID" "$GIT_APP_INSTALLATION_ID" "$TEMP_KEY"
     echo -e "${GREEN}✓ GitHub App authentication injected${NC}"

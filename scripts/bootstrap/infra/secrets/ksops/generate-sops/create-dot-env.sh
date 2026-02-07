@@ -20,6 +20,9 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../../../.." && pwd)"
 
+# Source env helpers
+source "$REPO_ROOT/scripts/bootstrap/helpers/env-helpers.sh"
+
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║   Create .env from Encrypted Secrets                        ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
@@ -337,8 +340,8 @@ if [ -d "$CORE_SECRETS_DIR" ]; then
                     env_var_name=$(echo "$key" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
                 fi
                 
-                # Write to .env (printf handles multi-line)
-                printf '%s=%s\n' "$env_var_name" "$value" >> "$ENV_FILE"
+                # Write to .env (handles multi-line with base64 encoding)
+                write_env_var "$env_var_name" "$value" "$ENV_FILE"
                 ((++SECRET_COUNT))
             done <<< "$keys"
         else
