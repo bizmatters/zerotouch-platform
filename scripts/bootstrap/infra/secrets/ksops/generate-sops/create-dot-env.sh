@@ -63,6 +63,11 @@ echo ""
 # Step 1: Get Age key (from SOPS_AGE_KEY env var or S3)
 echo -e "${BLUE}[1/4] Retrieving Age key...${NC}"
 
+# Debug: Check if SOPS_AGE_KEY is set (without revealing the key)
+if [ -n "${SOPS_AGE_KEY:-}" ]; then
+    echo -e "${GREEN}✓ SOPS_AGE_KEY detected (length: ${#SOPS_AGE_KEY})${NC}"
+fi
+
 if [ -n "${SOPS_AGE_KEY:-}" ]; then
     # Use Age key from environment (CI mode)
     AGE_PRIVATE_KEY="$SOPS_AGE_KEY"
