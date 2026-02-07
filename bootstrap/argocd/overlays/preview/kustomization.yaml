@@ -8,8 +8,8 @@ resources:
 # URL patching is handled by 01-patch-urls.sh script (applied before ArgoCD sync)
 
 patches:
-# 1. Specific Patch: Exclude Cilium from Foundation Config
-# This prevents ArgoCD from deploying platform/foundation/cilium.yaml
+# 1. Specific Patch: Exclude Cilium and network policies from Foundation Config
+# This prevents ArgoCD from deploying Cilium and CiliumNetworkPolicy in preview
 - target:
     kind: Application
     name: foundation-config
@@ -21,7 +21,7 @@ patches:
     spec:
       source:
         directory:
-          exclude: 'cilium.yaml'
+          exclude: '{cilium.yaml,network-policies/*}'
 
 # 2. Remove Control Plane Tolerations (Kind clusters don't have control-plane taints)
 - target:
