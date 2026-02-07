@@ -51,7 +51,7 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
             continue
         fi
         
-        READY_PODS=$(kubectl get pods -n "$ns" -o json 2>/dev/null | jq '[.items[] | select(.status.conditions[] | select(.type=="Ready" and .status=="True"))] | length')
+        READY_PODS=$(kubectl get pods -n "$ns" -o json 2>/dev/null | jq '[.items[] | select((.status.phase=="Running" and (.status.conditions[] | select(.type=="Ready" and .status=="True"))) or .status.phase=="Succeeded")] | length')
         
         if [[ "$READY_PODS" -eq "$TOTAL_PODS" ]]; then
             echo "  $ns: ✓ $READY_PODS/$TOTAL_PODS ready"
@@ -59,8 +59,8 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
             echo "  $ns: ⏳ $READY_PODS/$TOTAL_PODS ready"
             ALL_READY=false
             
-            # Show which pods are not ready
-            NOT_READY=$(kubectl get pods -n "$ns" -o json 2>/dev/null | jq -r '.items[] | select(.status.conditions[] | select(.type=="Ready" and .status!="True")) | "\(.metadata.name) (\(.status.phase))"' | head -3)
+            # Show which pods are not ready (exclude Succeeded jobs)
+            NOT_READY=$(kubectl get pods -n "$ns" -o json 2>/dev/null | jq -r '.items[] | select(.status.phase!="Succeeded" and (.status.conditions[] | select(.type=="Ready" and .status!="True"))) | "\(.metadata.name) (\(.status.phase))"' | head -3)
             if [[ -n "$NOT_READY" ]]; then
                 echo "$NOT_READY" | while read -r line; do
                     [[ -n "$line" ]] && echo "      - $line"
