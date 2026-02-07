@@ -116,7 +116,7 @@ fi
 
 export SOPS_AGE_KEY="$AGE_PRIVATE_KEY"
 echo -e "${GREEN}✓ Age key retrieved from S3${NC}"
-echo -e "${GREEN}  Public Key: $AGE_PUBLIC_KEY${NC}$'
+echo -e "${GREEN}  Public Key: $AGE_PUBLIC_KEY${NC}"
 
 # Check required tools
 if ! command -v sops &> /dev/null; then
