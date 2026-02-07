@@ -328,4 +328,4 @@ fi
 # BOOTSTRAP COMPLETE
 # ============================================================================
 
-"$SCRIPT_DIR/99-bootstrap-complete.sh" "$MODE" "${CREDENTIALS_FILE:-}" "${SERVER_IP:-}" "${WORKER_NODES:-}"
+"$SCRIPT_DIR/../99-bootstrap-complete.sh" "$MODE" "${CREDENTIALS_FILE:-}" "${SERVER_IP:-}" "${WORKER_NODES:-}"
