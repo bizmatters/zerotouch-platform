@@ -23,12 +23,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # - name: Configure AWS credentials
-      #   uses: aws-actions/configure-aws-credentials@v4
-      #   with:
-      #     role-to-assume: ${{ vars.AWS_ROLE_ARN }}
-      #     aws-region: ap-south-1
-      #     mask-aws-account-id: true
+      - name: Install age and sops
+        run: |
+          # Install age
+          AGE_VERSION=1.1.1
+          curl -Lo age.tar.gz "https://github.com/FiloSottile/age/releases/download/v${AGE_VERSION}/age-v${AGE_VERSION}-linux-amd64.tar.gz"
+          tar xf age.tar.gz
+          sudo mv age/age age/age-keygen /usr/local/bin/
+          
+          # Install sops
+          SOPS_VERSION=3.8.1
+          curl -Lo sops "https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.linux.amd64"
+          chmod +x sops
+          sudo mv sops /usr/local/bin/
+          
+          # Verify installations
+          age --version
+          sops --version
 
       - name: Set up Python
         uses: actions/setup-python@v5
