@@ -42,9 +42,9 @@ jobs:
       HETZNER_DNS_TOKEN: ${{ secrets.HETZNER_DNS_TOKEN }}
       HETZNER_S3_ACCESS_KEY: ${{ secrets.HETZNER_S3_ACCESS_KEY }}
       HETZNER_S3_SECRET_KEY: ${{ secrets.HETZNER_S3_SECRET_KEY }}
-      APP_ID: ${{ vars.APP_ID }}
-      APP_INSTALLATION_ID: ${{ vars.APP_INSTALLATION_ID }}
-      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+      GIT_APP_ID: ${{ vars.GIT_APP_ID }}
+      GIT_APP_INSTALLATION_ID: ${{ vars.GIT_APP_INSTALLATION_ID }}
+      GIT_APP_PRIVATE_KEY: ${{ secrets.GIT_APP_PRIVATE_KEY }}
       AWS_REGION: ${{ vars.AWS_REGION }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       TENANTS_REPO_NAME: ${{ vars.TENANTS_REPO_NAME }}
@@ -55,8 +55,8 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v1
         with:
-          app-id: ${{ vars.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          app-id: ${{ vars.GIT_APP_ID }}
+          private-key: ${{ secrets.GIT_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: zerotouch-platform,zerotouch-tenants
 
