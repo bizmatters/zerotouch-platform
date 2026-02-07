@@ -58,12 +58,12 @@ fi
 
 if [ "$IS_PREVIEW_MODE" = true ]; then
     # Preview mode: Only core components
-    EXPECTED_APPS=("crossplane-operator" "secrets" "keda" "foundation-config" "databases" "nats")
+    EXPECTED_APPS=("crossplane-operator" "secrets" "keda" "foundation-config" "dragonfly" "nats")
     echo -e "${BLUE}Preview mode detected - checking core applications only${NC}"
 else
     # Production mode: All components including infrastructure and gateway stack
     EXPECTED_APPS=(
-        "crossplane-operator" "secrets" "keda" "apis" "foundation-config" "databases" "tenant-infrastructure"
+        "crossplane-operator" "secrets" "keda" "apis" "foundation-config" "dragonfly" "tenant-infrastructure"
         "cert-manager" "nats" "cnpg"
         "gateway-api-crds" "gateway-class" "gateway-config" "gateway-foundation"
         "hcloud-ccm" "external-dns" "cert-manager-webhook-hetzner"
