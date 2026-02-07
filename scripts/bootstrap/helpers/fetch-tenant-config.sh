@@ -36,7 +36,7 @@ ENV_FILE="$CACHE_DIR/environments/$ENV/talos-values.yaml"
 GITHUB_USERNAME="${BOT_GITHUB_USERNAME:-${GITHUB_REPOSITORY_OWNER:-${ORG_NAME:-arun4infra}}}"
 
 # Try GitHub App authentication first, fallback to PAT
-if [[ -n "$GITHUB_APP_ID" && -n "$GITHUB_APP_INSTALLATION_ID" && -n "$GITHUB_APP_PRIVATE_KEY" && -n "$TENANTS_REPO_NAME" ]]; then
+if [[ -n "$GIT_APP_ID" && -n "$GIT_APP_INSTALLATION_ID" && -n "$GIT_APP_PRIVATE_KEY" && -n "$TENANTS_REPO_NAME" ]]; then
     echo "✓ Generating GitHub App token..." >&2
     
     # Generate JWT for GitHub App
@@ -45,19 +45,19 @@ if [[ -n "$GITHUB_APP_ID" && -n "$GITHUB_APP_INSTALLATION_ID" && -n "$GITHUB_APP
     EXP=$((NOW + 600))
     
     HEADER='{"alg":"RS256","typ":"JWT"}'
-    PAYLOAD="{\"iat\":${IAT},\"exp\":${EXP},\"iss\":\"${GITHUB_APP_ID}\"}"
+    PAYLOAD="{\"iat\":${IAT},\"exp\":${EXP},\"iss\":\"${GIT_APP_ID}\"}"
     
     HEADER_B64=$(echo -n "$HEADER" | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
     PAYLOAD_B64=$(echo -n "$PAYLOAD" | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
     
-    SIGNATURE=$(echo -n "${HEADER_B64}.${PAYLOAD_B64}" | openssl dgst -sha256 -sign <(echo "$GITHUB_APP_PRIVATE_KEY") | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
+    SIGNATURE=$(echo -n "${HEADER_B64}.${PAYLOAD_B64}" | openssl dgst -sha256 -sign <(echo "$GIT_APP_PRIVATE_KEY") | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
     JWT="${HEADER_B64}.${PAYLOAD_B64}.${SIGNATURE}"
     
     # Get installation access token
     TOKEN_RESPONSE=$(curl -s -X POST \
         -H "Authorization: Bearer $JWT" \
         -H "Accept: application/vnd.github+json" \
-        "https://api.github.com/app/installations/${GITHUB_APP_INSTALLATION_ID}/access_tokens")
+        "https://api.github.com/app/installations/${GIT_APP_INSTALLATION_ID}/access_tokens")
     
     GITHUB_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.token // empty')
     
@@ -73,7 +73,7 @@ if [[ -n "$GITHUB_APP_ID" && -n "$GITHUB_APP_INSTALLATION_ID" && -n "$GITHUB_APP
     echo "✓ Using GitHub App authentication" >&2
 else
     echo "Error: Tenant repository credentials not available" >&2
-    echo "Set: GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, GITHUB_APP_PRIVATE_KEY, TENANTS_REPO_NAME, ORG_NAME" >&2
+    echo "Set: GIT_APP_ID, GIT_APP_INSTALLATION_ID, GIT_APP_PRIVATE_KEY, TENANTS_REPO_NAME, ORG_NAME" >&2
     exit 1
 fi
 

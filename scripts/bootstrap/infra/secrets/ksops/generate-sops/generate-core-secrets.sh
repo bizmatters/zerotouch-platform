@@ -103,7 +103,7 @@ EOF
     fi
 done < "$ENV_FILE"
 
-if [[ -n "$GITHUB_APP_ID" && -n "$GITHUB_APP_INSTALLATION_ID" && -n "$GITHUB_APP_PRIVATE_KEY" ]]; then
+if [[ -n "$GIT_APP_ID" && -n "$GIT_APP_INSTALLATION_ID" && -n "$GIT_APP_PRIVATE_KEY" ]]; then
     # Create GitHub App credentials secret for GHCR token refresher CronJob
     # This secret is consumed by platform/foundation/ghcr-token-refresher/cronjob.yaml
     # The CronJob uses these credentials to generate fresh GitHub App tokens every 30 minutes
@@ -116,10 +116,10 @@ metadata:
   namespace: kube-system
 type: Opaque
 stringData:
-  github-app-id: "${GITHUB_APP_ID}"
-  github-app-installation-id: "${GITHUB_APP_INSTALLATION_ID}"
+  github-app-id: "${GIT_APP_ID}"
+  github-app-installation-id: "${GIT_APP_INSTALLATION_ID}"
   github-app-private-key: |
-$(echo "$GITHUB_APP_PRIVATE_KEY" | sed 's/^/    /')
+$(echo "$GIT_APP_PRIVATE_KEY" | sed 's/^/    /')
 EOF
     
     if sops -e -i "$CORE_SECRETS_DIR/github-app-credentials.secret.yaml" 2>/dev/null; then

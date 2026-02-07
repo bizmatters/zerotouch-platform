@@ -72,9 +72,9 @@ echo ""
 echo -e "${BLUE}Validating environment variables...${NC}"
 MISSING_VARS=()
 
-if [ -z "${GITHUB_APP_ID:-}" ]; then MISSING_VARS+=("GITHUB_APP_ID"); fi
-if [ -z "${GITHUB_APP_INSTALLATION_ID:-}" ]; then MISSING_VARS+=("GITHUB_APP_INSTALLATION_ID"); fi
-if [ -z "${GITHUB_APP_PRIVATE_KEY:-}" ]; then MISSING_VARS+=("GITHUB_APP_PRIVATE_KEY"); fi
+if [ -z "${GIT_APP_ID:-}" ]; then MISSING_VARS+=("GIT_APP_ID"); fi
+if [ -z "${GIT_APP_INSTALLATION_ID:-}" ]; then MISSING_VARS+=("GIT_APP_INSTALLATION_ID"); fi
+if [ -z "${GIT_APP_PRIVATE_KEY:-}" ]; then MISSING_VARS+=("GIT_APP_PRIVATE_KEY"); fi
 
 # Check for environment-specific S3 credentials dynamically
 S3_ACCESS_KEY_VAR="${ENV_UPPER}_HETZNER_S3_ACCESS_KEY"
@@ -110,14 +110,14 @@ echo ""
 
 # Step 2: Inject GitHub App Authentication
 echo -e "${BLUE}[2/8] Injecting GitHub App authentication...${NC}"
-if [ -n "${GITHUB_APP_ID:-}" ] && [ -n "${GITHUB_APP_INSTALLATION_ID:-}" ] && [ -n "${GITHUB_APP_PRIVATE_KEY:-}" ]; then
+if [ -n "${GIT_APP_ID:-}" ] && [ -n "${GIT_APP_INSTALLATION_ID:-}" ] && [ -n "${GIT_APP_PRIVATE_KEY:-}" ]; then
     TEMP_KEY=$(mktemp)
-    echo "$GITHUB_APP_PRIVATE_KEY" > "$TEMP_KEY"
+    echo "$GIT_APP_PRIVATE_KEY" > "$TEMP_KEY"
     trap "rm -f $TEMP_KEY" EXIT
-    "$SECRETS_DIR/00-inject-identities.sh" "$GITHUB_APP_ID" "$GITHUB_APP_INSTALLATION_ID" "$TEMP_KEY"
+    "$SECRETS_DIR/00-inject-identities.sh" "$GIT_APP_ID" "$GIT_APP_INSTALLATION_ID" "$TEMP_KEY"
     echo -e "${GREEN}✓ GitHub App authentication injected${NC}"
 else
-    echo -e "${YELLOW}⚠️  Skipping: GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, or GITHUB_APP_PRIVATE_KEY not set${NC}"
+    echo -e "${YELLOW}⚠️  Skipping: GIT_APP_ID, GIT_APP_INSTALLATION_ID, or GIT_APP_PRIVATE_KEY not set${NC}"
 fi
 echo ""
 

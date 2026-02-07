@@ -22,9 +22,9 @@ fi
 
 source "$ENV_FILE"
 
-if [ -z "$GITHUB_APP_ID" ] || [ -z "$GITHUB_APP_INSTALLATION_ID" ] || [ -z "$GITHUB_APP_PRIVATE_KEY" ]; then
+if [ -z "$GIT_APP_ID" ] || [ -z "$GIT_APP_INSTALLATION_ID" ] || [ -z "$GIT_APP_PRIVATE_KEY" ]; then
     echo "Error: Missing GitHub App credentials in .env"
-    echo "Required: GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, GITHUB_APP_PRIVATE_KEY"
+    echo "Required: GIT_APP_ID, GIT_APP_INSTALLATION_ID, GIT_APP_PRIVATE_KEY"
     exit 1
 fi
 
@@ -34,19 +34,19 @@ IAT=$((NOW - 60))
 EXP=$((NOW + 600))
 
 HEADER='{"alg":"RS256","typ":"JWT"}'
-PAYLOAD="{\"iat\":${IAT},\"exp\":${EXP},\"iss\":\"${GITHUB_APP_ID}\"}"
+PAYLOAD="{\"iat\":${IAT},\"exp\":${EXP},\"iss\":\"${GIT_APP_ID}\"}"
 
 HEADER_B64=$(echo -n "$HEADER" | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
 PAYLOAD_B64=$(echo -n "$PAYLOAD" | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
 
-SIGNATURE=$(echo -n "${HEADER_B64}.${PAYLOAD_B64}" | openssl dgst -sha256 -sign <(echo "$GITHUB_APP_PRIVATE_KEY") | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
+SIGNATURE=$(echo -n "${HEADER_B64}.${PAYLOAD_B64}" | openssl dgst -sha256 -sign <(echo "$GIT_APP_PRIVATE_KEY") | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
 JWT="${HEADER_B64}.${PAYLOAD_B64}.${SIGNATURE}"
 
 # Get installation access token
 TOKEN_RESPONSE=$(curl -s -X POST \
     -H "Authorization: Bearer $JWT" \
     -H "Accept: application/vnd.github+json" \
-    "https://api.github.com/app/installations/${GITHUB_APP_INSTALLATION_ID}/access_tokens")
+    "https://api.github.com/app/installations/${GIT_APP_INSTALLATION_ID}/access_tokens")
 
 GITHUB_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.token // empty')
 

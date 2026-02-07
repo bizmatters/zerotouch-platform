@@ -30,7 +30,7 @@ if [ "$#" -ne 3 ]; then
     exit 1
 fi
 
-GITHUB_APP_ID="$1"
+GIT_APP_ID="$1"
 INSTALLATION_ID="$2"
 PRIVATE_KEY_FILE="$3"
 
@@ -40,7 +40,7 @@ echo -e "${BLUE}╚════════════════════�
 echo ""
 
 # Validate inputs
-if [ -z "$GITHUB_APP_ID" ]; then
+if [ -z "$GIT_APP_ID" ]; then
     echo -e "${RED}✗ Error: GitHub App ID is required${NC}"
     exit 1
 fi
@@ -55,7 +55,7 @@ if [ ! -f "$PRIVATE_KEY_FILE" ]; then
     exit 1
 fi
 
-echo -e "${GREEN}✓ GitHub App ID: $GITHUB_APP_ID${NC}"
+echo -e "${GREEN}✓ GitHub App ID: $GIT_APP_ID${NC}"
 echo -e "${GREEN}✓ Installation ID: $INSTALLATION_ID${NC}"
 echo -e "${GREEN}✓ Private key file: $PRIVATE_KEY_FILE${NC}"
 echo ""
@@ -81,7 +81,7 @@ echo -e "${BLUE}Creating GitHub App credentials secret...${NC}"
 
 kubectl create secret generic argocd-github-app-creds \
     --namespace=argocd \
-    --from-literal=githubAppID="$GITHUB_APP_ID" \
+    --from-literal=githubAppID="$GIT_APP_ID" \
     --from-literal=githubAppInstallationID="$INSTALLATION_ID" \
     --from-literal=githubAppPrivateKey="$PRIVATE_KEY_CONTENT" \
     --dry-run=client -o yaml | kubectl apply -f - > /dev/null 2>&1

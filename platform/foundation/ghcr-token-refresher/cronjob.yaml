@@ -56,9 +56,9 @@ spec:
               apk add --no-cache curl jq openssl kubectl
               
               # Read GitHub App credentials from secret
-              GITHUB_APP_ID=$(cat /secrets/github-app-id)
-              GITHUB_APP_INSTALLATION_ID=$(cat /secrets/github-app-installation-id)
-              GITHUB_APP_PRIVATE_KEY=$(cat /secrets/github-app-private-key)
+              GIT_APP_ID=$(cat /secrets/github-app-id)
+              GIT_APP_INSTALLATION_ID=$(cat /secrets/github-app-installation-id)
+              GIT_APP_PRIVATE_KEY=$(cat /secrets/github-app-private-key)
               
               # Generate JWT
               NOW=$(date +%s)
@@ -66,12 +66,12 @@ spec:
               EXP=$((NOW + 600))
               
               HEADER='{"alg":"RS256","typ":"JWT"}'
-              PAYLOAD="{\"iat\":${IAT},\"exp\":${EXP},\"iss\":\"${GITHUB_APP_ID}\"}"
+              PAYLOAD="{\"iat\":${IAT},\"exp\":${EXP},\"iss\":\"${GIT_APP_ID}\"}"
               
               HEADER_B64=$(echo -n "$HEADER" | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
               PAYLOAD_B64=$(echo -n "$PAYLOAD" | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
               
-              SIGNATURE=$(echo -n "${HEADER_B64}.${PAYLOAD_B64}" | openssl dgst -sha256 -sign <(echo "$GITHUB_APP_PRIVATE_KEY") | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
+              SIGNATURE=$(echo -n "${HEADER_B64}.${PAYLOAD_B64}" | openssl dgst -sha256 -sign <(echo "$GIT_APP_PRIVATE_KEY") | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
               JWT="${HEADER_B64}.${PAYLOAD_B64}.${SIGNATURE}"
               
               # Get installation token with packages read permission
@@ -80,7 +80,7 @@ spec:
                 -H "Accept: application/vnd.github+json" \
                 -H "Content-Type: application/json" \
                 -d '{"permissions":{"packages":"read"}}' \
-                "https://api.github.com/app/installations/${GITHUB_APP_INSTALLATION_ID}/access_tokens")
+                "https://api.github.com/app/installations/${GIT_APP_INSTALLATION_ID}/access_tokens")
               
               GITHUB_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.token // empty')
               

@@ -64,9 +64,9 @@ cat > "$REPO_DIR/.env.example" << 'EOF'
 ORG_NAME=your-github-org
 
 # GitHub App Credentials (for GHCR access)
-GITHUB_APP_ID=
-GITHUB_APP_INSTALLATION_ID=
-GITHUB_APP_PRIVATE_KEY=""
+GIT_APP_ID=
+GIT_APP_INSTALLATION_ID=
+GIT_APP_PRIVATE_KEY=""
 
 # Service-specific secrets (prefix with environment)
 # DEV_<SERVICE>_<SECRET_NAME>=value
@@ -87,9 +87,9 @@ ORG_NAME=$ORG_NAME
 
 # GitHub App Credentials (for GHCR access)
 # Get these from: https://github.com/organizations/$ORG_NAME/settings/apps
-GITHUB_APP_ID=
-GITHUB_APP_INSTALLATION_ID=
-GITHUB_APP_PRIVATE_KEY=""
+GIT_APP_ID=
+GIT_APP_INSTALLATION_ID=
+GIT_APP_PRIVATE_KEY=""
 EOF
 echo -e "${GREEN}✓ .env${NC}"
 

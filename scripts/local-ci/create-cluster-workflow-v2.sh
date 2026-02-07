@@ -68,8 +68,8 @@ run_with_log() {
 export CI=true
 
 # Debug: Check if critical env vars are set
-if [ -z "$GITHUB_APP_ID" ]; then
-    log "⚠️  WARNING: GITHUB_APP_ID not set - rescue mode may fail"
+if [ -z "$GIT_APP_ID" ]; then
+    log "⚠️  WARNING: GIT_APP_ID not set - rescue mode may fail"
 fi
 if [ -z "$HETZNER_API_TOKEN" ]; then
     log "⚠️  WARNING: HETZNER_API_TOKEN not set - rescue mode may fail"

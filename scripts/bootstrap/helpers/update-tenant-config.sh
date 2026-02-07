@@ -68,7 +68,7 @@ git add "$FILE_PATH"
 git commit -m "$COMMIT_MESSAGE" --quiet
 
 # Regenerate GitHub App token if using GitHub App auth
-if [[ -n "$GITHUB_APP_ID" && -n "$GITHUB_APP_INSTALLATION_ID" && -n "$GITHUB_APP_PRIVATE_KEY" ]]; then
+if [[ -n "$GIT_APP_ID" && -n "$GIT_APP_INSTALLATION_ID" && -n "$GIT_APP_PRIVATE_KEY" ]]; then
     echo "Regenerating GitHub App token for push..." >&2
     
     NOW=$(date +%s)
@@ -76,18 +76,18 @@ if [[ -n "$GITHUB_APP_ID" && -n "$GITHUB_APP_INSTALLATION_ID" && -n "$GITHUB_APP
     EXP=$((NOW + 600))
     
     HEADER='{"alg":"RS256","typ":"JWT"}'
-    PAYLOAD="{\"iat\":${IAT},\"exp\":${EXP},\"iss\":\"${GITHUB_APP_ID}\"}"
+    PAYLOAD="{\"iat\":${IAT},\"exp\":${EXP},\"iss\":\"${GIT_APP_ID}\"}"
     
     HEADER_B64=$(echo -n "$HEADER" | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
     PAYLOAD_B64=$(echo -n "$PAYLOAD" | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
     
-    SIGNATURE=$(echo -n "${HEADER_B64}.${PAYLOAD_B64}" | openssl dgst -sha256 -sign <(echo "$GITHUB_APP_PRIVATE_KEY") | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
+    SIGNATURE=$(echo -n "${HEADER_B64}.${PAYLOAD_B64}" | openssl dgst -sha256 -sign <(echo "$GIT_APP_PRIVATE_KEY") | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
     JWT="${HEADER_B64}.${PAYLOAD_B64}.${SIGNATURE}"
     
     GITHUB_TOKEN=$(curl -s -X POST \
         -H "Authorization: Bearer $JWT" \
         -H "Accept: application/vnd.github+json" \
-        "https://api.github.com/app/installations/${GITHUB_APP_INSTALLATION_ID}/access_tokens" | \
+        "https://api.github.com/app/installations/${GIT_APP_INSTALLATION_ID}/access_tokens" | \
         jq -r '.token // empty')
     
     if [[ -n "$GITHUB_TOKEN" ]]; then

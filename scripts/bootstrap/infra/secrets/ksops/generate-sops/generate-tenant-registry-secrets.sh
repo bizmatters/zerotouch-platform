@@ -31,7 +31,7 @@ if [ -d "$REGISTRY_SECRETS_DIR" ]; then
 fi
 
 # ArgoCD repo secret
-if [[ -n "$ORG_NAME" && -n "$TENANTS_REPO_NAME" && -n "$GITHUB_APP_ID" && -n "$GITHUB_APP_INSTALLATION_ID" && -n "$GITHUB_APP_PRIVATE_KEY" ]]; then
+if [[ -n "$ORG_NAME" && -n "$TENANTS_REPO_NAME" && -n "$GIT_APP_ID" && -n "$GIT_APP_INSTALLATION_ID" && -n "$GIT_APP_PRIVATE_KEY" ]]; then
     REPO_URL="https://github.com/${ORG_NAME}/${TENANTS_REPO_NAME}.git"
     
     cat > "$REGISTRY_SECRETS_DIR/repo-zerotouch-tenants.secret.yaml" << 'EOF'
@@ -50,10 +50,10 @@ stringData:
 EOF
     
     echo "  url: ${REPO_URL}" >> "$REGISTRY_SECRETS_DIR/repo-zerotouch-tenants.secret.yaml"
-    echo "  githubAppID: \"${GITHUB_APP_ID}\"" >> "$REGISTRY_SECRETS_DIR/repo-zerotouch-tenants.secret.yaml"
-    echo "  githubAppInstallationID: \"${GITHUB_APP_INSTALLATION_ID}\"" >> "$REGISTRY_SECRETS_DIR/repo-zerotouch-tenants.secret.yaml"
+    echo "  githubAppID: \"${GIT_APP_ID}\"" >> "$REGISTRY_SECRETS_DIR/repo-zerotouch-tenants.secret.yaml"
+    echo "  githubAppInstallationID: \"${GIT_APP_INSTALLATION_ID}\"" >> "$REGISTRY_SECRETS_DIR/repo-zerotouch-tenants.secret.yaml"
     echo "  githubAppPrivateKey: |" >> "$REGISTRY_SECRETS_DIR/repo-zerotouch-tenants.secret.yaml"
-    echo "$GITHUB_APP_PRIVATE_KEY" | sed 's/^/    /' >> "$REGISTRY_SECRETS_DIR/repo-zerotouch-tenants.secret.yaml"
+    echo "$GIT_APP_PRIVATE_KEY" | sed 's/^/    /' >> "$REGISTRY_SECRETS_DIR/repo-zerotouch-tenants.secret.yaml"
     
     if sops -e -i "$REGISTRY_SECRETS_DIR/repo-zerotouch-tenants.secret.yaml" 2>/dev/null; then
         echo -e "${GREEN}  ✓ repo-zerotouch-tenants.secret.yaml${NC}"
@@ -97,26 +97,26 @@ fi
 # This creates the initial ghcr-pull-secret in the registry overlay for first deployment
 # After deployment, platform/foundation/ghcr-token-refresher/cronjob.yaml automatically
 # refreshes this secret every 30 minutes in all tenant namespaces using github-app-credentials
-if [[ -n "$GITHUB_APP_ID" && -n "$GITHUB_APP_INSTALLATION_ID" && -n "$GITHUB_APP_PRIVATE_KEY" ]]; then
+if [[ -n "$GIT_APP_ID" && -n "$GIT_APP_INSTALLATION_ID" && -n "$GIT_APP_PRIVATE_KEY" ]]; then
     # Generate JWT for GitHub App
     NOW=$(date +%s)
     IAT=$((NOW - 60))
     EXP=$((NOW + 600))
     
     HEADER='{"alg":"RS256","typ":"JWT"}'
-    PAYLOAD="{\"iat\":${IAT},\"exp\":${EXP},\"iss\":\"${GITHUB_APP_ID}\"}"
+    PAYLOAD="{\"iat\":${IAT},\"exp\":${EXP},\"iss\":\"${GIT_APP_ID}\"}"
     
     HEADER_B64=$(echo -n "$HEADER" | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
     PAYLOAD_B64=$(echo -n "$PAYLOAD" | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
     
-    SIGNATURE=$(echo -n "${HEADER_B64}.${PAYLOAD_B64}" | openssl dgst -sha256 -sign <(echo "$GITHUB_APP_PRIVATE_KEY") | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
+    SIGNATURE=$(echo -n "${HEADER_B64}.${PAYLOAD_B64}" | openssl dgst -sha256 -sign <(echo "$GIT_APP_PRIVATE_KEY") | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
     JWT="${HEADER_B64}.${PAYLOAD_B64}.${SIGNATURE}"
     
     # Get installation access token
     TOKEN_RESPONSE=$(curl -s -X POST \
         -H "Authorization: Bearer $JWT" \
         -H "Accept: application/vnd.github+json" \
-        "https://api.github.com/app/installations/${GITHUB_APP_INSTALLATION_ID}/access_tokens")
+        "https://api.github.com/app/installations/${GIT_APP_INSTALLATION_ID}/access_tokens")
     
     GITHUB_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.token // empty')
     
