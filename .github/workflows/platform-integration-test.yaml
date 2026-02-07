@@ -49,9 +49,15 @@ jobs:
 
       - name: Bootstrap Platform Preview Environment
         env:
+          # Kind configuration
           KIND_NODE_IMAGE: ghcr.io/${{ github.repository_owner }}/zerotouch-preview-node:${{ steps.version.outputs.hash }}
-          BOT_GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
-          TENANTS_REPO_NAME: ${{ vars.TENANTS_REPO_NAME }}
+          
+          # GitHub App variables (must be explicitly passed)
+          GIT_APP_ID: ${{ vars.GIT_APP_ID }}
+          GIT_APP_INSTALLATION_ID: ${{ vars.GIT_APP_INSTALLATION_ID }}
+          
+          # Note: All environment secrets (PR_HETZNER_*, GIT_APP_PRIVATE_KEY, BOT_GITHUB_TOKEN)
+          # are automatically inherited from the 'preview' environment
         run: |
           chmod +x scripts/bootstrap/pipeline/02-master-bootstrap-v2.sh
           ./scripts/bootstrap/pipeline/02-master-bootstrap-v2.sh --mode preview

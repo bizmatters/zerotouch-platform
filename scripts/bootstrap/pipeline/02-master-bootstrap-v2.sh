@@ -69,6 +69,9 @@ fi
 # Check if first argument is --mode
 if [ "$1" = "--mode" ]; then
     MODE="$2"
+    if [ "$MODE" = "preview" ]; then
+        ENV="pr"  # Preview mode uses PR environment
+    fi
     shift 2
 # Check if first argument looks like an environment name (not an IP)
 elif [[ "$1" =~ ^(dev|staging|production)$ ]]; then
