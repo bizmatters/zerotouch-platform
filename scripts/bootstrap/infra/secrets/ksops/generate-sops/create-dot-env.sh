@@ -249,8 +249,8 @@ process_secrets_dir() {
                     
                     echo -e "${BLUE}    Writing: ${prefix}${env_var_name}${NC}"
                     
-                    # Write to .env with prefix
-                    echo "${prefix}${env_var_name}=${value}" >> "$ENV_FILE"
+                    # Write to .env with prefix (use printf to handle special chars)
+                    printf '%s=%s\n' "${prefix}${env_var_name}" "$value" >> "$ENV_FILE"
                     ((SECRET_COUNT++))
                     ((key_count++))
                 fi
