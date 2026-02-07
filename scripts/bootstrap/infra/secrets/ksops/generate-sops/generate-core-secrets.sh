@@ -36,7 +36,7 @@ metadata:
   namespace: kube-system
 type: Opaque
 stringData:
-  value: ${ORG_NAME}
+  value: "${ORG_NAME}"
 EOF
     if sops -e -i "$CORE_SECRETS_DIR/org-name.secret.yaml" 2>/dev/null; then
         echo -e "${GREEN}  ✓ org-name.secret.yaml${NC}"
@@ -54,7 +54,7 @@ metadata:
   namespace: kube-system
 type: Opaque
 stringData:
-  value: ${TENANTS_REPO_NAME}
+  value: "${TENANTS_REPO_NAME}"
 EOF
     if sops -e -i "$CORE_SECRETS_DIR/tenants-repo-name.secret.yaml" 2>/dev/null; then
         echo -e "${GREEN}  ✓ tenants-repo-name.secret.yaml${NC}"
@@ -92,7 +92,7 @@ metadata:
   namespace: ${secret_namespace}
 type: Opaque
 stringData:
-  ${secret_key}: ${value}
+  ${secret_key}: "${value}"
 EOF
     
     if sops -e -i "$CORE_SECRETS_DIR/$secret_file" 2>/dev/null; then
