@@ -150,6 +150,8 @@ if [ ! -d "$SECRETS_DIR" ]; then
     exit 1
 fi
 
+echo -e "${GREEN}✓ Secrets directory found: $SECRETS_DIR${NC}"
+
 export SOPS_AGE_KEY="$AGE_PRIVATE_KEY"
 
 ENV_FILE="$REPO_ROOT/.env"
