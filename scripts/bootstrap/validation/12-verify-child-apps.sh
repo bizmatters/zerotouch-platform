@@ -47,6 +47,7 @@ echo -e "${BLUE}╚════════════════════�
 echo ""
 
 echo -e "${BLUE}Verifying child Applications...${NC}"
+echo -e "${BLUE}Waiting 10s for ApplicationSet to generate apps...${NC}"
 sleep 10
 
 # Check if running in preview mode (Kind cluster)
@@ -56,20 +57,40 @@ if kubectl get nodes -o name 2>/dev/null | grep -q "zerotouch-preview"; then
 fi
 
 if [ "$IS_PREVIEW_MODE" = true ]; then
-    # Preview mode: Only core components (no kagent, apis, intelligence, tenant-infrastructure)
-    EXPECTED_APPS=("crossplane-operator" "external-secrets" "keda" "foundation-config" "databases")
+    # Preview mode: Only core components
+    EXPECTED_APPS=("crossplane-operator" "secrets" "keda" "foundation-config" "databases" "nats")
     echo -e "${BLUE}Preview mode detected - checking core applications only${NC}"
 else
-    # Production mode: All components including tenant-infrastructure
-    EXPECTED_APPS=("crossplane-operator" "external-secrets" "keda" "kagent" "apis" "intelligence" "foundation-config" "databases" "tenant-infrastructure")
+    # Production mode: All components including infrastructure and gateway stack
+    EXPECTED_APPS=(
+        "crossplane-operator" "secrets" "keda" "apis" "foundation-config" "databases" "tenant-infrastructure"
+        "cert-manager" "nats" "cnpg"
+        "gateway-api-crds" "gateway-class" "gateway-config" "gateway-foundation"
+        "hcloud-ccm" "external-dns" "cert-manager-webhook-hetzner"
+        "local-path-provisioner"
+        "agentgateway" "agentgateway-httproute"
+    )
 fi
+
+echo -e "${BLUE}Checking ${#EXPECTED_APPS[@]} applications...${NC}"
+echo ""
+
 MISSING_APPS=()
+FOUND_COUNT=0
 
 for app in "${EXPECTED_APPS[@]}"; do
-    if ! kubectl_retry get application "$app" -n argocd &>/dev/null; then
+    echo -e "${BLUE}  Checking: $app${NC}"
+    if kubectl_retry get application "$app" -n argocd &>/dev/null; then
+        echo -e "${GREEN}    ✓ Found${NC}"
+        ((++FOUND_COUNT))
+    else
+        echo -e "${RED}    ✗ Missing${NC}"
         MISSING_APPS+=("$app")
     fi
 done
+
+echo ""
+echo -e "${BLUE}Summary: $FOUND_COUNT/${#EXPECTED_APPS[@]} applications found${NC}"
 
 if [ ${#MISSING_APPS[@]} -gt 0 ]; then
     echo -e "${RED}✗ Missing Applications: ${MISSING_APPS[*]}${NC}"

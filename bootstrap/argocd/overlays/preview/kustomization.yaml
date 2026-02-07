@@ -2,7 +2,6 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-- ../../base
 - 06-postgres.yaml
 - gateway-api-crds.yaml
 
@@ -25,22 +24,6 @@ patches:
           exclude: 'cilium.yaml'
 
 # 2. Remove Control Plane Tolerations (Kind clusters don't have control-plane taints)
-- target:
-    kind: Application
-    name: external-secrets
-  patch: |-
-    apiVersion: argoproj.io/v1alpha1
-    kind: Application
-    metadata:
-      name: external-secrets
-    spec:
-      source:
-        helm:
-          values: |
-            installCRDs: true
-            webhook:
-              create: true
-
 - target:
     kind: Application
     name: crossplane-operator
