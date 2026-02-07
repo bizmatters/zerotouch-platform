@@ -164,16 +164,22 @@ process_secrets_dir() {
     local dir="$1"
     local prefix="$2"
     
+    echo -e "${BLUE}Processing secrets from: $dir${NC}"
+    
     while IFS= read -r secret_file; do
+        echo -e "${BLUE}  Decrypting: $(basename "$secret_file")${NC}"
+        
         # Skip github-app-credentials (has individual secrets instead)
         if [[ "$(basename "$secret_file")" == "github-app-credentials.secret.yaml" ]]; then
+            echo -e "${YELLOW}  ⊘ Skipped (handled separately)${NC}"
             continue
         fi
         
         # Decrypt secret
         if ! decrypted=$(sops -d "$secret_file" 2>&1); then
-            echo -e "${YELLOW}⚠ Failed to decrypt: $(basename "$secret_file")${NC}"
-            continue
+            echo -e "${RED}✗ Failed to decrypt: $(basename "$secret_file")${NC}"
+            echo -e "${RED}Error: $decrypted${NC}"
+            exit 1
         fi
         
         # Extract secret name and data
