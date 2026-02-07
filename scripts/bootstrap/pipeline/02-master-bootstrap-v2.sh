@@ -190,8 +190,11 @@ if [ "$MODE" = "preview" ]; then
         source "$PLATFORM_ENV_FILE"
         set +a  # stop automatically exporting
         log_success "Environment variables loaded from .env"
+    elif [[ "${CI:-false}" == "true" ]] || [[ "${GITHUB_ACTIONS:-false}" == "true" ]]; then
+        log_info "Running in CI environment - using environment variables instead of .env file"
     else
         log_error "Service .env file not found at $SERVICE_ENV_FILE"
+        log_error "Not running in CI - .env file is required for local execution"
         exit 1
     fi
     
