@@ -62,4 +62,4 @@ patchesJson6902:
       kind: Deployment
       name: argocd-repo-server
       namespace: argocd
-    path: ../repo-server-ksops-init.yaml
+    path: repo-server-ksops-init.yaml

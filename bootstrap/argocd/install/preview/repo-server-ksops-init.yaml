@@ -1,0 +1,59 @@
+- op: add
+  path: /spec/template/spec/volumes/-
+  value:
+    name: custom-tools
+    emptyDir: {}
+- op: add
+  path: /spec/template/spec/volumes/-
+  value:
+    name: sops-age-key
+    secret:
+      secretName: sops-age
+      optional: true
+- op: add
+  path: /spec/template/spec/initContainers/-
+  value:
+    name: install-ksops
+    image: viaductoss/ksops:v4.3.2
+    command: ["/bin/sh", "-c"]
+    args:
+      - echo "Installing KSOPS...";
+        mkdir -p /custom-tools/kustomize/plugin/viaduct.ai/v1/ksops;
+        cp /usr/local/bin/ksops /custom-tools/kustomize/plugin/viaduct.ai/v1/ksops/ksops;
+        cp /usr/local/bin/ksops /custom-tools/;
+        cp /usr/local/bin/kustomize /custom-tools/;
+        echo "Done.";
+    volumeMounts:
+      - mountPath: /custom-tools
+        name: custom-tools
+- op: add
+  path: /spec/template/spec/containers/0/volumeMounts/-
+  value:
+    mountPath: /custom-tools
+    name: custom-tools
+- op: add
+  path: /spec/template/spec/containers/0/volumeMounts/-
+  value:
+    mountPath: /.config/kustomize/plugin
+    name: custom-tools
+    subPath: kustomize/plugin
+- op: add
+  path: /spec/template/spec/containers/0/volumeMounts/-
+  value:
+    mountPath: /.config/sops/age
+    name: sops-age-key
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value:
+    name: XDG_CONFIG_HOME
+    value: /.config
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value:
+    name: SOPS_AGE_KEY_FILE
+    value: /.config/sops/age/keys.txt
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value:
+    name: PATH
+    value: /custom-tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
