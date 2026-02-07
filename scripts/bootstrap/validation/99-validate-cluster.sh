@@ -121,28 +121,10 @@ done
 
 echo ""
 
+# 3. External Secrets (REMOVED - using KSOPS instead)
+# ClusterSecretStore checks removed as external-secrets is no longer used
 
-# 4. Check ClusterSecretStore
-echo "🗄️  ClusterSecretStore Status:"
-echo "------------------------------------------"
-
-STORES=$(kubectl get clustersecretstore -o json 2>/dev/null)
-if [[ -n "$STORES" ]]; then
-    echo "$STORES" | jq -r '.items[] | "\(.metadata.name)|\(.status.conditions[0].status // "Unknown")|\(.status.conditions[0].reason // "Unknown")"' | while IFS='|' read -r name status reason; do
-        if [[ "$status" == "True" ]]; then
-            echo -e "  ✅ ${GREEN}$name${NC}: Ready"
-        else
-            echo -e "  ❌ ${RED}$name${NC}: $reason"
-            ((FAILED++)) || true
-        fi
-    done
-else
-    echo "  ⚠️  No ClusterSecretStores found"
-fi
-
-echo ""
-
-# 6. Platform API Validation
+# 4. Platform API Validation
 echo "🔧 Platform API Validation:"
 echo "------------------------------------------"
 
