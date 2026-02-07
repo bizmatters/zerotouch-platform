@@ -16,7 +16,7 @@ jobs:
   integration-test:
     name: Platform Integration Test
     runs-on: ubuntu-latest
-    environment: preview
+    environment: pr
     timeout-minutes: 45
     
     steps:
