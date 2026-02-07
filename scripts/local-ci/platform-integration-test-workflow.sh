@@ -163,27 +163,60 @@ log_info "✓ Python dependencies installed"
 # Step 2: Check environment variables
 log_step "Step 2/8: Checking environment variables..."
 
+# Source .env file if it exists to get AGE_PRIVATE_KEY
+if [ -f "$REPO_ROOT/.env" ]; then
+    log_info "Loading environment variables from .env..."
+    set -a
+    source "$REPO_ROOT/.env"
+    set +a
+fi
+
+# Check if we have AGE_PRIVATE_KEY (from .env or environment)
+if [ -z "${AGE_PRIVATE_KEY:-}" ] && [ -z "${SOPS_AGE_KEY:-}" ]; then
+    log_error "Neither AGE_PRIVATE_KEY nor SOPS_AGE_KEY found"
+    echo ""
+    echo "Please ensure .env contains AGE_PRIVATE_KEY or set SOPS_AGE_KEY:"
+    echo "  export SOPS_AGE_KEY=\"your-age-private-key\""
+    exit 1
+fi
+
+# Use AGE_PRIVATE_KEY as SOPS_AGE_KEY if not already set
+export SOPS_AGE_KEY="${SOPS_AGE_KEY:-${AGE_PRIVATE_KEY}}"
+
+# Check if .env has all required secrets, if not regenerate it
+if ! grep -q "PR_HETZNER_API_TOKEN" "$REPO_ROOT/.env" 2>/dev/null; then
+    log_info "Generating full .env from encrypted secrets..."
+    
+    export ENV=pr
+    chmod +x "$REPO_ROOT/scripts/bootstrap/infra/secrets/ksops/generate-sops/create-dot-env.sh"
+    if "$REPO_ROOT/scripts/bootstrap/infra/secrets/ksops/generate-sops/create-dot-env.sh"; then
+        log_info "✓ .env file generated from encrypted secrets"
+        # Reload .env to get all decrypted secrets
+        set -a
+        source "$REPO_ROOT/.env"
+        set +a
+        log_info "✓ Environment variables reloaded"
+    else
+        log_error "Failed to generate .env file"
+        exit 1
+    fi
+else
+    log_info "✓ .env already contains decrypted secrets"
+fi
+
 MISSING_VARS=()
 
-if [ -z "$OPENAI_API_KEY" ]; then
-    MISSING_VARS+=("OPENAI_API_KEY")
+if [ -z "${GIT_APP_ID:-}" ]; then
+    MISSING_VARS+=("GIT_APP_ID")
 fi
 
-if [ -z "$BOT_GITHUB_TOKEN" ]; then
-    MISSING_VARS+=("BOT_GITHUB_TOKEN")
-fi
-
-if [ -z "$BOT_GITHUB_TOKEN" ]; then
-    MISSING_VARS+=("BOT_GITHUB_TOKEN")
+if [ -z "${GIT_APP_INSTALLATION_ID:-}" ]; then
+    MISSING_VARS+=("GIT_APP_INSTALLATION_ID")
 fi
 
 # Optional variables (warn but don't fail)
 OPTIONAL_VARS=()
-if [ -z "$ANTHROPIC_API_KEY" ]; then
-    OPTIONAL_VARS+=("ANTHROPIC_API_KEY")
-fi
-
-if [ -z "$TENANTS_REPO_NAME" ]; then
+if [ -z "${TENANTS_REPO_NAME:-}" ]; then
     OPTIONAL_VARS+=("TENANTS_REPO_NAME")
 fi
 
@@ -214,11 +247,11 @@ cd "$REPO_ROOT"
 log_info "Starting platform bootstrap in preview mode..."
 log_info "Bootstrap logs will be saved to: $LOGS_DIR/bootstrap-$(date +%Y%m%d-%H%M%S).log"
 
-chmod +x scripts/bootstrap/01-master-bootstrap.sh
+chmod +x scripts/bootstrap/pipeline/02-master-bootstrap-v2.sh
 
 # Run bootstrap and capture output
 BOOTSTRAP_LOG="$LOGS_DIR/bootstrap-$(date +%Y%m%d-%H%M%S).log"
-if ./scripts/bootstrap/01-master-bootstrap.sh --mode preview 2>&1 | tee "$BOOTSTRAP_LOG"; then
+if ./scripts/bootstrap/pipeline/02-master-bootstrap-v2.sh --mode preview 2>&1 | tee "$BOOTSTRAP_LOG"; then
     log_info "✓ Platform bootstrap completed"
 else
     log_error "Platform bootstrap failed - check logs at: $BOOTSTRAP_LOG"

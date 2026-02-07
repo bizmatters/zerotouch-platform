@@ -4,8 +4,10 @@ environments/*/talos-values.yaml.bak
 environments/*/*.secret.yaml
 .env
 .env.bkp
+.env.backup
 .env.sops
 .env.ssm
+.env.local
 .age-key
 .claude
 .kiro

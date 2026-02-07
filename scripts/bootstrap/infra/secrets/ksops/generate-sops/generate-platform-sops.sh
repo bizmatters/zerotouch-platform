@@ -12,7 +12,7 @@ NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../../../.." && pwd)"
-ENV_FILE="$REPO_ROOT/.env"
+ENV_FILE="$REPO_ROOT/.env.local"
 
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║   Generate Platform Secrets (KSOPS)                         ║${NC}"

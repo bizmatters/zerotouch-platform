@@ -51,7 +51,7 @@ echo -e "${GREEN}✓ Repository: $REPO_ROOT${NC}"
 echo ""
 
 # Check required tools
-for tool in age sops aws; do
+for tool in age sops; do
     if ! command -v $tool &> /dev/null; then
         echo -e "${RED}✗ Error: $tool not found${NC}"
         exit 1
@@ -60,40 +60,51 @@ done
 echo -e "${GREEN}✓ Required tools installed${NC}"
 echo ""
 
-# Source S3 helpers
-HELPERS_DIR="$SCRIPT_DIR/../../helpers"
-if [ ! -f "$HELPERS_DIR/s3-helpers.sh" ]; then
-    echo -e "${RED}✗ Error: s3-helpers.sh not found${NC}"
-    exit 1
+# Step 1: Get Age key (from SOPS_AGE_KEY env var or S3)
+echo -e "${BLUE}[1/4] Retrieving Age key...${NC}"
+
+if [ -n "${SOPS_AGE_KEY:-}" ]; then
+    # Use Age key from environment (CI mode)
+    AGE_PRIVATE_KEY="$SOPS_AGE_KEY"
+    echo -e "${GREEN}✓ Age key loaded from environment${NC}"
+else
+    # Retrieve from S3 (local mode)
+    # Source S3 helpers
+    HELPERS_DIR="$SCRIPT_DIR/../../../../helpers"
+    if [ ! -f "$HELPERS_DIR/s3-helpers.sh" ]; then
+        echo -e "${RED}✗ Error: s3-helpers.sh not found${NC}"
+        exit 1
+    fi
+
+    source "$HELPERS_DIR/s3-helpers.sh"
+
+    if ! configure_s3_credentials "$ENV"; then
+        echo -e "${RED}✗ Failed to configure S3 credentials${NC}"
+        echo -e "${YELLOW}Required variables: ${ENV_UPPER}_HETZNER_S3_*${NC}"
+        exit 1
+    fi
+
+    if ! AGE_PRIVATE_KEY=$(s3_retrieve_age_key); then
+        echo -e "${RED}✗ Failed to retrieve Age key from S3${NC}"
+        echo -e "${YELLOW}Run manual setup first:${NC}"
+        echo -e "  1. ENV=$ENV source ./scripts/bootstrap/infra/secrets/ksops/08b-generate-age-keys.sh"
+        echo -e "  2. ENV=$ENV ./scripts/bootstrap/infra/secrets/ksops/08b-backup-age-to-s3.sh"
+        exit 1
+    fi
+
+    echo -e "${GREEN}✓ Age key retrieved from S3${NC}"
 fi
-
-source "$HELPERS_DIR/s3-helpers.sh"
-
-# Step 1: Configure S3 and retrieve Age key
-echo -e "${BLUE}[1/4] Configuring S3 and retrieving Age key...${NC}"
-
-if ! configure_s3_credentials "$ENV"; then
-    echo -e "${RED}✗ Failed to configure S3 credentials${NC}"
-    echo -e "${YELLOW}Required variables: ${ENV_UPPER}_HETZNER_S3_*${NC}"
-    exit 1
-fi
-
-if ! AGE_PRIVATE_KEY=$(s3_retrieve_age_key); then
-    echo -e "${RED}✗ Failed to retrieve Age key from S3${NC}"
-    echo -e "${YELLOW}Run manual setup first:${NC}"
-    echo -e "  1. ENV=$ENV source ./scripts/bootstrap/infra/secrets/ksops/08b-generate-age-keys.sh"
-    echo -e "  2. ENV=$ENV ./scripts/bootstrap/infra/secrets/ksops/08b-backup-age-to-s3.sh"
-    exit 1
-fi
-
-echo -e "${GREEN}✓ Age key retrieved from S3${NC}"
 echo ""
 
 # Step 2: Derive public key
 echo -e "${BLUE}[2/4] Deriving public key...${NC}"
 
+# Trim whitespace from Age key
+AGE_PRIVATE_KEY=$(echo "$AGE_PRIVATE_KEY" | xargs)
+
 if ! AGE_PUBLIC_KEY=$(echo "$AGE_PRIVATE_KEY" | age-keygen -y 2>&1); then
     echo -e "${RED}✗ Failed to derive public key${NC}"
+    echo -e "${RED}Error: $AGE_PUBLIC_KEY${NC}"
     exit 1
 fi
 
@@ -125,6 +136,7 @@ echo ""
 echo -e "${BLUE}[4/4] Decrypting secrets and generating .env...${NC}"
 
 SECRETS_DIR="$REPO_ROOT/bootstrap/argocd/overlays/main/$ENV/secrets"
+CORE_SECRETS_DIR="$REPO_ROOT/bootstrap/argocd/overlays/main/core/secrets"
 
 if [ ! -d "$SECRETS_DIR" ]; then
     echo -e "${RED}✗ Secrets directory not found: $SECRETS_DIR${NC}"
@@ -140,57 +152,75 @@ ENV_FILE="$REPO_ROOT/.env"
 
 SECRET_COUNT=0
 
-# Process each encrypted secret file
-while IFS= read -r secret_file; do
-    # Decrypt secret
-    if ! decrypted=$(sops -d "$secret_file" 2>&1); then
-        echo -e "${YELLOW}⚠ Failed to decrypt: $(basename "$secret_file")${NC}"
-        continue
-    fi
+# Function to process secrets from a directory
+process_secrets_dir() {
+    local dir="$1"
+    local prefix="$2"
     
-    # Extract secret name and data
-    secret_name=$(echo "$decrypted" | grep "name:" | head -1 | sed 's/.*name: *//')
-    
-    # Extract all stringData keys and values
-    in_string_data=false
-    while IFS= read -r line; do
-        if [[ "$line" =~ ^stringData: ]]; then
-            in_string_data=true
+    while IFS= read -r secret_file; do
+        # Skip github-app-credentials (has individual secrets instead)
+        if [[ "$(basename "$secret_file")" == "github-app-credentials.secret.yaml" ]]; then
             continue
         fi
         
-        if [[ "$in_string_data" == true ]]; then
-            # Stop if we hit another top-level key
-            if [[ "$line" =~ ^[a-zA-Z] ]]; then
-                break
+        # Decrypt secret
+        if ! decrypted=$(sops -d "$secret_file" 2>&1); then
+            echo -e "${YELLOW}⚠ Failed to decrypt: $(basename "$secret_file")${NC}"
+            continue
+        fi
+        
+        # Extract secret name and data
+        secret_name=$(echo "$decrypted" | grep "name:" | head -1 | sed 's/.*name: *//')
+        
+        # Extract all stringData keys and values
+        in_string_data=false
+        while IFS= read -r line; do
+            if [[ "$line" =~ ^stringData: ]]; then
+                in_string_data=true
+                continue
             fi
             
-            # Extract key: value pairs
-            if [[ "$line" =~ ^[[:space:]]+([^:]+):[[:space:]]*(.+)$ ]]; then
-                key="${BASH_REMATCH[1]}"
-                value="${BASH_REMATCH[2]}"
-                
-                # Remove quotes if present
-                value="${value#\"}"
-                value="${value%\"}"
-                
-                # Convert secret name to env var format
-                env_var_name=$(echo "$secret_name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
-                
-                # If key is not "value", append it to var name
-                if [ "$key" != "value" ]; then
-                    key_upper=$(echo "$key" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
-                    env_var_name="${env_var_name}_${key_upper}"
+            if [[ "$in_string_data" == true ]]; then
+                # Stop if we hit another top-level key
+                if [[ "$line" =~ ^[a-zA-Z] ]]; then
+                    break
                 fi
                 
-                # Write to .env with environment prefix
-                echo "${ENV_UPPER}_${env_var_name}=${value}" >> "$ENV_FILE"
-                ((SECRET_COUNT++))
+                # Extract key: value pairs
+                if [[ "$line" =~ ^[[:space:]]+([^:]+):[[:space:]]*(.+)$ ]]; then
+                    key="${BASH_REMATCH[1]}"
+                    value="${BASH_REMATCH[2]}"
+                    
+                    # Remove quotes if present
+                    value="${value#\"}"
+                    value="${value%\"}"
+                    
+                    # Convert secret name to env var format
+                    env_var_name=$(echo "$secret_name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+                    
+                    # If key is not "value", append it to var name
+                    if [ "$key" != "value" ]; then
+                        key_upper=$(echo "$key" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+                        env_var_name="${env_var_name}_${key_upper}"
+                    fi
+                    
+                    # Write to .env with prefix
+                    echo "${prefix}${env_var_name}=${value}" >> "$ENV_FILE"
+                    ((SECRET_COUNT++))
+                fi
             fi
-        fi
-    done <<< "$decrypted"
-    
-done < <(find "$SECRETS_DIR" -name "*.secret.yaml" -type f)
+        done <<< "$decrypted"
+        
+    done < <(find "$dir" -name "*.secret.yaml" -type f)
+}
+
+# Process environment-specific secrets (with PR_ prefix)
+process_secrets_dir "$SECRETS_DIR" "${ENV_UPPER}_"
+
+# Process core secrets (no prefix)
+if [ -d "$CORE_SECRETS_DIR" ]; then
+    process_secrets_dir "$CORE_SECRETS_DIR" ""
+fi
 
 if [ $SECRET_COUNT -eq 0 ]; then
     echo -e "${RED}✗ No secrets decrypted${NC}"

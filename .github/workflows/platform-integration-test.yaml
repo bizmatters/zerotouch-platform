@@ -47,6 +47,16 @@ jobs:
           echo "hash=$VERSION_HASH" >> $GITHUB_OUTPUT
           echo "Using preview image version: $VERSION_HASH"
 
+      - name: Generate .env from encrypted secrets
+        env:
+          ENV: preview
+          SOPS_AGE_KEY: ${{ secrets.AGE_PRIVATE_KEY }}
+        run: |
+          if [ ! -f .env ]; then
+            chmod +x scripts/bootstrap/infra/secrets/ksops/generate-sops/create-dot-env.sh
+            ./scripts/bootstrap/infra/secrets/ksops/generate-sops/create-dot-env.sh
+          fi
+
       - name: Bootstrap Platform Preview Environment
         env:
           # Kind configuration

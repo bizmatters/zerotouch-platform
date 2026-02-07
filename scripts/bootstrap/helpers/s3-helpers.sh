@@ -47,24 +47,26 @@ s3_retrieve_age_key() {
     local temp_dir=$(mktemp -d)
     trap "rm -rf $temp_dir" RETURN
     
-    # Download ACTIVE backup files
+    # Download ACTIVE backup files (suppress all output)
     if ! aws s3 cp "s3://${S3_BUCKET}/age-keys/ACTIVE-age-key-encrypted.txt" \
         "$temp_dir/encrypted.txt" \
         --endpoint-url "$S3_ENDPOINT" \
-        --cli-connect-timeout 10 2>/dev/null; then
+        --cli-connect-timeout 10 \
+        --quiet >/dev/null 2>&1; then
         return 1
     fi
     
     if ! aws s3 cp "s3://${S3_BUCKET}/age-keys/ACTIVE-recovery-key.txt" \
         "$temp_dir/recovery.key" \
         --endpoint-url "$S3_ENDPOINT" \
-        --cli-connect-timeout 10 2>/dev/null; then
+        --cli-connect-timeout 10 \
+        --quiet >/dev/null 2>&1; then
         return 1
     fi
     
     # Decrypt Age key
     local age_private_key
-    if ! age_private_key=$(age -d -i "$temp_dir/recovery.key" "$temp_dir/encrypted.txt" 2>&1); then
+    if ! age_private_key=$(age -d -i "$temp_dir/recovery.key" "$temp_dir/encrypted.txt" 2>/dev/null); then
         return 1
     fi
     
