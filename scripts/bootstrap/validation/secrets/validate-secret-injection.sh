@@ -71,9 +71,9 @@ validate "github-app-credentials secret exists in kube-system namespace" \
 
 # Validation 5: Check GitHub App secret has required fields
 validate "github-app-credentials has all required fields" \
-    "kubectl get secret github-app-credentials -n kube-system -o jsonpath='{.data.github-app-id}' | base64 -d | grep -q '.' && \
-     kubectl get secret github-app-credentials -n kube-system -o jsonpath='{.data.github-app-installation-id}' | base64 -d | grep -q '.' && \
-     kubectl get secret github-app-credentials -n kube-system -o jsonpath='{.data.github-app-private-key}' | base64 -d | grep -q 'BEGIN'"
+    "kubectl get secret github-app-credentials -n kube-system -o jsonpath='{.data.git-app-id}' | base64 -d | grep -q '.' && \
+     kubectl get secret github-app-credentials -n kube-system -o jsonpath='{.data.git-app-installation-id}' | base64 -d | grep -q '.' && \
+     kubectl get secret github-app-credentials -n kube-system -o jsonpath='{.data.git-app-private-key}' | base64 -d | grep -q 'BEGIN'"
 
 # Summary
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"

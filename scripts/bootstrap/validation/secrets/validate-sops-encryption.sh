@@ -200,11 +200,6 @@ if [ $FAILED -eq 0 ]; then
     echo -e "${YELLOW}Success Criteria Met:${NC}"
     echo -e "  ✓ Secrets properly encrypted with correct keys"
     echo -e "  ✓ Platform SOPS capability validated"
-    exit 0
-else
-    echo -e "${RED}✗ CHECKPOINT 3 VALIDATION FAILED${NC}"
-    exit 1
-fi
     echo -e "  ✓ Ready for ArgoCD sync"
     echo ""
     exit 0
