@@ -170,9 +170,11 @@ process_secrets_dir() {
     local prefix="$2"
     
     echo -e "${BLUE}Processing secrets from: $dir${NC}"
+    echo -e "${BLUE}Prefix: $prefix${NC}"
     
     while IFS= read -r secret_file; do
-        echo -e "${BLUE}  Decrypting: $(basename "$secret_file")${NC}"
+        echo -e "${BLUE}  Processing file: $secret_file${NC}"
+        echo -e "${BLUE}  Basename: $(basename "$secret_file")${NC}"
         
         # Skip github-app-credentials (has individual secrets instead)
         if [[ "$(basename "$secret_file")" == "github-app-credentials.secret.yaml" ]]; then
@@ -180,15 +182,27 @@ process_secrets_dir() {
             continue
         fi
         
+        echo -e "${BLUE}  Running: sops -d $secret_file${NC}"
+        echo -e "${BLUE}  SOPS_AGE_KEY length: ${#SOPS_AGE_KEY}${NC}"
+        
         # Decrypt secret
         local decrypted
         local decrypt_error
-        if ! decrypted=$(sops -d "$secret_file" 2>&1); then
-            decrypt_error="$decrypted"
+        set +e  # Temporarily disable exit on error
+        decrypted=$(sops -d "$secret_file" 2>&1)
+        local exit_code=$?
+        set -e  # Re-enable exit on error
+        
+        echo -e "${BLUE}  Decryption exit code: $exit_code${NC}"
+        
+        if [ $exit_code -ne 0 ]; then
             echo -e "${RED}✗ Failed to decrypt: $(basename "$secret_file")${NC}"
-            echo -e "${RED}$decrypt_error${NC}"
+            echo -e "${RED}Exit code: $exit_code${NC}"
+            echo -e "${RED}Output: $decrypted${NC}"
             exit 1
         fi
+        
+        echo -e "${GREEN}  ✓ Decrypted successfully${NC}"
         
         # Extract secret name and data
         secret_name=$(echo "$decrypted" | grep "name:" | head -1 | sed 's/.*name: *//')
