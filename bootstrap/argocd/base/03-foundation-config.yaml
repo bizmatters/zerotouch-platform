@@ -11,7 +11,9 @@ spec:
     repoURL: https://github.com/arun4infra/zerotouch-platform.git
     targetRevision: main
     path: platform/foundation
-    kustomize: {}
+    directory:
+      recurse: true
+      exclude: '{kustomization.yaml,*.md}'
   destination:
     server: https://kubernetes.default.svc
   syncPolicy:
