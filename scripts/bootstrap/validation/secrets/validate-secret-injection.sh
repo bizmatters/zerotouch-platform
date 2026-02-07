@@ -55,7 +55,7 @@ echo ""
 # Validation 1: Check encrypted secrets exist in Git
 cd "$REPO_ROOT"
 validate "Encrypted secrets exist in Git repository" \
-    "find bootstrap/argocd/overlays/main -name '*.secret.yaml' 2>/dev/null | grep -q '.'"
+    "find bootstrap/argocd/overlays -name '*.secret.yaml' 2>/dev/null | grep -q '.'"
 
 # Validation 2: Check sops-age secret exists in cluster
 validate "sops-age secret exists in argocd namespace" \
@@ -69,7 +69,7 @@ validate "sops-age secret has keys.txt field" \
 validate "github-app-credentials secret exists in kube-system namespace" \
     "kubectl get secret github-app-credentials -n kube-system &>/dev/null"
 
-# Validation 5: Check GitHub App secret has required fields
+# Validation 5: Check GitHub App secret has required fields (keys are git-app-* not github-app-*)
 validate "github-app-credentials has all required fields" \
     "kubectl get secret github-app-credentials -n kube-system -o jsonpath='{.data.git-app-id}' | base64 -d | grep -q '.' && \
      kubectl get secret github-app-credentials -n kube-system -o jsonpath='{.data.git-app-installation-id}' | base64 -d | grep -q '.' && \
