@@ -184,11 +184,13 @@ if [ "$MODE" = "preview" ]; then
     SERVICE_ENV_FILE="$(cd "$SCRIPT_DIR/../../.." && pwd)/.env"
     PLATFORM_ENV_FILE="$REPO_ROOT/.env"
     
-    if [[ -f "$SERVICE_ENV_FILE" ]]; then
+    if [[ -f "$SERVICE_ENV_FILE" ]] && [[ "$SERVICE_ENV_FILE" != "$PLATFORM_ENV_FILE" ]]; then
         log_info "Copying service .env file to platform root..."
         cp "$SERVICE_ENV_FILE" "$PLATFORM_ENV_FILE"
-        
-        # Source the copied .env file
+    fi
+    
+    if [[ -f "$PLATFORM_ENV_FILE" ]]; then
+        # Source the .env file
         set -a  # automatically export all variables
         source "$PLATFORM_ENV_FILE"
         set +a  # stop automatically exporting
