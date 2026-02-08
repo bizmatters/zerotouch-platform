@@ -48,14 +48,24 @@ echo -e "${BLUE}║   Validation Script                                         
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
+# Get ENV from environment or default to pr
+ENV="${ENV:-pr}"
+ENV_UPPER=$(echo "$ENV" | tr '[:lower:]' '[:upper:]')
+
+# Determine .sops.yaml location based on environment
+if [[ "$ENV" == "pr" ]]; then
+    SOPS_CONFIG="$REPO_ROOT/bootstrap/argocd/overlays/preview/.sops.yaml"
+else
+    SOPS_CONFIG="$REPO_ROOT/bootstrap/argocd/overlays/main/$ENV/.sops.yaml"
+fi
+
 # Check if .sops.yaml exists in current repository
-if [[ -f "$REPO_ROOT/.sops.yaml" ]]; then
-    echo -e "${GREEN}✓ Found .sops.yaml in repository${NC}"
-    SOPS_CONFIG="$REPO_ROOT/.sops.yaml"
+if [[ -f "$SOPS_CONFIG" ]]; then
+    echo -e "${GREEN}✓ Found .sops.yaml at $SOPS_CONFIG${NC}"
     cd "$REPO_ROOT"
 else
-    echo -e "${RED}✗ No .sops.yaml found in repository${NC}"
-    echo -e "${YELLOW}.sops.yaml is mandatory - it is the source of truth for Age public key${NC}"
+    echo -e "${RED}✗ No .sops.yaml found at $SOPS_CONFIG${NC}"
+    echo -e "${YELLOW}Run: ENV=$ENV ./scripts/bootstrap/infra/secrets/ksops/setup-env-secrets.sh${NC}"
     exit 1
 fi
 

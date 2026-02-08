@@ -22,23 +22,35 @@ echo -e "${BLUE}╚════════════════════�
 
 cd "$REPO_ROOT"
 
+# Get ENV from environment or default to pr
+ENV="${ENV:-pr}"
+ENV_UPPER=$(echo "$ENV" | tr '[:lower:]' '[:upper:]')
+
+# Determine .sops.yaml location based on environment
+if [[ "$ENV" == "pr" ]]; then
+    SOPS_YAML="$REPO_ROOT/bootstrap/argocd/overlays/preview/.sops.yaml"
+else
+    SOPS_YAML="$REPO_ROOT/bootstrap/argocd/overlays/main/$ENV/.sops.yaml"
+fi
+
 # Check if .sops.yaml exists
-if [[ ! -f "$REPO_ROOT/.sops.yaml" ]]; then
-    echo -e "${RED}✗ Error: .sops.yaml not found in repository${NC}"
+if [[ ! -f "$SOPS_YAML" ]]; then
+    echo -e "${RED}✗ Error: .sops.yaml not found at $SOPS_YAML${NC}"
+    echo -e "${YELLOW}Run: ENV=$ENV ./scripts/bootstrap/infra/secrets/ksops/setup-env-secrets.sh${NC}"
     exit 1
 fi
 
-echo -e "${GREEN}✓ Found .sops.yaml in repository${NC}"
+echo -e "${GREEN}✓ Found .sops.yaml at $SOPS_YAML${NC}"
 
 # Validate YAML format
-if ! python3 -c "import yaml; yaml.safe_load(open('.sops.yaml'))" 2>/dev/null; then
+if ! python3 -c "import yaml; yaml.safe_load(open('$SOPS_YAML'))" 2>/dev/null; then
     echo -e "${RED}✗ Error: Invalid YAML format in .sops.yaml${NC}"
     exit 1
 fi
 
 echo -e "${GREEN}✓ .sops.yaml format valid${NC}"
 
-# Test encryption
+# Test encryption with environment-specific config
 cat > test-secret.yaml <<EOF
 apiVersion: v1
 kind: Secret
@@ -49,7 +61,7 @@ stringData:
   test: value
 EOF
 
-if sops -e -i test-secret.yaml 2>/dev/null; then
+if sops --config "$SOPS_YAML" -e -i test-secret.yaml 2>/dev/null; then
     echo -e "${GREEN}✓ SOPS encryption successful with repository config${NC}"
     rm -f test-secret.yaml
 else

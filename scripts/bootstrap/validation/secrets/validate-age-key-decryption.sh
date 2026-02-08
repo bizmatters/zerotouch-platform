@@ -119,9 +119,16 @@ echo ""
 echo -e "${BLUE}[3/4] Verifying public key matches .sops.yaml...${NC}"
 
 if [ $FAILED -eq 0 ]; then
-    SOPS_YAML="$REPO_ROOT/.sops.yaml"
+    # Determine .sops.yaml location based on environment
+    if [[ "$ENV" == "pr" ]]; then
+        SOPS_YAML="$REPO_ROOT/bootstrap/argocd/overlays/preview/.sops.yaml"
+    else
+        SOPS_YAML="$REPO_ROOT/bootstrap/argocd/overlays/main/$ENV/.sops.yaml"
+    fi
+    
     if [ ! -f "$SOPS_YAML" ]; then
-        echo -e "${RED}✗ .sops.yaml not found${NC}"
+        echo -e "${RED}✗ .sops.yaml not found at $SOPS_YAML${NC}"
+        echo -e "${YELLOW}Run: ENV=$ENV ./scripts/bootstrap/infra/secrets/ksops/setup-env-secrets.sh${NC}"
         FAILED=1
     else
         EXPECTED_PUBLIC_KEY=$(grep "age:" "$SOPS_YAML" | sed -E 's/.*age:[[:space:]]*(age1[a-z0-9]+).*/\1/' | head -1)
@@ -148,8 +155,14 @@ echo -e "${BLUE}[4/4] Testing decryption of encrypted secrets...${NC}"
 if [ $FAILED -eq 0 ]; then
     cd "$REPO_ROOT"
     
-    # Find all encrypted secret files
-    SECRET_FILES=$(find bootstrap/argocd/overlays/main -name "*.secret.yaml" 2>/dev/null || echo "")
+    # Find all encrypted secret files in environment-specific directory
+    if [[ "$ENV" == "pr" ]]; then
+        SECRETS_DIR="bootstrap/argocd/overlays/preview/secrets"
+    else
+        SECRETS_DIR="bootstrap/argocd/overlays/main/$ENV/secrets"
+    fi
+    
+    SECRET_FILES=$(find "$SECRETS_DIR" -name "*.secret.yaml" 2>/dev/null || echo "")
     
     if [ -z "$SECRET_FILES" ]; then
         echo -e "${YELLOW}⚠ No encrypted secrets found in Git${NC}"
