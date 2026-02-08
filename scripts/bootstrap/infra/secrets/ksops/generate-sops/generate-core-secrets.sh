@@ -45,7 +45,7 @@ type: Opaque
 stringData:
   value: "${ORG_NAME}"
 EOF
-    if sops -e -i "$CORE_SECRETS_DIR/org-name.secret.yaml" 2>/dev/null; then
+    if sops --config "$SOPS_CONFIG" -e -i "$CORE_SECRETS_DIR/org-name.secret.yaml" 2>/dev/null; then
         echo -e "${GREEN}  ✓ org-name.secret.yaml${NC}"
         CORE_SECRET_FILES+=("org-name.secret.yaml")
         ((CORE_SECRET_COUNT++))
@@ -63,7 +63,7 @@ type: Opaque
 stringData:
   value: "${TENANTS_REPO_NAME}"
 EOF
-    if sops -e -i "$CORE_SECRETS_DIR/tenants-repo-name.secret.yaml" 2>/dev/null; then
+    if sops --config "$SOPS_CONFIG" -e -i "$CORE_SECRETS_DIR/tenants-repo-name.secret.yaml" 2>/dev/null; then
         echo -e "${GREEN}  ✓ tenants-repo-name.secret.yaml${NC}"
         CORE_SECRET_FILES+=("tenants-repo-name.secret.yaml")
         ((CORE_SECRET_COUNT++))
@@ -102,7 +102,7 @@ stringData:
   ${secret_key}: "${value}"
 EOF
     
-    if sops -e -i "$CORE_SECRETS_DIR/$secret_file" 2>/dev/null; then
+    if sops --config "$SOPS_CONFIG" -e -i "$CORE_SECRETS_DIR/$secret_file" 2>/dev/null; then
         echo -e "${GREEN}  ✓ ${secret_file}${NC}"
         CORE_SECRET_FILES+=("$secret_file")
         ((CORE_SECRET_COUNT++))
@@ -131,7 +131,7 @@ stringData:
 $(echo "$GIT_APP_PRIVATE_KEY" | sed 's/^/    /')
 EOF
     
-    if sops -e -i "$CORE_SECRETS_DIR/github-app-credentials.secret.yaml" 2>/dev/null; then
+    if sops --config "$SOPS_CONFIG" -e -i "$CORE_SECRETS_DIR/github-app-credentials.secret.yaml" 2>/dev/null; then
         echo -e "${GREEN}  ✓ github-app-credentials.secret.yaml${NC}"
         CORE_SECRET_FILES+=("github-app-credentials.secret.yaml")
         ((CORE_SECRET_COUNT++))

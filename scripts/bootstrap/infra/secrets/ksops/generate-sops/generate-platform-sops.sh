@@ -62,8 +62,18 @@ echo -e "${GREEN}✓ SOPS config: $SOPS_YAML${NC}"
 echo -e "${GREEN}✓ Output: $OVERLAY_DIR/secrets/${NC}"
 echo ""
 
-# Export ENV for sub-scripts
+# Clean up old secrets
+SECRETS_DIR="$OVERLAY_DIR/secrets"
+if [ -d "$SECRETS_DIR" ]; then
+    echo -e "${YELLOW}Cleaning up old secrets...${NC}"
+    rm -f "$SECRETS_DIR"/*.secret.yaml
+    echo -e "${GREEN}✓ Old secrets removed${NC}"
+    echo ""
+fi
+
+# Export ENV and SOPS config for sub-scripts
 export ENV
+export SOPS_CONFIG="$SOPS_YAML"
 
 "$SCRIPT_DIR/generate-env-secrets.sh"
 "$SCRIPT_DIR/generate-tenant-registry-secrets.sh"

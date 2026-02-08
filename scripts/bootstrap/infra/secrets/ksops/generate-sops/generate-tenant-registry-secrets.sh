@@ -55,7 +55,7 @@ EOF
     echo "  githubAppPrivateKey: |" >> "$SECRETS_DIR/repo-zerotouch-tenants.secret.yaml"
     echo "$GIT_APP_PRIVATE_KEY" | sed 's/^/    /' >> "$SECRETS_DIR/repo-zerotouch-tenants.secret.yaml"
     
-    if sops -e -i "$SECRETS_DIR/repo-zerotouch-tenants.secret.yaml" 2>/dev/null; then
+    if sops --config "$SOPS_CONFIG" -e -i "$SECRETS_DIR/repo-zerotouch-tenants.secret.yaml" 2>/dev/null; then
         echo -e "${GREEN}  ✓ repo-zerotouch-tenants.secret.yaml${NC}"
     else
         echo -e "${RED}  ✗ Failed to encrypt: repo-zerotouch-tenants.secret.yaml${NC}"
@@ -122,7 +122,7 @@ stringData:
     }
 EOF
         
-        if sops -e -i "$SECRETS_DIR/ghcr-pull-secret.secret.yaml" 2>/dev/null; then
+        if sops --config "$SOPS_CONFIG" -e -i "$SECRETS_DIR/ghcr-pull-secret.secret.yaml" 2>/dev/null; then
             echo -e "${GREEN}  ✓ ghcr-pull-secret.secret.yaml${NC}"
             
             # Update kustomization to include GHCR secret

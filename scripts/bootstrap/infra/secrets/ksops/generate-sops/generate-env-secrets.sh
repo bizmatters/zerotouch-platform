@@ -107,7 +107,7 @@ stringData:
   ${secret_key}: ${value}
 EOF
                     
-                    if sops -e -i "$SECRETS_DIR/$secret_file" 2>/dev/null; then
+                    if sops --config "$SOPS_CONFIG" -e -i "$SECRETS_DIR/$secret_file" 2>/dev/null; then
                         echo -e "${GREEN}  ✓ ${secret_file}${NC}"
                         SECRET_FILES+=("$secret_file")
                         ((SECRET_COUNT++))
@@ -133,7 +133,7 @@ stringData:
   ${secret_key}: ${value}
 EOF
                 
-                if sops -e -i "$SECRETS_DIR/$secret_file" 2>/dev/null; then
+                if sops --config "$SOPS_CONFIG" -e -i "$SECRETS_DIR/$secret_file" 2>/dev/null; then
                     echo -e "${GREEN}  ✓ ${secret_file}${NC}"
                     SECRET_FILES+=("$secret_file")
                     ((SECRET_COUNT++))
