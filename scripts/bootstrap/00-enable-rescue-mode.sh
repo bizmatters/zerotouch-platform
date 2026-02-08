@@ -32,6 +32,13 @@ HELPERS_DIR="$SCRIPT_DIR/helpers"
 ENV="$1"
 AUTO_YES=false
 
+# Auto-load .env if it exists (must be before any script that needs credentials)
+if [[ -f "$REPO_ROOT/.env" ]]; then
+    set -a
+    source "$REPO_ROOT/.env"
+    set +a
+fi
+
 # Parse arguments
 for arg in "$@"; do
     case $arg in
