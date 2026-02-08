@@ -105,23 +105,32 @@ else
     exit 1
 fi
 
-# Force immediate sync of secrets
-echo "🔄 Forcing immediate secret sync..."
-kubectl annotate externalsecret \
-    -n "${NAMESPACE}" \
-    -l zerotouch.io/managed=true \
-    force-sync="$(date +%s)" \
-    --overwrite
-
-echo "⏳ Waiting for secrets to become Ready..."
-kubectl wait \
-    --for=condition=Ready \
-    externalsecret \
-    -n "${NAMESPACE}" \
-    -l zerotouch.io/managed=true \
-    --timeout=60s
-
-echo "✅ Secrets synced"
+# Decrypt and apply KSOPS secrets manually (ArgoCD doesn't sync in CI)
+SECRETS_DIR="${PROJECT_ROOT}/platform/${SERVICE_NAME}/overlays/pr/secrets"
+if [[ -d "$SECRETS_DIR" ]]; then
+    echo "🔐 Decrypting and applying KSOPS secrets..."
+    
+    # Check if SOPS_AGE_KEY is set
+    if [[ -z "${SOPS_AGE_KEY:-}" && -z "${AGE_PRIVATE_KEY:-}" ]]; then
+        echo "❌ SOPS_AGE_KEY or AGE_PRIVATE_KEY required for secret decryption"
+        exit 1
+    fi
+    
+    # Use AGE_PRIVATE_KEY if SOPS_AGE_KEY not set
+    export SOPS_AGE_KEY="${SOPS_AGE_KEY:-${AGE_PRIVATE_KEY}}"
+    
+    # Decrypt and apply each secret file
+    for secret_file in "$SECRETS_DIR"/*.secret.yaml; do
+        if [[ -f "$secret_file" ]]; then
+            echo "  Decrypting: $(basename "$secret_file")"
+            sops -d "$secret_file" | kubectl apply -n "${NAMESPACE}" -f -
+        fi
+    done
+    
+    echo "✅ KSOPS secrets applied"
+else
+    echo "ℹ️  No secrets directory found, skipping secret deployment"
+fi
 
 # Apply overlay claims if they exist (for PR environment)
 OVERLAY_CLAIMS_DIR="${PROJECT_ROOT}/platform/${SERVICE_NAME}/overlays/pr"
