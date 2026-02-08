@@ -1,12 +1,13 @@
 #!/bin/bash
 # Generate SOPS-encrypted *.secret.yaml from .env file
-# Usage: ./generate-env-sops.sh [TENANT_NAME] [OUTPUT_BASE_DIR] [SOPS_CONFIG] [ENV_FILTER]
+# Usage: ./generate-env-sops.sh [TENANT_NAME] [OUTPUT_BASE_DIR] [SOPS_CONFIG] [ENV_FILTER] [ENV_FILE]
 #
 # Arguments:
 #   TENANT_NAME: Optional tenant name to filter env vars (e.g., deepagents-runtime)
 #   OUTPUT_BASE_DIR: Base directory for output (default: $REPO_ROOT/secrets)
 #   SOPS_CONFIG: Path to .sops.yaml (default: auto-detect)
 #   ENV_FILTER: Filter by environment (pr, dev, staging, production) - only process matching prefix
+#   ENV_FILE: Path to .env file (default: $REPO_ROOT/.env.local)
 #
 # Supported prefixes: PR_, DEV_, STAGING_, PROD_
 # cd zerotouch-platform && set -a && source .env && set +a && ./scripts/bootstrap/infra/secrets/ksops/generate-sops/generate-service-env-sops.sh
@@ -25,10 +26,17 @@ TENANT_NAME="${1:-}"
 OUTPUT_BASE_DIR="${2:-}"
 SOPS_CONFIG="${3:-}"
 ENV_FILTER="${4:-}"
+ENV_FILE_ARG="${5:-}"
 
 # Detect current repo root
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-ENV_FILE="$REPO_ROOT/.env.local"
+
+# Use provided ENV_FILE or default to .env.local
+if [ -n "$ENV_FILE_ARG" ]; then
+    ENV_FILE="$ENV_FILE_ARG"
+else
+    ENV_FILE="$REPO_ROOT/.env.local"
+fi
 
 # Set default output directory if not provided
 if [ -z "$OUTPUT_BASE_DIR" ]; then
