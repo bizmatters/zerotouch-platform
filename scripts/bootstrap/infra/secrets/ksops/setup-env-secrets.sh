@@ -65,6 +65,11 @@ fi
 echo -e "${GREEN}✓ Prerequisites checked${NC}"
 echo ""
 
+# Source .env.local for S3 credentials
+set -a
+source "$ENV_FILE"
+set +a
+
 # Step 1: Generate Age keypair
 echo -e "${BLUE}[1/3] Generating Age keypair...${NC}"
 export ENV="$ENV"
@@ -87,11 +92,6 @@ echo ""
 
 # Step 3: Generate encrypted secrets
 echo -e "${BLUE}[3/3] Generating encrypted secrets...${NC}"
-
-# Source .env.local for secret generation
-set -a
-source "$ENV_FILE"
-set +a
 
 "$SCRIPT_DIR/generate-sops/generate-platform-sops.sh"
 
