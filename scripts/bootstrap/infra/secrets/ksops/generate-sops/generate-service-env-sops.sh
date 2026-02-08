@@ -10,7 +10,20 @@
 #   ENV_FILE: Path to .env file (default: $REPO_ROOT/.env.local)
 #
 # Supported prefixes: PR_, DEV_, STAGING_, PROD_
-# cd zerotouch-platform && set -a && source .env && set +a && ./scripts/bootstrap/infra/secrets/ksops/generate-sops/generate-service-env-sops.sh
+#
+# Examples:
+#   # Generate secrets for a single service (tenant)
+#   cd zerotouch-tenants
+#   ENV=dev SOPS_AGE_KEY="age1..." ./zerotouch-platform/scripts/bootstrap/infra/secrets/ksops/generate-sops/generate-service-env-sops.sh \
+#     "my-service" \
+#     "./tenants/my-service/overlays/dev/secrets" \
+#     "./zerotouch-platform/bootstrap/argocd/overlays/main/dev/.sops.yaml" \
+#     "dev" \
+#     "./tenants/my-service/.env"
+#
+#   # Generate platform secrets (called by generate-platform-sops.sh)
+#   cd zerotouch-platform && set -a && source .env.local && set +a && \
+#   ENV=dev ./scripts/bootstrap/infra/secrets/ksops/generate-sops/generate-service-env-sops.sh
 
 set -e
 
