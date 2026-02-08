@@ -28,7 +28,7 @@ DEV_HETZNER_S3_SECRET_KEY=<secret-key>
 ### Run Backup
 ```bash
 cd zerotouch-platform
-source .env
+source .env.local
 source scripts/bootstrap/infra/secrets/ksops/08b-generate-age-keys.sh
 scripts/bootstrap/infra/secrets/ksops/08b-backup-age-to-s3.sh
 ```

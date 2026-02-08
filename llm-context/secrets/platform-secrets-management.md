@@ -10,8 +10,8 @@ Platform secrets follow a **Git-first** approach where encrypted secrets are com
 ┌─────────────────────────────────────────────────────────────┐
 │ Manual Setup (One-time)                                     │
 ├─────────────────────────────────────────────────────────────┤
-│ 1. Create .env with {ENV}_* prefixed secrets                │
-│    → Manual: Create/edit .env file                          │
+│ 1. Create .env.local with {ENV}_* prefixed secrets          │
+│    → Manual: Create/edit .env.local file                    │
 │                                                              │
 │ 2. Generate Age keypair (or retrieve from S3)               │
 │    → 08b-generate-age-keys.sh                               │
@@ -67,10 +67,10 @@ Platform secrets follow a **Git-first** approach where encrypted secrets are com
 
 ### Step 1: Create Environment File
 
-Create `.env` with environment-prefixed secrets:
+Create `.env.local` with environment-prefixed secrets:
 
 ```bash
-# .env example
+# .env.local example
 PR_HETZNER_API_TOKEN=xxx
 PR_HETZNER_DNS_TOKEN=xxx
 PR_HETZNER_S3_ACCESS_KEY=xxx
@@ -103,15 +103,15 @@ source ./scripts/bootstrap/infra/secrets/ksops/08b-generate-age-keys.sh
 ### Step 3: Generate Encrypted Secrets
 
 ```bash
-# Ensure .env is sourced
-set -a && source .env && set +a
+# Ensure .env.local is sourced
+set -a && source .env.local && set +a
 
 # Generate all platform secrets
 ./scripts/bootstrap/infra/secrets/ksops/generate-sops/generate-platform-sops.sh
 ```
 
 **Output locations**:
-- `bootstrap/argocd/overlays/main/pr/secrets/` (NEW)
+- `bootstrap/argocd/overlays/preview/secrets/` (PR environment)
 - `bootstrap/argocd/overlays/main/dev/secrets/`
 - `bootstrap/argocd/overlays/main/staging/secrets/`
 - `bootstrap/argocd/overlays/main/prod/secrets/`
@@ -139,7 +139,7 @@ s3://{bucket}/age-keys/
 ```bash
 # Verify decryption works
 export SOPS_AGE_KEY="$AGE_PRIVATE_KEY"
-sops -d bootstrap/argocd/overlays/main/pr/secrets/hcloud.secret.yaml
+sops -d bootstrap/argocd/overlays/preview/secrets/hcloud.secret.yaml
 
 # Commit encrypted secrets
 git add bootstrap/argocd/overlays/main/*/secrets/*.secret.yaml
@@ -253,7 +253,7 @@ jobs:
 
 ### ✗ DON'T
 
-- Commit unencrypted `.env` file
+- Commit unencrypted `.env` or `.env.local` files
 - Generate secrets during cluster bootstrap
 - Generate new Age key if one exists in S3
 - Proceed with bootstrap if secrets can't be decrypted
@@ -405,7 +405,8 @@ git push
 | Age private key | S3 `{bucket}/age-keys/ACTIVE-age-key-encrypted.txt` | ✗ No |
 | Recovery key | S3 `{bucket}/age-keys/ACTIVE-recovery-key.txt` | ✗ No |
 | Encrypted secrets | `bootstrap/argocd/overlays/main/*/secrets/*.secret.yaml` | ✓ Yes |
-| Environment file | `.env` (generated on-demand) | ✗ No |
+| Environment file (manual) | `.env.local` (manual setup) | ✗ No |
+| Environment file (automated) | `.env` (generated on-demand) | ✗ No |
 | Cluster secret | `kubectl get secret sops-age -n argocd` | ✗ No |
 
 ---
@@ -428,7 +429,7 @@ git push
 |--------|---------|-------------|
 | `08b-generate-age-keys.sh` | Generate/retrieve Age keypair | Manual setup |
 | `08b-backup-age-to-s3.sh` | Backup Age key to S3 | After key generation |
-| `generate-platform-sops.sh` | Generate encrypted secrets | After .env created |
+| `generate-platform-sops.sh` | Generate encrypted secrets | After .env.local created |
 | `create-dot-env.sh` | Decrypt secrets → .env | CI/local when .env missing |
 | `08-setup-ksops.sh` | Inject Age key to cluster | During bootstrap |
 | `08c-inject-age-key.sh` | Create sops-age secret | Called by 08-setup-ksops.sh |
