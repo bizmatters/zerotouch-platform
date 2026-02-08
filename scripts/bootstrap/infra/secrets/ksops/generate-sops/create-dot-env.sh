@@ -121,9 +121,16 @@ echo ""
 # Step 3: Validate against .sops.yaml
 echo -e "${BLUE}[3/4] Validating Age key...${NC}"
 
-SOPS_YAML="$REPO_ROOT/.sops.yaml"
+# Determine .sops.yaml location based on environment
+if [[ "$ENV" == "pr" ]]; then
+    SOPS_YAML="$REPO_ROOT/bootstrap/argocd/overlays/preview/.sops.yaml"
+else
+    SOPS_YAML="$REPO_ROOT/bootstrap/argocd/overlays/main/$ENV/.sops.yaml"
+fi
+
 if [ ! -f "$SOPS_YAML" ]; then
-    echo -e "${RED}✗ .sops.yaml not found${NC}"
+    echo -e "${RED}✗ .sops.yaml not found at $SOPS_YAML${NC}"
+    echo -e "${YELLOW}Run: ENV=$ENV ./scripts/bootstrap/infra/secrets/ksops/setup-env-secrets.sh${NC}"
     exit 1
 fi
 
