@@ -353,6 +353,7 @@ main() {
     export IMAGE_TAG="${IMAGE_TAG}"
     export NAMESPACE="${NAMESPACE}"
     export ENVIRONMENT="${ENVIRONMENT}"
+    export ENV="${ENVIRONMENT}"
     export TEST_PATH="${TEST_PATH}"
     export TEST_NAME="${TEST_NAME}"
     export TIMEOUT="${TIMEOUT}"
