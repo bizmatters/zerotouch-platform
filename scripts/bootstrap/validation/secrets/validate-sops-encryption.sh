@@ -157,8 +157,8 @@ stringData:
   test-key: test-value
 EOF
 
-# Run sops encryption
-if sops -e "$TEST_DIR/test.secret.yaml" > "$TEST_DIR/test.secret.enc.yaml" 2>/dev/null; then
+# Run sops encryption with environment-specific config
+if sops -e --config "$SOPS_CONFIG" "$TEST_DIR/test.secret.yaml" > "$TEST_DIR/test.secret.enc.yaml" 2>/dev/null; then
     echo -e "${GREEN}✓ PASSED: Secret encryption successful${NC}"
     PASSED=$((PASSED + 1))
     
