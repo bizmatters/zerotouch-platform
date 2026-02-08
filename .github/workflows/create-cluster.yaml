@@ -50,12 +50,24 @@ jobs:
           chmod +x scripts/bootstrap/infra/00-setup-infra-deps.sh
           ./scripts/bootstrap/infra/00-setup-infra-deps.sh
 
+      - name: Determine Age Key Secret Name
+        id: age-key-name
+        run: |
+          ENV="${{ inputs.environment }}"
+          case "$ENV" in
+            production) echo "name=SOPS_AGE_KEY_PROD" >> $GITHUB_OUTPUT ;;
+            pr) echo "name=SOPS_AGE_KEY_PR" >> $GITHUB_OUTPUT ;;
+            dev) echo "name=SOPS_AGE_KEY_DEV" >> $GITHUB_OUTPUT ;;
+            staging) echo "name=SOPS_AGE_KEY_STAGING" >> $GITHUB_OUTPUT ;;
+            *) echo "name=SOPS_AGE_KEY_${ENV^^}" >> $GITHUB_OUTPUT ;;
+          esac
+
       - name: Decrypt GitHub App credentials
         id: decrypt-creds
         uses: ./.github/actions/decrypt-github-app-creds
         with:
           environment: ${{ inputs.environment }}
-          age-key: ${{ secrets[format('SOPS_AGE_KEY_{0}', inputs.environment == 'production' && 'PROD' || upper(inputs.environment))] }}
+          age-key: ${{ secrets[steps.age-key-name.outputs.name] }}
 
       - name: Generate GitHub App token
         id: app-token

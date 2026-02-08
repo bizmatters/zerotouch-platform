@@ -2,6 +2,8 @@ bootstrap/talos/nodes
 environments/*/talos-values.yaml
 environments/*/*.secret.yaml
 .env
+.env.local
+.env.bkp
 .env.ssm
 .age-key
 .sops.yaml
