@@ -59,7 +59,7 @@ checkout_pr_claims() {
         # Checkout zerotouch-tenants repository
         # Construct tenant repository URL from components
         local github_username="${BOT_GITHUB_USERNAME:-${GITHUB_REPOSITORY_OWNER}}"
-        local tenants_repo_name="${TENANTS_REPO_NAME:-${GITHUB_VARS_TENANTS_REPO_NAME}}"
+        local tenants_repo_name="${PR_TENANTS_REPO_NAME:-${TENANTS_REPO_NAME}}"
         local tenants_repo_url="https://github.com/${github_username}/${tenants_repo_name}.git"
         local tenants_dir="platform/tenants-temp"
         

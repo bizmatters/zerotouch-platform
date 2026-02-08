@@ -514,7 +514,18 @@ trap cleanup EXIT
         fi
     fi
 
-    # Step 3c: Checkout PR claims
+    # Step 3c: Source .env file before checkout (contains PR_TENANTS_REPO_NAME, etc.)
+    if [[ -f "${PLATFORM_ROOT}/.env" ]]; then
+        log_info "Sourcing platform .env file for PR claims checkout..."
+        set -a  # automatically export all variables
+        source "${PLATFORM_ROOT}/.env"
+        set +a  # stop automatically exporting
+        log_success "Environment variables loaded from .env"
+    else
+        log_warn "Platform .env file not found at ${PLATFORM_ROOT}/.env"
+    fi
+    
+    # Step 3d: Checkout PR claims
     log_info "Checking out PR claims for CI testing"
     CHECKOUT_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/checkout-pr-claims.sh"
     
