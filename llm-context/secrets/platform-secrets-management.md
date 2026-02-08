@@ -81,70 +81,70 @@ PR_HETZNER_S3_BUCKET_NAME=pr-secrets
 
 DEV_HETZNER_API_TOKEN=xxx
 # ... repeat for DEV, STAGING, PROD
+
+# Core secrets (no prefix)
+GIT_APP_ID=xxx
+GIT_APP_INSTALLATION_ID=xxx
+GIT_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----
+...
+-----END RSA PRIVATE KEY-----"
+ORG_NAME=bizmatters
+TENANTS_REPO_NAME=zerotouch-tenants
 ```
 
 **Supported prefixes**: `PR_`, `DEV_`, `STAGING_`, `PROD_`
 
-### Step 2: Generate Age Keypair
+### Step 2: Run E2E Setup Script
 
 ```bash
 cd zerotouch-platform
 
-# Generate new Age keypair
-source ./scripts/bootstrap/infra/secrets/ksops/08b-generate-age-keys.sh
-
-# This exports:
-# - AGE_PUBLIC_KEY
-# - AGE_PRIVATE_KEY
+# Setup secrets for each environment (one command per env)
+./scripts/bootstrap/infra/secrets/ksops/setup-env-secrets.sh pr
+./scripts/bootstrap/infra/secrets/ksops/setup-env-secrets.sh dev
+./scripts/bootstrap/infra/secrets/ksops/setup-env-secrets.sh staging
+./scripts/bootstrap/infra/secrets/ksops/setup-env-secrets.sh prod
 ```
 
-**Note**: Script checks cluster for existing key first, generates only if not found.
-
-### Step 3: Generate Encrypted Secrets
-
-```bash
-# Ensure .env.local is sourced
-set -a && source .env.local && set +a
-
-# Generate all platform secrets
-./scripts/bootstrap/infra/secrets/ksops/generate-sops/generate-platform-sops.sh
-```
+**This script does:**
+1. Generates Age keypair (or retrieves from S3 if exists)
+2. Creates environment-specific `.sops.yaml` in overlay directory
+3. Backs up Age key to S3 (encrypted with recovery key)
+4. Generates all encrypted secrets for the environment
 
 **Output locations**:
-- `bootstrap/argocd/overlays/preview/secrets/` (PR environment)
-- `bootstrap/argocd/overlays/main/dev/secrets/`
-- `bootstrap/argocd/overlays/main/staging/secrets/`
-- `bootstrap/argocd/overlays/main/prod/secrets/`
-- `bootstrap/argocd/overlays/main/core/secrets/`
-- `bootstrap/argocd/overlays/main/tenants/secrets/`
+- `bootstrap/argocd/overlays/preview/.sops.yaml` + `secrets/` (PR)
+- `bootstrap/argocd/overlays/main/dev/.sops.yaml` + `secrets/`
+- `bootstrap/argocd/overlays/main/staging/.sops.yaml` + `secrets/`
+- `bootstrap/argocd/overlays/main/prod/.sops.yaml` + `secrets/`
 
-### Step 4: Backup Age Key to S3
+**Important**: Each environment has its own `.sops.yaml` with environment-specific Age public key.
 
-```bash
-# Backup Age key with environment-specific credentials
-./scripts/bootstrap/infra/secrets/ksops/08b-backup-age-to-s3.sh
-```
+### Step 3: Add Age Keys to GitHub Organization
 
-**S3 structure**:
-```
-s3://{bucket}/age-keys/
-├── ACTIVE-age-key-encrypted.txt      # Current active key
-├── ACTIVE-recovery-key.txt           # Recovery key for decryption
-├── 20260207-143022-age-key-encrypted.txt  # Timestamped backup
-└── 20260207-143022-recovery-key.txt       # Timestamped recovery
-```
+For each environment, add the Age private key to GitHub org secrets:
 
-### Step 5: Verify and Commit
+1. Go to GitHub Organization → Settings → Secrets → Actions
+2. Create new secrets (one per environment):
+   - Name: `SOPS_AGE_KEY_PR`, Value: Age private key from PR setup
+   - Name: `SOPS_AGE_KEY_DEV`, Value: Age private key from DEV setup
+   - Name: `SOPS_AGE_KEY_STAGING`, Value: Age private key from STAGING setup
+   - Name: `SOPS_AGE_KEY_PROD`, Value: Age private key from PROD setup
+3. Set visibility: All repositories (or specific repos)
+
+**Important**: Each environment has its own Age keypair. Do not reuse keys across environments.
+
+### Step 4: Commit Encrypted Secrets
 
 ```bash
-# Verify decryption works
-export SOPS_AGE_KEY="$AGE_PRIVATE_KEY"
-sops -d bootstrap/argocd/overlays/preview/secrets/hcloud.secret.yaml
+# Verify encrypted secrets
+ls -la bootstrap/argocd/overlays/preview/secrets/
+ls -la bootstrap/argocd/overlays/main/dev/secrets/
 
-# Commit encrypted secrets
-git add bootstrap/argocd/overlays/main/*/secrets/*.secret.yaml
-git add .sops.yaml
-git commit -m "chore: add encrypted platform secrets for all environments"
+# Commit to Git
+git add bootstrap/argocd/overlays/
+git add .gitignore  # If updated
+git commit -m "chore: setup environment-specific encrypted secrets"
 git push
 ```
 
@@ -212,29 +212,39 @@ After `.env` exists:
 ```yaml
 jobs:
   integration-test:
-    environment: preview  # Access to PR_* secrets
+    runs-on: ubuntu-latest
     steps:
-      - name: Generate .env from encrypted secrets
-        env:
-          PR_HETZNER_S3_ACCESS_KEY: ${{ secrets.PR_HETZNER_S3_ACCESS_KEY }}
-          PR_HETZNER_S3_SECRET_KEY: ${{ secrets.PR_HETZNER_S3_SECRET_KEY }}
-          PR_HETZNER_S3_ENDPOINT: ${{ secrets.PR_HETZNER_S3_ENDPOINT }}
-          PR_HETZNER_S3_REGION: ${{ secrets.PR_HETZNER_S3_REGION }}
-          PR_HETZNER_S3_BUCKET_NAME: ${{ secrets.PR_HETZNER_S3_BUCKET_NAME }}
+      - name: Determine Environment
+        id: env
         run: |
-          if [ ! -f .env ]; then
-            ./scripts/bootstrap/infra/secrets/ksops/generate-sops/create-dot-env.sh
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "name=dev" >> $GITHUB_OUTPUT
+            echo "age_secret=SOPS_AGE_KEY_DEV" >> $GITHUB_OUTPUT
+          else
+            echo "name=pr" >> $GITHUB_OUTPUT
+            echo "age_secret=SOPS_AGE_KEY_PR" >> $GITHUB_OUTPUT
           fi
       
-      - name: Bootstrap Platform
+      - name: Decrypt Secrets
+        env:
+          SOPS_AGE_KEY: ${{ secrets[steps.env.outputs.age_secret] }}
         run: |
-          ./scripts/bootstrap/pipeline/02-master-bootstrap-v2.sh --mode preview
+          # Decrypt GitHub App credentials and other secrets
+          ENV="${{ steps.env.outputs.name }}"
+          if [[ "$ENV" == "pr" ]]; then
+            SECRETS_DIR="bootstrap/argocd/overlays/preview/secrets"
+          else
+            SECRETS_DIR="bootstrap/argocd/overlays/main/${ENV}/secrets"
+          fi
+          
+          # Decrypt and use secrets...
 ```
 
 **Key points**:
-- Only S3 credentials needed in CI (5 secrets)
+- Only 1 org secret per environment: `SOPS_AGE_KEY_{ENV}`
+- Dynamic Age key selection based on branch
+- Environment-specific `.sops.yaml` in overlay directories
 - No individual secret passing required
-- `.env` generated on-demand from Git secrets
 - Fail-fast if Age key missing/invalid
 
 ---
@@ -401,10 +411,10 @@ git push
 
 | Item | Location | Committed to Git |
 |------|----------|------------------|
-| Age public key | `.sops.yaml` | ✓ Yes |
+| Age public key | `bootstrap/argocd/overlays/{preview\|main/$ENV}/.sops.yaml` | ✓ Yes |
 | Age private key | S3 `{bucket}/age-keys/ACTIVE-age-key-encrypted.txt` | ✗ No |
 | Recovery key | S3 `{bucket}/age-keys/ACTIVE-recovery-key.txt` | ✗ No |
-| Encrypted secrets | `bootstrap/argocd/overlays/main/*/secrets/*.secret.yaml` | ✓ Yes |
+| Encrypted secrets | `bootstrap/argocd/overlays/{preview\|main/$ENV}/secrets/*.secret.yaml` | ✓ Yes |
 | Environment file (manual) | `.env.local` (manual setup) | ✗ No |
 | Environment file (automated) | `.env` (generated on-demand) | ✗ No |
 | Cluster secret | `kubectl get secret sops-age -n argocd` | ✗ No |
@@ -427,12 +437,12 @@ git push
 
 | Script | Purpose | When to Run |
 |--------|---------|-------------|
-| `08b-generate-age-keys.sh` | Generate/retrieve Age keypair | Manual setup |
-| `08b-backup-age-to-s3.sh` | Backup Age key to S3 | After key generation |
-| `generate-platform-sops.sh` | Generate encrypted secrets | After .env.local created |
+| `setup-env-secrets.sh ENV` | E2E: Generate Age key + Backup + Encrypt secrets | Initial setup per environment |
+| `08b-generate-age-keys.sh` | Generate/retrieve Age keypair | Called by setup script |
+| `08b-backup-age-to-s3.sh` | Backup Age key to S3 | Called by setup script |
+| `generate-platform-sops.sh` | Generate encrypted secrets | After .env.local updated |
 | `create-dot-env.sh` | Decrypt secrets → .env | CI/local when .env missing |
-| `08-setup-ksops.sh` | Inject Age key to cluster | During bootstrap |
-| `08c-inject-age-key.sh` | Create sops-age secret | Called by 08-setup-ksops.sh |
+| `08c-inject-age-key.sh` | Create sops-age secret | During bootstrap |
 
 ---
 
@@ -446,7 +456,13 @@ CI → Pass all secrets individually → Bootstrap generates secrets → Inject 
 
 ### New Workflow (Current)
 ```
-Manual → Generate secrets → Commit to Git → Backup Age key to S3
-CI → Pass S3 creds only → create-dot-env.sh → Bootstrap uses .env → Inject to cluster
+Manual → setup-env-secrets.sh → Encrypted secrets in Git → Backup Age key to S3
+CI → Uses SOPS_AGE_KEY_{ENV} → Decrypt secrets → Bootstrap uses .env → Inject to cluster
 ```
-**Benefits**: 5 secrets in CI, fail-fast validation, Git as source of truth
+**Benefits**: 
+- 1 org secret per environment in CI
+- Environment-specific Age keys (isolated encryption)
+- Environment-specific `.sops.yaml` in overlay directories
+- Fail-fast validation
+- Git as source of truth
+- E2E automation via single script

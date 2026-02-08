@@ -2,66 +2,49 @@
 
 ## CI/CD (GitHub Actions)
 
-**Required GitHub Secrets per Environment:**
+**Required GitHub Organization Secrets:**
 
-| Environment | Secret Name | Purpose |
-|-------------|-------------|---------|
-| `pr` | `AGE_PRIVATE_KEY` | Decrypt SOPS secrets from Git |
-| `dev` | `AGE_PRIVATE_KEY` | Decrypt SOPS secrets from Git |
-| `staging` | `AGE_PRIVATE_KEY` | Decrypt SOPS secrets from Git |
-| `production` | `AGE_PRIVATE_KEY` | Decrypt SOPS secrets from Git |
+| Secret Name | Purpose | Visibility |
+|-------------|---------|------------|
+| `SOPS_AGE_KEY_PR` | Decrypt PR environment secrets | All repos |
+| `SOPS_AGE_KEY_DEV` | Decrypt DEV environment secrets | All repos |
+| `SOPS_AGE_KEY_STAGING` | Decrypt STAGING environment secrets | All repos |
+| `SOPS_AGE_KEY_PROD` | Decrypt PROD environment secrets | All repos |
 
-**That's it.** All other secrets (Hetzner API tokens, GitHub App credentials, etc.) are encrypted in Git and decrypted automatically using the Age key.
+**That's it.** All other secrets (Hetzner API tokens, GitHub App credentials, etc.) are encrypted in Git and decrypted automatically using environment-specific Age keys.
 
 ---
 
 ## Local Development
 
-### Option 1: Use Age Key (Recommended for CI parity)
+### E2E Setup (Generate + Backup + Encrypt)
 
 ```bash
-# Set Age key in environment
-export AGE_PRIVATE_KEY="AGE-SECRET-KEY-1..."
+cd zerotouch-platform
 
-# Bootstrap will auto-generate .env from encrypted secrets
-ENV=dev ./scripts/bootstrap/pipeline/02-master-bootstrap-v2.sh --mode preview
+# One command per environment
+./scripts/bootstrap/infra/secrets/ksops/setup-env-secrets.sh pr
+./scripts/bootstrap/infra/secrets/ksops/setup-env-secrets.sh dev
+./scripts/bootstrap/infra/secrets/ksops/setup-env-secrets.sh staging
+./scripts/bootstrap/infra/secrets/ksops/setup-env-secrets.sh prod
+
+# Script will:
+# 1. Generate Age keypair (or retrieve from S3)
+# 2. Create environment-specific .sops.yaml
+# 3. Backup Age key to S3
+# 4. Generate all encrypted secrets
+# 5. Output: Add SOPS_AGE_KEY_{ENV} to GitHub org secrets
 ```
 
-### Option 2: Use S3 Retrieval (No Age key needed)
+### Refresh Secrets (After updating .env.local)
 
 ```bash
-# Set S3 credentials for your environment
-export DEV_HETZNER_S3_ACCESS_KEY="..."
-export DEV_HETZNER_S3_SECRET_KEY="..."
-export DEV_HETZNER_S3_ENDPOINT="https://fsn1.your-objectstorage.com"
-export DEV_HETZNER_S3_REGION="fsn1"
-export DEV_HETZNER_S3_BUCKET_NAME="dev-secrets"
+# Re-encrypt secrets with existing Age key
+ENV=dev ./scripts/bootstrap/infra/secrets/ksops/generate-sops/generate-platform-sops.sh
 
-# Bootstrap will retrieve Age key from S3, then decrypt secrets
-ENV=dev ./scripts/bootstrap/pipeline/02-master-bootstrap-v2.sh --mode preview
-```
-
-### Option 3: Manual .env.local (For secret generation)
-
-```bash
-# Create .env.local with all secrets
-cat > .env.local << EOF
-DEV_HETZNER_API_TOKEN=xxx
-DEV_HETZNER_DNS_TOKEN=xxx
-GIT_APP_ID=xxx
-GIT_APP_INSTALLATION_ID=xxx
-GIT_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----
-...
------END RSA PRIVATE KEY-----"
-EOF
-
-# Generate encrypted secrets (one-time setup)
-set -a && source .env.local && set +a
-./scripts/bootstrap/infra/secrets/ksops/generate-sops/generate-platform-sops.sh
-
-# Commit encrypted secrets to Git
+# Commit changes
 git add bootstrap/argocd/overlays/
-git commit -m "chore: add encrypted secrets"
+git commit -m "chore: update dev secrets"
 git push
 ```
 
@@ -71,29 +54,30 @@ git push
 
 **CI/CD Flow:**
 ```
-AGE_PRIVATE_KEY (secret) → create-dot-env.sh → .env → bootstrap
+SOPS_AGE_KEY_{ENV} (org secret) → decrypt secrets → .env → bootstrap
 ```
 
 **Local Flow (Option 1):**
 ```
-AGE_PRIVATE_KEY (env var) → create-dot-env.sh → .env → bootstrap
+SOPS_AGE_KEY (env var) → decrypt secrets → .env → bootstrap
 ```
 
 **Local Flow (Option 2):**
 ```
-S3 credentials → retrieve Age key → create-dot-env.sh → .env → bootstrap
+S3 credentials → retrieve Age key → decrypt secrets → .env → bootstrap
 ```
 
 **Manual Setup Flow:**
 ```
-.env.local → generate-platform-sops.sh → encrypted *.secret.yaml → Git
+.env.local → setup-env-secrets.sh → encrypted *.secret.yaml → Git
 ```
 
 ---
 
 ## Key Points
 
-- **CI only needs 1 secret per environment**: `AGE_PRIVATE_KEY`
+- **CI uses environment-specific Age keys**: `SOPS_AGE_KEY_PR`, `SOPS_AGE_KEY_DEV`, etc.
+- **Each environment has its own Age keypair**: Isolated encryption per environment
 - **Local dev has 3 options**: Age key, S3 retrieval, or manual .env.local
 - **All secrets encrypted in Git**: Hetzner tokens, GitHub App creds, etc.
 - **No secrets in CI workflows**: Everything decrypted from Git at runtime

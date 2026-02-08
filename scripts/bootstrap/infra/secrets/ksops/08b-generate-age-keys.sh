@@ -165,12 +165,25 @@ echo -e "${GREEN}✓ AGE_PUBLIC_KEY exported${NC}"
 echo -e "${GREEN}✓ AGE_PRIVATE_KEY exported${NC}"
 echo ""
 
-# Update .sops.yaml with current public key (only for newly generated keys)
+# Update environment-specific .sops.yaml with current public key (only for newly generated keys)
 if [ "${KEY_SOURCE:-}" = "generated" ]; then
-    SOPS_YAML_PATH="$SCRIPT_DIR/../../../../../.sops.yaml"
+    # Determine overlay path based on environment
+    if [[ "$ENV" == "pr" ]]; then
+        OVERLAY_DIR="$SCRIPT_DIR/../../../../../bootstrap/argocd/overlays/preview"
+    else
+        OVERLAY_DIR="$SCRIPT_DIR/../../../../../bootstrap/argocd/overlays/main/$ENV"
+    fi
+    
+    SOPS_YAML_PATH="$OVERLAY_DIR/.sops.yaml"
+    
+    echo -e "${BLUE}Updating environment-specific .sops.yaml...${NC}"
+    echo -e "${BLUE}Path: $SOPS_YAML_PATH${NC}"
+    
+    # Create overlay directory if it doesn't exist
+    mkdir -p "$OVERLAY_DIR"
+    
+    # Create or update .sops.yaml
     if [ -f "$SOPS_YAML_PATH" ]; then
-        echo -e "${BLUE}Updating .sops.yaml with new public key...${NC}"
-        
         # Check if public key already matches
         if grep -q "$AGE_PUBLIC_KEY" "$SOPS_YAML_PATH"; then
             echo -e "${GREEN}✓ .sops.yaml already contains current public key${NC}"
@@ -179,11 +192,21 @@ if [ "${KEY_SOURCE:-}" = "generated" ]; then
             sed -i.bak "s/age: age1[a-z0-9]*/age: $AGE_PUBLIC_KEY/" "$SOPS_YAML_PATH"
             rm -f "$SOPS_YAML_PATH.bak"
             echo -e "${GREEN}✓ .sops.yaml updated with public key${NC}"
-            echo -e "${YELLOW}⚠ IMPORTANT: Re-encrypt all secrets with new key:${NC}"
-            echo -e "  ${GREEN}./scripts/bootstrap/infra/secrets/ksops/generate-sops/generate-platform-sops.sh${NC}"
         fi
-        echo ""
+    else
+        # Create new .sops.yaml
+        cat > "$SOPS_YAML_PATH" <<EOF
+creation_rules:
+  - path_regex: .*\.yaml$
+    age: $AGE_PUBLIC_KEY
+    encrypted_regex: '^(data|stringData)'
+EOF
+        echo -e "${GREEN}✓ .sops.yaml created with public key${NC}"
     fi
+    
+    echo -e "${YELLOW}⚠ IMPORTANT: Re-encrypt all secrets for $ENV_UPPER environment:${NC}"
+    echo -e "  ${GREEN}ENV=$ENV ./scripts/bootstrap/infra/secrets/ksops/generate-sops/generate-platform-sops.sh${NC}"
+    echo ""
 fi
 
 echo -e "${YELLOW}Next steps:${NC}"

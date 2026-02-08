@@ -55,7 +55,7 @@ jobs:
         uses: ./.github/actions/decrypt-github-app-creds
         with:
           environment: ${{ inputs.environment }}
-          age-key: ${{ secrets.AGE_PRIVATE_KEY }}
+          age-key: ${{ secrets[format('SOPS_AGE_KEY_{0}', inputs.environment == 'production' && 'PROD' || upper(inputs.environment))] }}
 
       - name: Generate GitHub App token
         id: app-token

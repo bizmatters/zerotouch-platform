@@ -71,7 +71,7 @@ jobs:
           KIND_NODE_IMAGE: ghcr.io/${{ github.repository_owner }}/zerotouch-preview-node:${{ steps.version.outputs.hash }}
           
           # Age key for SOPS decryption (used by create-dot-env.sh to generate .env)
-          AGE_PRIVATE_KEY: ${{ secrets.AGE_PRIVATE_KEY }}
+          AGE_PRIVATE_KEY: ${{ secrets.SOPS_AGE_KEY_PR }}
           
           # Environment
           ENV: pr
