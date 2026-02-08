@@ -116,6 +116,15 @@ jobs:
           git config --global user.email "bootstrap@zerotouch.dev"
           git config --global user.name "ZeroTouch Bootstrap"
 
+      - name: Decrypt secrets to .env
+        env:
+          ENV: ${{ inputs.environment }}
+          AGE_PRIVATE_KEY: ${{ secrets[steps.age-key-name.outputs.name] }}
+        run: |
+          # Decrypt all secrets from Git to .env file
+          # Provides credentials for rescue mode and bootstrap scripts
+          ./scripts/bootstrap/infra/secrets/ksops/generate-sops/create-dot-env.sh
+
       - name: Enable Rescue Mode
         if: ${{ !inputs.skip_rescue_mode }}
         run: ./scripts/bootstrap/00-enable-rescue-mode.sh ${{ inputs.environment }} -y
