@@ -1,6 +1,6 @@
 #!/bin/bash
 # Local Platform Integration Test
-# Mirrors the GitHub workflow: .github/workflows/platform-integration-test.yaml
+# Mirrors the GitHub workflow: .github/workflows/platform-sanity-test.yaml
 # Usage: ./scripts/local-ci/platform-integration-test.sh [--cleanup-only]
 
 set -e

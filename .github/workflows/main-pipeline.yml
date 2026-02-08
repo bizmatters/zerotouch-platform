@@ -14,7 +14,7 @@ permissions:
 jobs:
   # STAGE 1: Platform Integration Test
   platform-test:
-    uses: ./.github/workflows/platform-integration-test.yaml
+    uses: ./.github/workflows/platform-sanity-test.yaml
     secrets: inherit
 
   # STAGE 2: Auto-deploy to Dev (only on main branch)
