@@ -40,7 +40,14 @@ runs:
         SOPS_AGE_KEY: ${{ inputs.age-key }}
       run: |
         # Decrypt GitHub App credentials from SOPS secrets
-        SECRETS_DIR="bootstrap/argocd/overlays/main/${ENV}/secrets"
+        # Determine overlay path based on environment
+        if [[ "$ENV" == "pr" ]]; then
+          SECRETS_DIR="bootstrap/argocd/overlays/preview/secrets"
+        else
+          SECRETS_DIR="bootstrap/argocd/overlays/main/${ENV}/secrets"
+        fi
+        
+        echo "Using secrets directory: $SECRETS_DIR"
         
         GIT_APP_ID=$(sops -d "${SECRETS_DIR}/git-app-id.secret.yaml" | grep "value:" | awk '{print $2}' | tr -d '"')
         GIT_APP_INSTALLATION_ID=$(sops -d "${SECRETS_DIR}/git-app-installation-id.secret.yaml" | grep "value:" | awk '{print $2}' | tr -d '"')

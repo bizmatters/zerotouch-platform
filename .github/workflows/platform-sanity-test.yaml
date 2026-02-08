@@ -70,15 +70,11 @@ jobs:
           # Kind configuration
           KIND_NODE_IMAGE: ghcr.io/${{ github.repository_owner }}/zerotouch-preview-node:${{ steps.version.outputs.hash }}
           
-          # Age key for KSOPS (used by bootstrap to generate .env)
+          # Age key for SOPS decryption (used by create-dot-env.sh to generate .env)
           AGE_PRIVATE_KEY: ${{ secrets.AGE_PRIVATE_KEY }}
           
           # Environment
           ENV: pr
-          
-          # GitHub App variables (must be explicitly passed)
-          GIT_APP_ID: ${{ vars.GIT_APP_ID }}
-          GIT_APP_INSTALLATION_ID: ${{ vars.GIT_APP_INSTALLATION_ID }}
         run: |
           chmod +x scripts/bootstrap/pipeline/02-master-bootstrap-v2.sh
           ./scripts/bootstrap/pipeline/02-master-bootstrap-v2.sh --mode preview
