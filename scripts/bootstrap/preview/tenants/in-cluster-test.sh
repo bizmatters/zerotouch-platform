@@ -704,11 +704,11 @@ bootstrap_platform() {
     # Step 6: Bootstrap platform
     log_info "Bootstrap platform"
     cd "${PLATFORM_ROOT}"
-    if [[ -f "scripts/bootstrap/01-master-bootstrap.sh" ]]; then
-        chmod +x scripts/bootstrap/01-master-bootstrap.sh
-        ./scripts/bootstrap/01-master-bootstrap.sh --mode preview
+    if [[ -f "scripts/bootstrap/pipeline/02-master-bootstrap-v2.sh" ]]; then
+        chmod +x scripts/bootstrap/pipeline/02-master-bootstrap-v2.sh
+        ./scripts/bootstrap/pipeline/02-master-bootstrap-v2.sh --mode preview
     else
-        log_error "Master bootstrap script not found: scripts/bootstrap/01-master-bootstrap.sh"
+        log_error "Master bootstrap script not found: scripts/bootstrap/pipeline/02-master-bootstrap-v2.sh"
         exit 1
     fi
 
