@@ -20,7 +20,9 @@ jobs:
   # STAGE 2: Auto-deploy to Dev (only on main branch)
   deploy-dev:
     needs: platform-test
-    if: github.ref == 'refs/heads/main'
+    if: |
+      github.ref == 'refs/heads/main' && 
+      vars.DEV_ENABLED != 'false'
     uses: ./.github/workflows/create-cluster.yaml
     with:
       environment: 'dev'
