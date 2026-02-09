@@ -55,8 +55,14 @@ for arg in "$@"; do
 done
 
 # Fetch tenant configuration from private repository
-source "$HELPERS_DIR/fetch-tenant-config.sh" "$ENV"
-VALUES_FILE="$TENANT_CONFIG_FILE"
+# Skip if already fetched by workflow (CI mode with cache)
+if [[ -n "${TENANT_CONFIG_FILE:-}" ]] && [[ -f "$TENANT_CONFIG_FILE" ]]; then
+    echo "✓ Using pre-fetched tenant config: $TENANT_CONFIG_FILE" >&2
+    VALUES_FILE="$TENANT_CONFIG_FILE"
+else
+    source "$HELPERS_DIR/fetch-tenant-config.sh" "$ENV"
+    VALUES_FILE="$TENANT_CONFIG_FILE"
+fi
 
 # Source shared Hetzner API helper
 source "$HELPERS_DIR/hetzner-api.sh"

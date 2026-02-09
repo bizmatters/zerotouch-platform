@@ -85,6 +85,11 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           path: .tenants-cache
 
+      - name: Set tenant config path
+        run: |
+          echo "TENANT_CONFIG_FILE=${{ github.workspace }}/.tenants-cache/environments/${{ inputs.environment }}/talos-values.yaml" >> $GITHUB_ENV
+          echo "TENANT_CACHE_DIR=${{ github.workspace }}/.tenants-cache" >> $GITHUB_ENV
+
       - name: Validate environment overlay
         run: |
           OVERLAY_DIR="bootstrap/argocd/overlays/main/${{ inputs.environment }}"

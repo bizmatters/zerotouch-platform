@@ -39,9 +39,18 @@ GITHUB_USERNAME="${BOT_GITHUB_USERNAME:-${GITHUB_REPOSITORY_OWNER:-${ORG_NAME:-a
 if [[ -n "$GIT_APP_ID" && -n "$GIT_APP_INSTALLATION_ID" && -n "$GIT_APP_PRIVATE_KEY" && -n "$TENANTS_REPO_NAME" ]]; then
     echo "✓ Generating GitHub App token..." >&2
     
+    # Debug: Check if private key is base64-encoded
+    echo "DEBUG: GIT_APP_PRIVATE_KEY length: ${#GIT_APP_PRIVATE_KEY}" >&2
+    echo "DEBUG: First 50 chars: ${GIT_APP_PRIVATE_KEY:0:50}" >&2
+    
     # Decode private key if it's base64-encoded (multi-line values are encoded in .env)
     if echo "$GIT_APP_PRIVATE_KEY" | base64 -d &>/dev/null && ! echo "$GIT_APP_PRIVATE_KEY" | grep -q "BEGIN"; then
+        echo "DEBUG: Detected base64-encoded key, decoding..." >&2
         GIT_APP_PRIVATE_KEY=$(echo "$GIT_APP_PRIVATE_KEY" | base64 -d)
+        echo "DEBUG: After decode - length: ${#GIT_APP_PRIVATE_KEY}" >&2
+        echo "DEBUG: After decode - first 50 chars: ${GIT_APP_PRIVATE_KEY:0:50}" >&2
+    else
+        echo "DEBUG: Key appears to be in PEM format already" >&2
     fi
     
     # Generate JWT for GitHub App
