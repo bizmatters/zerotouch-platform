@@ -33,45 +33,12 @@ generate_env_vars() {
     if [[ -n "$ALL_DEPS" ]]; then
         # PostgreSQL environment variables (check both internal and external deps)
         if echo "$ALL_DEPS" | grep -qE "(postgres|neon-db)"; then
-            # Check if secret has DATABASE_URL or individual keys
-            DATABASE_URL_CHECK=$(kubectl get secret "$SERVICE_NAME-db-conn" -n "$NAMESPACE" -o jsonpath='{.data.DATABASE_URL}' 2>/dev/null || echo "")
-            if [[ -n "$DATABASE_URL_CHECK" ]]; then
-                # Use DATABASE_URL (for services like ide-orchestrator with external Neon DB)
-                env_vars+="        - name: DATABASE_URL
+            env_vars+="        - name: DATABASE_URL
           valueFrom:
             secretKeyRef:
-              name: \"$SERVICE_NAME-db-conn\"
+              name: \"database-url\"
               key: DATABASE_URL
 "
-            else
-                # Use individual keys (for services like identity-service, ide-orchestrator)
-                env_vars+="        - name: POSTGRES_USER
-          valueFrom:
-            secretKeyRef:
-              name: \"$SERVICE_NAME-db-conn\"
-              key: POSTGRES_USER
-        - name: POSTGRES_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: \"$SERVICE_NAME-db-conn\"
-              key: POSTGRES_PASSWORD
-        - name: POSTGRES_DB
-          valueFrom:
-            secretKeyRef:
-              name: \"$SERVICE_NAME-db-conn\"
-              key: POSTGRES_DB
-        - name: POSTGRES_HOST
-          valueFrom:
-            secretKeyRef:
-              name: \"$SERVICE_NAME-db-conn\"
-              key: POSTGRES_HOST
-        - name: POSTGRES_PORT
-          valueFrom:
-            secretKeyRef:
-              name: \"$SERVICE_NAME-db-conn\"
-              key: POSTGRES_PORT
-"
-            fi
         fi
         
         # Redis/Dragonfly environment variables

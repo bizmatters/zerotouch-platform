@@ -353,7 +353,9 @@ while IFS= read -r secret_file; do
     
     if [ $exit_code -ne 0 ]; then
         echo -e "${RED}✗ Failed to decrypt: $(basename "$secret_file")${NC}"
-        continue
+        echo -e "${RED}Exit code: $exit_code${NC}"
+        echo -e "${RED}Output: $decrypted${NC}"
+        exit 1
     fi
     
     # Extract secret name

@@ -25,7 +25,7 @@ NC='\033[0m'
 get_secret_mapping() {
     local var_name="$1"
     case "$var_name" in
-        HETZNER_API_TOKEN|DEV_HETZNER_API_TOKEN|STAGING_HETZNER_API_TOKEN|PROD_HETZNER_API_TOKEN)
+        HCLOUD_TOKEN|DEV_HCLOUD_TOKEN|STAGING_HCLOUD_TOKEN|PROD_HCLOUD_TOKEN)
             echo "hcloud:token:kube-system"
             ;;
         HETZNER_DNS_TOKEN|DEV_HETZNER_DNS_TOKEN|STAGING_HETZNER_DNS_TOKEN|PROD_HETZNER_DNS_TOKEN)

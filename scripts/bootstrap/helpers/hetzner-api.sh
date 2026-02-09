@@ -16,7 +16,7 @@ if [[ -z "$HETZNER_API_TOKEN" ]]; then
         ENV=$(jq -r '.environment // empty' "$BOOTSTRAP_CONFIG")
         if [[ -n "$ENV" ]]; then
             ENV_UPPER=$(echo "$ENV" | tr '[:lower:]' '[:upper:]')
-            TOKEN_VAR="${ENV_UPPER}_HETZNER_API_TOKEN"
+            TOKEN_VAR="${ENV_UPPER}_HCLOUD_TOKEN"
             HETZNER_API_TOKEN="${!TOKEN_VAR}"
         fi
     fi

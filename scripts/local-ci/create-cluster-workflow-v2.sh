@@ -71,8 +71,10 @@ export CI=true
 if [ -z "$GIT_APP_ID" ]; then
     log "⚠️  WARNING: GIT_APP_ID not set - rescue mode may fail"
 fi
-if [ -z "$HETZNER_API_TOKEN" ]; then
-    log "⚠️  WARNING: HETZNER_API_TOKEN not set - rescue mode may fail"
+ENV_UPPER=$(echo "${ENVIRONMENT:-dev}" | tr '[:lower:]' '[:upper:]')
+HCLOUD_TOKEN_VAR="${ENV_UPPER}_HCLOUD_TOKEN"
+if [ -z "${!HCLOUD_TOKEN_VAR}" ]; then
+    log "⚠️  WARNING: ${HCLOUD_TOKEN_VAR} not set - rescue mode may fail"
 fi
 
 log "╔══════════════════════════════════════════════════════════════╗"

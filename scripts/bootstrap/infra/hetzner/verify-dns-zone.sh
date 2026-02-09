@@ -21,7 +21,7 @@ ZONE_NAME="${1:-nutgraf.in}"
 
 if [[ -z "$HETZNER_API_TOKEN" ]]; then
     echo "Error: HETZNER_API_TOKEN not set"
-    echo "Ensure .env is configured with ${ENV_UPPER}_HETZNER_API_TOKEN"
+    echo "Ensure .env is configured with ${ENV_UPPER}_HCLOUD_TOKEN"
     exit 1
 fi
 

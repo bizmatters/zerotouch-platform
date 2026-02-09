@@ -184,7 +184,7 @@ fi
 export SOPS_AGE_KEY="${SOPS_AGE_KEY:-${AGE_PRIVATE_KEY}}"
 
 # Check if .env has all required secrets, if not regenerate it
-if ! grep -q "PR_HETZNER_API_TOKEN" "$REPO_ROOT/.env" 2>/dev/null; then
+if ! grep -q "PR_HCLOUD_TOKEN" "$REPO_ROOT/.env" 2>/dev/null; then
     log_info "Generating full .env from encrypted secrets..."
     
     export ENV=pr

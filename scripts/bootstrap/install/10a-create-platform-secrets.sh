@@ -44,7 +44,7 @@ fi
 
 # Create hcloud secret - use environment-specific token
 ENV_UPPER=$(echo "${ENV:-dev}" | tr '[:lower:]' '[:upper:]')
-TOKEN_VAR="${ENV_UPPER}_HETZNER_API_TOKEN"
+TOKEN_VAR="${ENV_UPPER}_HCLOUD_TOKEN"
 HETZNER_API_TOKEN="${!TOKEN_VAR:-${HETZNER_API_TOKEN:-}}"
 
 if [[ -n "$HETZNER_API_TOKEN" ]]; then

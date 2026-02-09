@@ -5,12 +5,12 @@ set -e
 # Enables rescue mode for all configured servers and updates talos-values.yaml
 #
 # Prerequisites:
-# - HETZNER_API_TOKEN environment variable must be set
+# - ${ENV}_HCLOUD_TOKEN environment variable must be set (e.g., DEV_HCLOUD_TOKEN)
 # - jq must be installed
 # - yq must be installed (optional - will use sed if not available)
 #
 # Usage:
-#   export HETZNER_API_TOKEN="your-api-token"
+#   export DEV_HCLOUD_TOKEN="your-api-token"
 #   ./scripts/bootstrap/00-enable-rescue-mode.sh [ENV] [-y|--yes]
 #
 # Arguments:
@@ -108,7 +108,7 @@ log_info "═══════════════════════�
 
 # Use environment-specific token
 ENV_UPPER=$(echo "$ENV" | tr '[:lower:]' '[:upper:]')
-TOKEN_VAR="${ENV_UPPER}_HETZNER_API_TOKEN"
+TOKEN_VAR="${ENV_UPPER}_HCLOUD_TOKEN"
 HETZNER_API_TOKEN="${!TOKEN_VAR}"
 
 if [[ -z "$HETZNER_API_TOKEN" ]]; then
