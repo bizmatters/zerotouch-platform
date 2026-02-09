@@ -33,18 +33,20 @@ set +a
 CORE_SECRET_FILES=()
 CORE_SECRET_COUNT=0
 
+# Template paths
+TEMPLATE_DIR="$REPO_ROOT/scripts/bootstrap/infra/secrets/ksops/templates"
+UNIVERSAL_SECRET_TEMPLATE="$TEMPLATE_DIR/universal-secret.yaml"
+
 # Create ORG_NAME and TENANTS_REPO_NAME secrets
 if [[ -n "$ORG_NAME" ]]; then
-    cat > "$CORE_SECRETS_DIR/org-name.secret.yaml" << EOF
-apiVersion: v1
-kind: Secret
-metadata:
-  name: org-name
-  namespace: kube-system
-type: Opaque
-stringData:
-  value: "${ORG_NAME}"
-EOF
+    sed -e "s/SECRET_NAME_PLACEHOLDER/org-name/g" \
+        -e "s/NAMESPACE_PLACEHOLDER/kube-system/g" \
+        -e "s/ANNOTATIONS_PLACEHOLDER/argocd.argoproj.io\/sync-wave: \"0\"/g" \
+        -e "s/SECRET_TYPE_PLACEHOLDER/Opaque/g" \
+        -e "s/SECRET_KEY_PLACEHOLDER/value/g" \
+        -e "s/SECRET_VALUE_PLACEHOLDER/${ORG_NAME}/g" \
+        "$UNIVERSAL_SECRET_TEMPLATE" > "$CORE_SECRETS_DIR/org-name.secret.yaml"
+    
     if sops --config "$SOPS_CONFIG" -e -i "$CORE_SECRETS_DIR/org-name.secret.yaml" 2>/dev/null; then
         echo -e "${GREEN}  ✓ org-name.secret.yaml${NC}"
         CORE_SECRET_FILES+=("org-name.secret.yaml")
@@ -53,16 +55,14 @@ EOF
 fi
 
 if [[ -n "$TENANTS_REPO_NAME" ]]; then
-    cat > "$CORE_SECRETS_DIR/tenants-repo-name.secret.yaml" << EOF
-apiVersion: v1
-kind: Secret
-metadata:
-  name: tenants-repo-name
-  namespace: kube-system
-type: Opaque
-stringData:
-  value: "${TENANTS_REPO_NAME}"
-EOF
+    sed -e "s/SECRET_NAME_PLACEHOLDER/tenants-repo-name/g" \
+        -e "s/NAMESPACE_PLACEHOLDER/kube-system/g" \
+        -e "s/ANNOTATIONS_PLACEHOLDER/argocd.argoproj.io\/sync-wave: \"0\"/g" \
+        -e "s/SECRET_TYPE_PLACEHOLDER/Opaque/g" \
+        -e "s/SECRET_KEY_PLACEHOLDER/value/g" \
+        -e "s/SECRET_VALUE_PLACEHOLDER/${TENANTS_REPO_NAME}/g" \
+        "$UNIVERSAL_SECRET_TEMPLATE" > "$CORE_SECRETS_DIR/tenants-repo-name.secret.yaml"
+    
     if sops --config "$SOPS_CONFIG" -e -i "$CORE_SECRETS_DIR/tenants-repo-name.secret.yaml" 2>/dev/null; then
         echo -e "${GREEN}  ✓ tenants-repo-name.secret.yaml${NC}"
         CORE_SECRET_FILES+=("tenants-repo-name.secret.yaml")
@@ -91,16 +91,13 @@ while IFS='=' read -r name value || [ -n "$name" ]; do
     
     secret_file="${secret_name}.secret.yaml"
     
-    cat > "$CORE_SECRETS_DIR/$secret_file" << EOF
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ${secret_name}
-  namespace: ${secret_namespace}
-type: Opaque
-stringData:
-  ${secret_key}: "${value}"
-EOF
+    sed -e "s/SECRET_NAME_PLACEHOLDER/${secret_name}/g" \
+        -e "s/NAMESPACE_PLACEHOLDER/${secret_namespace}/g" \
+        -e "s/ANNOTATIONS_PLACEHOLDER/argocd.argoproj.io\/sync-wave: \"0\"/g" \
+        -e "s/SECRET_TYPE_PLACEHOLDER/Opaque/g" \
+        -e "s/SECRET_KEY_PLACEHOLDER/${secret_key}/g" \
+        -e "s|SECRET_VALUE_PLACEHOLDER|${value}|g" \
+        "$UNIVERSAL_SECRET_TEMPLATE" > "$CORE_SECRETS_DIR/$secret_file"
     
     if sops --config "$SOPS_CONFIG" -e -i "$CORE_SECRETS_DIR/$secret_file" 2>/dev/null; then
         echo -e "${GREEN}  ✓ ${secret_file}${NC}"
@@ -117,19 +114,22 @@ if [[ -n "$GIT_APP_ID" && -n "$GIT_APP_INSTALLATION_ID" && -n "$GIT_APP_PRIVATE_
     # This secret is consumed by platform/foundation/ghcr-token-refresher/cronjob.yaml
     # The CronJob uses these credentials to generate fresh GitHub App tokens every 30 minutes
     # and updates ghcr-pull-secret in all tenant namespaces for image pulls
+    
     cat > "$CORE_SECRETS_DIR/github-app-credentials.secret.yaml" << EOF
 apiVersion: v1
 kind: Secret
 metadata:
   name: github-app-credentials
   namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 type: Opaque
 stringData:
   git-app-id: "${GIT_APP_ID}"
   git-app-installation-id: "${GIT_APP_INSTALLATION_ID}"
   git-app-private-key: |
-$(echo "$GIT_APP_PRIVATE_KEY" | sed 's/^/    /')
 EOF
+    echo "$GIT_APP_PRIVATE_KEY" | sed 's/^/    /' >> "$CORE_SECRETS_DIR/github-app-credentials.secret.yaml"
     
     if sops --config "$SOPS_CONFIG" -e -i "$CORE_SECRETS_DIR/github-app-credentials.secret.yaml" 2>/dev/null; then
         echo -e "${GREEN}  ✓ github-app-credentials.secret.yaml${NC}"

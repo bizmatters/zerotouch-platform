@@ -7,6 +7,10 @@ set -e
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 ENV_FILE="$REPO_ROOT/.env.local"
 
+# Template paths
+TEMPLATE_DIR="$REPO_ROOT/scripts/bootstrap/infra/secrets/ksops/templates"
+UNIVERSAL_SECRET_TEMPLATE="$TEMPLATE_DIR/universal-secret.yaml"
+
 # Determine overlay directory based on ENV
 ENV="${ENV:-dev}"
 if [[ "$ENV" == "pr" ]]; then
@@ -81,31 +85,20 @@ mkdir -p "$SECRETS_DIR"
                     secret_file="${secret_name}.secret.yaml"
                     
                     # Determine sync wave based on namespace
-                    sync_wave=""
                     if [ "$secret_namespace" = "cert-manager" ]; then
-                        sync_wave="4"
+                        annotations="argocd.argoproj.io\/sync-wave: \\\"4\\\""
+                    else
+                        annotations="argocd.argoproj.io\/sync-wave: \\\"0\\\""
                     fi
                     
-                    cat > "$SECRETS_DIR/$secret_file" << EOF
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ${secret_name}
-  namespace: ${secret_namespace}
-EOF
-                    
-                    if [ -n "$sync_wave" ]; then
-                        cat >> "$SECRETS_DIR/$secret_file" << EOF
-  annotations:
-    argocd.argoproj.io/sync-wave: "${sync_wave}"
-EOF
-                    fi
-                    
-                    cat >> "$SECRETS_DIR/$secret_file" << EOF
-type: Opaque
-stringData:
-  ${secret_key}: ${value}
-EOF
+                    # Generate secret from universal template
+                    sed -e "s/SECRET_NAME_PLACEHOLDER/${secret_name}/g" \
+                        -e "s/NAMESPACE_PLACEHOLDER/${secret_namespace}/g" \
+                        -e "s/ANNOTATIONS_PLACEHOLDER/${annotations}/g" \
+                        -e "s/SECRET_TYPE_PLACEHOLDER/Opaque/g" \
+                        -e "s/SECRET_KEY_PLACEHOLDER/${secret_key}/g" \
+                        -e "s|SECRET_VALUE_PLACEHOLDER|${value}|g" \
+                        "$UNIVERSAL_SECRET_TEMPLATE" > "$SECRETS_DIR/$secret_file"
                     
                     if sops --config "$SOPS_CONFIG" -e -i "$SECRETS_DIR/$secret_file" 2>/dev/null; then
                         echo -e "${GREEN}  ✓ ${secret_file}${NC}"
@@ -122,16 +115,13 @@ EOF
                 secret_namespace="kube-system"
                 secret_file="${secret_name}.secret.yaml"
                 
-                cat > "$SECRETS_DIR/$secret_file" << EOF
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ${secret_name}
-  namespace: ${secret_namespace}
-type: Opaque
-stringData:
-  ${secret_key}: ${value}
-EOF
+                sed -e "s/SECRET_NAME_PLACEHOLDER/${secret_name}/g" \
+                    -e "s/NAMESPACE_PLACEHOLDER/${secret_namespace}/g" \
+                    -e "s/ANNOTATIONS_PLACEHOLDER/argocd.argoproj.io\/sync-wave: \"0\"/g" \
+                    -e "s/SECRET_TYPE_PLACEHOLDER/Opaque/g" \
+                    -e "s/SECRET_KEY_PLACEHOLDER/${secret_key}/g" \
+                    -e "s|SECRET_VALUE_PLACEHOLDER|${value}|g" \
+                    "$UNIVERSAL_SECRET_TEMPLATE" > "$SECRETS_DIR/$secret_file"
                 
                 if sops --config "$SOPS_CONFIG" -e -i "$SECRETS_DIR/$secret_file" 2>/dev/null; then
                     echo -e "${GREEN}  ✓ ${secret_file}${NC}"

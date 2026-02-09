@@ -184,15 +184,18 @@ while IFS='=' read -r name value || [ -n "$name" ]; do
         PLATFORM_ROOT="$REPO_ROOT/zerotouch-platform"
     fi
     
-    # Use template for secret file
-    TEMPLATE_FILE="$PLATFORM_ROOT/scripts/bootstrap/infra/secrets/ksops/templates/secret.yaml"
+    # Use universal template
+    TEMPLATE_FILE="$PLATFORM_ROOT/scripts/bootstrap/infra/secrets/ksops/templates/universal-secret.yaml"
     if [ ! -f "$TEMPLATE_FILE" ]; then
         echo -e "${RED}✗ Error: Template not found: $TEMPLATE_FILE${NC}"
         exit 1
     fi
     
-    # Generate secret from template
+    # Generate secret from universal template
     sed -e "s/SECRET_NAME_PLACEHOLDER/${secret_name}/g" \
+        -e "s/NAMESPACE_PLACEHOLDER/default/g" \
+        -e "s/ANNOTATIONS_PLACEHOLDER/argocd.argoproj.io\/sync-wave: \"0\"/g" \
+        -e "s/SECRET_TYPE_PLACEHOLDER/Opaque/g" \
         -e "s/SECRET_KEY_PLACEHOLDER/${secret_key}/g" \
         -e "s|SECRET_VALUE_PLACEHOLDER|${value}|g" \
         "$TEMPLATE_FILE" > "$SECRET_FILE"

@@ -6,6 +6,10 @@ set -e
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 ENV_FILE="$REPO_ROOT/.env.local"
 
+# Template paths
+TEMPLATE_DIR="$REPO_ROOT/scripts/bootstrap/infra/secrets/ksops/templates"
+UNIVERSAL_SECRET_TEMPLATE="$TEMPLATE_DIR/universal-secret.yaml"
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -108,21 +112,20 @@ if [[ -n "$GIT_APP_ID" && -n "$GIT_APP_INSTALLATION_ID" && -n "$GIT_APP_PRIVATE_
         # Create dockerconfigjson auth string
         AUTH_STRING=$(echo -n "x-access-token:${GITHUB_TOKEN}" | base64)
         
+        DOCKER_CONFIG_JSON="{\"auths\":{\"ghcr.io\":{\"auth\":\"${AUTH_STRING}\"}}}"
+        
         cat > "$SECRETS_DIR/ghcr-pull-secret.secret.yaml" << EOF
 apiVersion: v1
 kind: Secret
 metadata:
   name: ghcr-pull-secret
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 type: kubernetes.io/dockerconfigjson
 stringData:
   .dockerconfigjson: |
-    {
-      "auths": {
-        "ghcr.io": {
-          "auth": "${AUTH_STRING}"
-        }
-      }
-    }
+    ${DOCKER_CONFIG_JSON}
 EOF
         
         if sops --config "$SOPS_CONFIG" -e -i "$SECRETS_DIR/ghcr-pull-secret.secret.yaml" 2>/dev/null; then
