@@ -183,26 +183,9 @@ else
     log_info "✓ Repository credentials configured"
 fi
 
-# Create tenant repository credentials
-GITHUB_USERNAME="${BOT_GITHUB_USERNAME:-${GITHUB_REPOSITORY_OWNER:-arun4infra}}"
-TENANTS_REPO_NAME="${TENANTS_REPO_NAME:-${GITHUB_VARS_TENANTS_REPO_NAME}}"
-TENANT_REPO_URL="https://github.com/${GITHUB_USERNAME}/${TENANTS_REPO_NAME}.git"
-if kubectl get secret tenant-repo-credentials -n "$ARGOCD_NAMESPACE" &>/dev/null; then
-    log_warn "Tenant repository credentials already exist, skipping..."
-else
-    log_info "Creating tenant repository credentials secret..."
-    kubectl create secret generic tenant-repo-credentials -n "$ARGOCD_NAMESPACE" \
-        --from-literal=url="$TENANT_REPO_URL" \
-        --from-literal=username="$GITHUB_USERNAME" \
-        --from-literal=password="$GITHUB_TOKEN" \
-        --from-literal=type=git \
-        --from-literal=project=default
-
-    kubectl label secret tenant-repo-credentials -n "$ARGOCD_NAMESPACE" \
-        argocd.argoproj.io/secret-type=repository
-
-    log_info "✓ Tenant repository credentials configured"
-fi
+# Tenant repository credentials are now managed via KSOPS-encrypted secrets
+# (repo-zerotouch-tenants.secret.yaml with GitHub App authentication)
+# No need to create them here
 
 log_info ""
 log_info "✓ ArgoCD installation complete"
