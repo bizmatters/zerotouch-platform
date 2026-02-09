@@ -178,8 +178,14 @@ while IFS='=' read -r name value || [ -n "$name" ]; do
     value="${value#\"}"
     value="${value%\"}"
     
+    # Determine platform root (cloned by sync script)
+    PLATFORM_ROOT="$(dirname "$REPO_ROOT")/zerotouch-platform"
+    if [ ! -d "$PLATFORM_ROOT" ]; then
+        PLATFORM_ROOT="$REPO_ROOT/zerotouch-platform"
+    fi
+    
     # Use template for secret file
-    TEMPLATE_FILE="$REPO_ROOT/scripts/bootstrap/infra/secrets/ksops/templates/secret.yaml"
+    TEMPLATE_FILE="$PLATFORM_ROOT/scripts/bootstrap/infra/secrets/ksops/templates/secret.yaml"
     if [ ! -f "$TEMPLATE_FILE" ]; then
         echo -e "${RED}✗ Error: Template not found: $TEMPLATE_FILE${NC}"
         exit 1
@@ -223,7 +229,13 @@ echo -e "${GREEN}✓ Created $SECRET_COUNT encrypted secret files${NC}"
 # Generate ksops-generator.yaml and kustomization.yaml
 GENERATOR_FILE="$SECRETS_DIR/ksops-generator.yaml"
 KUSTOMIZATION_FILE="$SECRETS_DIR/kustomization.yaml"
-TEMPLATE_DIR="$REPO_ROOT/scripts/bootstrap/infra/secrets/ksops/templates"
+
+# Determine platform root (cloned by sync script)
+PLATFORM_ROOT="$(dirname "$REPO_ROOT")/zerotouch-platform"
+if [ ! -d "$PLATFORM_ROOT" ]; then
+    PLATFORM_ROOT="$REPO_ROOT/zerotouch-platform"
+fi
+TEMPLATE_DIR="$PLATFORM_ROOT/scripts/bootstrap/infra/secrets/ksops/templates"
 
 echo ""
 echo -e "${BLUE}Generating KSOPS configuration files...${NC}"
