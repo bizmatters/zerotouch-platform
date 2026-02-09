@@ -23,6 +23,13 @@ ARGOCD_NAMESPACE="argocd"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
+# Source .env file if it exists
+if [ -f "$REPO_ROOT/.env" ]; then
+    set -a
+    source "$REPO_ROOT/.env"
+    set +a
+fi
+
 # Source bootstrap config helper
 source "$REPO_ROOT/scripts/bootstrap/helpers/bootstrap-config.sh"
 
