@@ -39,6 +39,11 @@ GITHUB_USERNAME="${BOT_GITHUB_USERNAME:-${GITHUB_REPOSITORY_OWNER:-${ORG_NAME:-a
 if [[ -n "$GIT_APP_ID" && -n "$GIT_APP_INSTALLATION_ID" && -n "$GIT_APP_PRIVATE_KEY" && -n "$TENANTS_REPO_NAME" ]]; then
     echo "✓ Generating GitHub App token..." >&2
     
+    # Decode private key if it's base64-encoded (multi-line values are encoded in .env)
+    if echo "$GIT_APP_PRIVATE_KEY" | base64 -d &>/dev/null && ! echo "$GIT_APP_PRIVATE_KEY" | grep -q "BEGIN"; then
+        GIT_APP_PRIVATE_KEY=$(echo "$GIT_APP_PRIVATE_KEY" | base64 -d)
+    fi
+    
     # Generate JWT for GitHub App
     NOW=$(date +%s)
     IAT=$((NOW - 60))

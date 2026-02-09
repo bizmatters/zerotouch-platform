@@ -69,24 +69,12 @@ jobs:
           environment: ${{ inputs.environment }}
           age-key: ${{ secrets[steps.age-key-name.outputs.name] }}
 
-      - name: Decode and set private key
-        id: decode-key
-        env:
-          ENCODED_KEY: ${{ steps.decrypt-creds.outputs.private-key }}
-        run: |
-          DECODED=$(echo "$ENCODED_KEY" | base64 -d)
-          {
-            echo 'key<<EOFKEY'
-            echo "$DECODED"
-            echo 'EOFKEY'
-          } >> "$GITHUB_OUTPUT"
-
       - name: Generate GitHub App token
         id: app-token
         uses: actions/create-github-app-token@v1
         with:
           app-id: ${{ steps.decrypt-creds.outputs.app-id }}
-          private-key: ${{ steps.decode-key.outputs.key }}
+          private-key: ${{ steps.decrypt-creds.outputs.private-key }}
           owner: ${{ github.repository_owner }}
           repositories: zerotouch-platform,zerotouch-tenants
 

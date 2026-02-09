@@ -53,10 +53,9 @@ runs:
         GIT_APP_INSTALLATION_ID=$(sops -d "${SECRETS_DIR}/git-app-installation-id.secret.yaml" | grep "value:" | awk '{print $2}' | tr -d '"')
         GIT_APP_PRIVATE_KEY=$(sops -d "${SECRETS_DIR}/github-app-credentials.secret.yaml" | yq eval '.stringData.git-app-private-key' -)
         
-        # Base64 encode private key to safely pass through GitHub Actions output
-        GIT_APP_PRIVATE_KEY_B64=$(echo "$GIT_APP_PRIVATE_KEY" | base64 -w 0)
-        
         # Output credentials
         echo "app-id=$GIT_APP_ID" >> $GITHUB_OUTPUT
         echo "installation-id=$GIT_APP_INSTALLATION_ID" >> $GITHUB_OUTPUT
-        echo "private-key=$GIT_APP_PRIVATE_KEY_B64" >> $GITHUB_OUTPUT
+        echo "private-key<<EOF" >> $GITHUB_OUTPUT
+        echo "$GIT_APP_PRIVATE_KEY" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
