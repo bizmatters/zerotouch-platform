@@ -44,7 +44,7 @@ if [[ -n "$ORG_NAME" ]]; then
         -e "s/ANNOTATIONS_PLACEHOLDER/argocd.argoproj.io\/sync-wave: \"0\"/g" \
         -e "s/SECRET_TYPE_PLACEHOLDER/Opaque/g" \
         -e "s/SECRET_KEY_PLACEHOLDER/value/g" \
-        -e "s/SECRET_VALUE_PLACEHOLDER/${ORG_NAME}/g" \
+        -e "s|SECRET_VALUE_PLACEHOLDER|\"${ORG_NAME}\"|g" \
         "$UNIVERSAL_SECRET_TEMPLATE" > "$CORE_SECRETS_DIR/org-name.secret.yaml"
     
     if sops --config "$SOPS_CONFIG" -e -i "$CORE_SECRETS_DIR/org-name.secret.yaml" 2>/dev/null; then
@@ -60,7 +60,7 @@ if [[ -n "$TENANTS_REPO_NAME" ]]; then
         -e "s/ANNOTATIONS_PLACEHOLDER/argocd.argoproj.io\/sync-wave: \"0\"/g" \
         -e "s/SECRET_TYPE_PLACEHOLDER/Opaque/g" \
         -e "s/SECRET_KEY_PLACEHOLDER/value/g" \
-        -e "s/SECRET_VALUE_PLACEHOLDER/${TENANTS_REPO_NAME}/g" \
+        -e "s|SECRET_VALUE_PLACEHOLDER|\"${TENANTS_REPO_NAME}\"|g" \
         "$UNIVERSAL_SECRET_TEMPLATE" > "$CORE_SECRETS_DIR/tenants-repo-name.secret.yaml"
     
     if sops --config "$SOPS_CONFIG" -e -i "$CORE_SECRETS_DIR/tenants-repo-name.secret.yaml" 2>/dev/null; then
@@ -96,7 +96,7 @@ while IFS='=' read -r name value || [ -n "$name" ]; do
         -e "s/ANNOTATIONS_PLACEHOLDER/argocd.argoproj.io\/sync-wave: \"0\"/g" \
         -e "s/SECRET_TYPE_PLACEHOLDER/Opaque/g" \
         -e "s/SECRET_KEY_PLACEHOLDER/${secret_key}/g" \
-        -e "s|SECRET_VALUE_PLACEHOLDER|${value}|g" \
+        -e "s|SECRET_VALUE_PLACEHOLDER|\"${value}\"|g" \
         "$UNIVERSAL_SECRET_TEMPLATE" > "$CORE_SECRETS_DIR/$secret_file"
     
     if sops --config "$SOPS_CONFIG" -e -i "$CORE_SECRETS_DIR/$secret_file" 2>/dev/null; then

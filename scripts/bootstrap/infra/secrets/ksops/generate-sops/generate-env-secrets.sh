@@ -97,7 +97,7 @@ mkdir -p "$SECRETS_DIR"
                         -e "s/ANNOTATIONS_PLACEHOLDER/${annotations}/g" \
                         -e "s/SECRET_TYPE_PLACEHOLDER/Opaque/g" \
                         -e "s/SECRET_KEY_PLACEHOLDER/${secret_key}/g" \
-                        -e "s|SECRET_VALUE_PLACEHOLDER|${value}|g" \
+                        -e "s|SECRET_VALUE_PLACEHOLDER|\"${value}\"|g" \
                         "$UNIVERSAL_SECRET_TEMPLATE" > "$SECRETS_DIR/$secret_file"
                     
                     if sops --config "$SOPS_CONFIG" -e -i "$SECRETS_DIR/$secret_file" 2>/dev/null; then
@@ -120,7 +120,7 @@ mkdir -p "$SECRETS_DIR"
                     -e "s/ANNOTATIONS_PLACEHOLDER/argocd.argoproj.io\/sync-wave: \"0\"/g" \
                     -e "s/SECRET_TYPE_PLACEHOLDER/Opaque/g" \
                     -e "s/SECRET_KEY_PLACEHOLDER/${secret_key}/g" \
-                    -e "s|SECRET_VALUE_PLACEHOLDER|${value}|g" \
+                    -e "s|SECRET_VALUE_PLACEHOLDER|\"${value}\"|g" \
                     "$UNIVERSAL_SECRET_TEMPLATE" > "$SECRETS_DIR/$secret_file"
                 
                 if sops --config "$SOPS_CONFIG" -e -i "$SECRETS_DIR/$secret_file" 2>/dev/null; then

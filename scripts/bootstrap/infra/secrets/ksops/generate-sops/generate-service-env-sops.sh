@@ -208,7 +208,7 @@ while IFS='=' read -r name value || [ -n "$name" ]; do
         -e "s/ANNOTATIONS_PLACEHOLDER/argocd.argoproj.io\/sync-wave: \"0\"/g" \
         -e "s/SECRET_TYPE_PLACEHOLDER/Opaque/g" \
         -e "s/SECRET_KEY_PLACEHOLDER/${secret_key}/g" \
-        -e "s|SECRET_VALUE_PLACEHOLDER|${value}|g" \
+        -e "s|SECRET_VALUE_PLACEHOLDER|\"${value}\"|g" \
         "$TEMPLATE_FILE" > "$SECRET_FILE"
     
     # Encrypt with SOPS
