@@ -67,7 +67,7 @@ spec:
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:
-              name: ${SERVICE_NAME}-db-conn
+              name: database-url
               key: DATABASE_URL
         command: ["/bin/bash"]
         args:
