@@ -69,13 +69,17 @@ jobs:
           environment: ${{ inputs.environment }}
           age-key: ${{ secrets[steps.age-key-name.outputs.name] }}
 
-      - name: Decode private key
+      - name: Decode and set private key
         id: decode-key
+        env:
+          ENCODED_KEY: ${{ steps.decrypt-creds.outputs.private-key }}
         run: |
-          DECODED_KEY=$(echo "${{ steps.decrypt-creds.outputs.private-key }}" | base64 -d)
-          echo "key<<EOF" >> $GITHUB_OUTPUT
-          echo "$DECODED_KEY" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          DECODED=$(echo "$ENCODED_KEY" | base64 -d)
+          {
+            echo 'key<<EOFKEY'
+            echo "$DECODED"
+            echo 'EOFKEY'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Generate GitHub App token
         id: app-token
