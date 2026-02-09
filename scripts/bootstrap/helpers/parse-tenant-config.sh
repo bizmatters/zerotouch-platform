@@ -23,8 +23,10 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Fetch tenant config
-source "$SCRIPT_DIR/fetch-tenant-config.sh" "$ENV" --use-cache
+# Fetch tenant config only if not already set
+if [[ -z "${TENANT_CONFIG_FILE:-}" ]] || [[ ! -f "$TENANT_CONFIG_FILE" ]]; then
+    source "$SCRIPT_DIR/fetch-tenant-config.sh" "$ENV" --use-cache
+fi
 
 # Parse values using Python
 TENANT_VALUES=$(python3 - <<EOF

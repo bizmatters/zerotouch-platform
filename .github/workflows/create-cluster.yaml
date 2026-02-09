@@ -139,7 +139,7 @@ jobs:
         run: sleep 90
 
       - name: Bootstrap Cluster
-        run: ./scripts/bootstrap/01-master-bootstrap.sh ${{ inputs.environment }}
+        run: ./scripts/bootstrap/pipeline/02-master-bootstrap-v2.sh ${{ inputs.environment }}
 
       - name: Run Gateway Validation
         run: |
