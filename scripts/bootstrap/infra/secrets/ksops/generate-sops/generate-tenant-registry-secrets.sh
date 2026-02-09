@@ -50,8 +50,8 @@ stringData:
 EOF
     
     echo "  url: ${REPO_URL}" >> "$SECRETS_DIR/repo-zerotouch-tenants.secret.yaml"
-    echo "  githubAppID: \"${GIT_APP_ID}\"" >> "$SECRETS_DIR/repo-zerotouch-tenants.secret.yaml"
-    echo "  githubAppInstallationID: \"${GIT_APP_INSTALLATION_ID}\"" >> "$SECRETS_DIR/repo-zerotouch-tenants.secret.yaml"
+    echo "  githubAppID: ${GIT_APP_ID}" >> "$SECRETS_DIR/repo-zerotouch-tenants.secret.yaml"
+    echo "  githubAppInstallationID: ${GIT_APP_INSTALLATION_ID}" >> "$SECRETS_DIR/repo-zerotouch-tenants.secret.yaml"
     echo "  githubAppPrivateKey: |" >> "$SECRETS_DIR/repo-zerotouch-tenants.secret.yaml"
     echo "$GIT_APP_PRIVATE_KEY" | sed 's/^/    /' >> "$SECRETS_DIR/repo-zerotouch-tenants.secret.yaml"
     
