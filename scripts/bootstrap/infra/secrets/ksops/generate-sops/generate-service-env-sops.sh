@@ -178,16 +178,18 @@ while IFS='=' read -r name value || [ -n "$name" ]; do
     value="${value#\"}"
     value="${value%\"}"
     
-    cat > "$SECRET_FILE" << EOF
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ${secret_name}
-type: Opaque
-stringData:
-  ${secret_key}: |
-    ${value}
-EOF
+    # Use template for secret file
+    TEMPLATE_FILE="$REPO_ROOT/scripts/bootstrap/infra/secrets/ksops/templates/secret.yaml"
+    if [ ! -f "$TEMPLATE_FILE" ]; then
+        echo -e "${RED}✗ Error: Template not found: $TEMPLATE_FILE${NC}"
+        exit 1
+    fi
+    
+    # Generate secret from template
+    sed -e "s/SECRET_NAME_PLACEHOLDER/${secret_name}/g" \
+        -e "s/SECRET_KEY_PLACEHOLDER/${secret_key}/g" \
+        -e "s|SECRET_VALUE_PLACEHOLDER|${value}|g" \
+        "$TEMPLATE_FILE" > "$SECRET_FILE"
     
     # Encrypt with SOPS
     SOPS_CMD="sops -e -i"
@@ -217,6 +219,40 @@ fi
 
 echo ""
 echo -e "${GREEN}✓ Created $SECRET_COUNT encrypted secret files${NC}"
+
+# Generate ksops-generator.yaml and kustomization.yaml
+GENERATOR_FILE="$SECRETS_DIR/ksops-generator.yaml"
+KUSTOMIZATION_FILE="$SECRETS_DIR/kustomization.yaml"
+TEMPLATE_DIR="$REPO_ROOT/scripts/bootstrap/infra/secrets/ksops/templates"
+
+echo ""
+echo -e "${BLUE}Generating KSOPS configuration files...${NC}"
+
+# Copy template for ksops-generator.yaml
+if [ ! -f "$TEMPLATE_DIR/ksops-generator.yaml" ]; then
+    echo -e "${RED}✗ Error: Template not found: $TEMPLATE_DIR/ksops-generator.yaml${NC}"
+    exit 1
+fi
+cp "$TEMPLATE_DIR/ksops-generator.yaml" "$GENERATOR_FILE"
+
+# Add all secret files to the generator
+for secret_file in "$SECRETS_DIR"/*.secret.yaml; do
+    if [ -f "$secret_file" ]; then
+        basename_file=$(basename "$secret_file")
+        echo "  - ./$basename_file" >> "$GENERATOR_FILE"
+    fi
+done
+
+echo -e "${GREEN}✓ Created: ksops-generator.yaml${NC}"
+
+# Copy template for kustomization.yaml
+if [ ! -f "$TEMPLATE_DIR/kustomization.yaml" ]; then
+    echo -e "${RED}✗ Error: Template not found: $TEMPLATE_DIR/kustomization.yaml${NC}"
+    exit 1
+fi
+cp "$TEMPLATE_DIR/kustomization.yaml" "$KUSTOMIZATION_FILE"
+
+echo -e "${GREEN}✓ Created: kustomization.yaml${NC}"
 echo ""
 echo -e "${YELLOW}Next steps:${NC}"
 if [ -n "$TENANT_NAME" ]; then
