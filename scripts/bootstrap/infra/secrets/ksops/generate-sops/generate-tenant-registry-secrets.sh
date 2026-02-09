@@ -31,11 +31,10 @@ set +a
 mkdir -p "$SECRETS_DIR"
 
 # ArgoCD repo credentials template (repo-creds)
-# Uses prefix matching to avoid conflicts with exact URL repository secrets
-# Project-scoped to 'default' for isolation
+# Uses repo-creds type with project scoping to avoid conflicts with repository type secrets
+# Scoped to tenants repo only for principle of least privilege
 if [[ -n "$ORG_NAME" && -n "$TENANTS_REPO_NAME" && -n "$GIT_APP_ID" && -n "$GIT_APP_INSTALLATION_ID" && -n "$GIT_APP_PRIVATE_KEY" ]]; then
-    # Use org-level URL prefix for credential template matching
-    REPO_URL_PREFIX="https://github.com/${ORG_NAME}"
+    REPO_URL="https://github.com/${ORG_NAME}/${TENANTS_REPO_NAME}.git"
     
     cat > "$SECRETS_DIR/repo-zerotouch-tenants.secret.yaml" << 'EOF'
 apiVersion: v1
@@ -52,7 +51,7 @@ stringData:
   type: git
 EOF
     
-    echo "  url: ${REPO_URL_PREFIX}" >> "$SECRETS_DIR/repo-zerotouch-tenants.secret.yaml"
+    echo "  url: ${REPO_URL}" >> "$SECRETS_DIR/repo-zerotouch-tenants.secret.yaml"
     echo "  project: default" >> "$SECRETS_DIR/repo-zerotouch-tenants.secret.yaml"
     echo "  githubAppID: \"${GIT_APP_ID}\"" >> "$SECRETS_DIR/repo-zerotouch-tenants.secret.yaml"
     echo "  githubAppInstallationID: \"${GIT_APP_INSTALLATION_ID}\"" >> "$SECRETS_DIR/repo-zerotouch-tenants.secret.yaml"
