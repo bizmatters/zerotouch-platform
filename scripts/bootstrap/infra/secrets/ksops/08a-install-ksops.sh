@@ -108,9 +108,33 @@ install_ksops_plugin() {
             ;;
     esac
     
-    # Download and extract KSOPS archive
+    # Download and extract KSOPS archive with retry
     local TEMP_DIR=$(mktemp -d)
-    curl -Lo "$TEMP_DIR/ksops.tar.gz" "https://github.com/viaduct-ai/kustomize-sops/releases/latest/download/ksops_latest_${OS}_${ARCH}.tar.gz"
+    local DOWNLOAD_URL="https://github.com/viaduct-ai/kustomize-sops/releases/latest/download/ksops_latest_${OS}_${ARCH}.tar.gz"
+    local MAX_RETRIES=3
+    local RETRY_COUNT=0
+    
+    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+        log_step "Downloading KSOPS (attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)..."
+        if curl -Lo "$TEMP_DIR/ksops.tar.gz" "$DOWNLOAD_URL"; then
+            if tar -tzf "$TEMP_DIR/ksops.tar.gz" >/dev/null 2>&1; then
+                log_info "Download successful"
+                break
+            else
+                log_error "Downloaded file is corrupted"
+                rm -f "$TEMP_DIR/ksops.tar.gz"
+            fi
+        fi
+        RETRY_COUNT=$((RETRY_COUNT + 1))
+        [ $RETRY_COUNT -lt $MAX_RETRIES ] && sleep 2
+    done
+    
+    if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+        log_error "Failed to download KSOPS after $MAX_RETRIES attempts"
+        rm -rf "$TEMP_DIR"
+        return 1
+    fi
+    
     tar -xzf "$TEMP_DIR/ksops.tar.gz" -C "$TEMP_DIR"
     mv "$TEMP_DIR/ksops" "$PLUGIN_DIR/ksops"
     chmod +x "$PLUGIN_DIR/ksops"
