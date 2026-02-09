@@ -56,9 +56,9 @@ spec:
               apk add --no-cache curl jq openssl kubectl
               
               # Read GitHub App credentials from secret
-              GIT_APP_ID=$(cat /secrets/github-app-id)
-              GIT_APP_INSTALLATION_ID=$(cat /secrets/github-app-installation-id)
-              GIT_APP_PRIVATE_KEY=$(cat /secrets/github-app-private-key)
+              GIT_APP_ID=$(cat /secrets/git-app-id)
+              GIT_APP_INSTALLATION_ID=$(cat /secrets/git-app-installation-id)
+              GIT_APP_PRIVATE_KEY=$(cat /secrets/git-app-private-key)
               
               # Generate JWT
               NOW=$(date +%s)
