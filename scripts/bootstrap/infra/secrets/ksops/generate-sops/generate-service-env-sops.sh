@@ -194,7 +194,8 @@ while IFS='=' read -r name value || [ -n "$name" ]; do
     # Determine namespace from tenant's 00-namespace.yaml file
     secret_namespace="default"
     if [ -n "$TENANT_NAME" ]; then
-        TENANT_DIR="$(dirname "$(dirname "$SECRETS_DIR")")"
+        # Go up 3 levels from secrets dir: secrets -> dev -> overlays -> tenant-root
+        TENANT_DIR="$(dirname "$(dirname "$(dirname "$SECRETS_DIR")")")"
         NAMESPACE_FILE="$TENANT_DIR/00-namespace.yaml"
         if [ -f "$NAMESPACE_FILE" ]; then
             secret_namespace=$(grep -A1 "^metadata:" "$NAMESPACE_FILE" | grep "name:" | awk '{print $2}')
