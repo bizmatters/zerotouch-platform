@@ -12,7 +12,7 @@ ENV_FILE="${4:-.env}"
 # Template paths
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 TEMPLATE_DIR="$REPO_ROOT/scripts/bootstrap/infra/secrets/ksops/templates"
-UNIVERSAL_SECRET_TEMPLATE="$TEMPLATE_DIR/universal-secret.yaml"
+DOCKERCONFIGJSON_TEMPLATE="$TEMPLATE_DIR/ghcr-pull-secret.yaml"
 
 if [ -z "$OUTPUT_FILE" ] || [ -z "$NAMESPACE" ]; then
     echo "Usage: $0 <OUTPUT_FILE> <NAMESPACE> [SOPS_CONFIG] [ENV_FILE]"
@@ -66,21 +66,14 @@ AUTH_STRING=$(echo -n "x-access-token:${GITHUB_TOKEN}" | base64)
 
 # Create dockerconfigjson (single line, no formatting)
 DOCKER_CONFIG_JSON="{\"auths\":{\"ghcr.io\":{\"auth\":\"${AUTH_STRING}\"}}}"
+DOCKER_CONFIG_JSON_BASE64=$(echo -n "$DOCKER_CONFIG_JSON" | base64)
 
-# Create secret YAML from template
-cat > "$OUTPUT_FILE" << EOF
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ghcr-pull-secret
-  namespace: ${NAMESPACE}
-  annotations:
-    argocd.argoproj.io/sync-wave: "0"
-type: kubernetes.io/dockerconfigjson
-stringData:
-  .dockerconfigjson: |
-    ${DOCKER_CONFIG_JSON}
-EOF
+# Create secret YAML from dockerconfigjson template
+sed -e "s/SECRET_NAME_PLACEHOLDER/ghcr-pull-secret/g" \
+    -e "s/NAMESPACE_PLACEHOLDER/${NAMESPACE}/g" \
+    -e "s/ANNOTATIONS_PLACEHOLDER/argocd.argoproj.io\/sync-wave: \\\"0\\\"/g" \
+    -e "s|DOCKER_CONFIG_JSON_BASE64_PLACEHOLDER|${DOCKER_CONFIG_JSON_BASE64}|g" \
+    "$DOCKERCONFIGJSON_TEMPLATE" > "$OUTPUT_FILE"
 
 # Encrypt with SOPS
 if [ -n "$SOPS_CONFIG" ] && [ -f "$SOPS_CONFIG" ]; then

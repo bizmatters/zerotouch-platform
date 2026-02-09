@@ -9,6 +9,7 @@ ENV_FILE="$REPO_ROOT/.env.local"
 # Template paths
 TEMPLATE_DIR="$REPO_ROOT/scripts/bootstrap/infra/secrets/ksops/templates"
 UNIVERSAL_SECRET_TEMPLATE="$TEMPLATE_DIR/universal-secret.yaml"
+DOCKERCONFIGJSON_TEMPLATE="$TEMPLATE_DIR/ghcr-pull-secret.yaml"
 
 # Colors
 RED='\033[0;31m'
@@ -113,20 +114,13 @@ if [[ -n "$GIT_APP_ID" && -n "$GIT_APP_INSTALLATION_ID" && -n "$GIT_APP_PRIVATE_
         AUTH_STRING=$(echo -n "x-access-token:${GITHUB_TOKEN}" | base64)
         
         DOCKER_CONFIG_JSON="{\"auths\":{\"ghcr.io\":{\"auth\":\"${AUTH_STRING}\"}}}"
+        DOCKER_CONFIG_JSON_BASE64=$(echo -n "$DOCKER_CONFIG_JSON" | base64)
         
-        cat > "$SECRETS_DIR/ghcr-pull-secret.secret.yaml" << EOF
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ghcr-pull-secret
-  namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "0"
-type: kubernetes.io/dockerconfigjson
-stringData:
-  .dockerconfigjson: |
-    ${DOCKER_CONFIG_JSON}
-EOF
+        sed -e "s/SECRET_NAME_PLACEHOLDER/ghcr-pull-secret/g" \
+            -e "s/NAMESPACE_PLACEHOLDER/argocd/g" \
+            -e "s/ANNOTATIONS_PLACEHOLDER/argocd.argoproj.io\/sync-wave: \\\"0\\\"/g" \
+            -e "s|DOCKER_CONFIG_JSON_BASE64_PLACEHOLDER|${DOCKER_CONFIG_JSON_BASE64}|g" \
+            "$DOCKERCONFIGJSON_TEMPLATE" > "$SECRETS_DIR/ghcr-pull-secret.secret.yaml"
         
         if sops --config "$SOPS_CONFIG" -e -i "$SECRETS_DIR/ghcr-pull-secret.secret.yaml" 2>/dev/null; then
             echo -e "${GREEN}  ✓ ghcr-pull-secret.secret.yaml${NC}"
