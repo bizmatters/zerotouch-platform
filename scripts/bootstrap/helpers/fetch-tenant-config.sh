@@ -7,6 +7,13 @@
 
 set -e
 
+# If TENANT_CONFIG_FILE is already set and file exists, skip fetching
+if [[ -n "${TENANT_CONFIG_FILE:-}" ]] && [[ -f "$TENANT_CONFIG_FILE" ]]; then
+    echo "✓ Using pre-set tenant config: $TENANT_CONFIG_FILE" >&2
+    export TENANT_CACHE_DIR="${TENANT_CACHE_DIR:-$(dirname "$(dirname "$(dirname "$TENANT_CONFIG_FILE")")")}"
+    return 0 2>/dev/null || exit 0
+fi
+
 ENV="$1"
 USE_CACHE=false
 
