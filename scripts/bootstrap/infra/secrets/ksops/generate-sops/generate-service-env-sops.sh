@@ -191,9 +191,19 @@ while IFS='=' read -r name value || [ -n "$name" ]; do
         exit 1
     fi
     
+    # Determine namespace from tenant's 00-namespace.yaml file
+    secret_namespace="default"
+    if [ -n "$TENANT_NAME" ]; then
+        TENANT_DIR="$(dirname "$(dirname "$SECRETS_DIR")")"
+        NAMESPACE_FILE="$TENANT_DIR/00-namespace.yaml"
+        if [ -f "$NAMESPACE_FILE" ]; then
+            secret_namespace=$(grep -A1 "^metadata:" "$NAMESPACE_FILE" | grep "name:" | awk '{print $2}')
+        fi
+    fi
+    
     # Generate secret from universal template
     sed -e "s/SECRET_NAME_PLACEHOLDER/${secret_name}/g" \
-        -e "s/NAMESPACE_PLACEHOLDER/default/g" \
+        -e "s/NAMESPACE_PLACEHOLDER/${secret_namespace}/g" \
         -e "s/ANNOTATIONS_PLACEHOLDER/argocd.argoproj.io\/sync-wave: \"0\"/g" \
         -e "s/SECRET_TYPE_PLACEHOLDER/Opaque/g" \
         -e "s/SECRET_KEY_PLACEHOLDER/${secret_key}/g" \
