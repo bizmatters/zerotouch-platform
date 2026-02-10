@@ -102,8 +102,57 @@ spec:
           echo "🧪 Running integration tests..."
           echo "=============================================="
           
-          # Language detection and test execution
-          if [ -f "go.mod" ]; then
+          # Check if ci/config.yaml exists and has test.command
+          TEST_COMMAND=""
+          if [ -f "ci/config.yaml" ]; then
+            if command -v yq &> /dev/null; then
+              TEST_COMMAND=$(yq eval '.test.command // ""' ci/config.yaml)
+              echo "Test command from config: $TEST_COMMAND"
+            fi
+          fi
+          
+          # If test.command is specified in config, use it
+          if [ -n "$TEST_COMMAND" ]; then
+            echo "Using test command from ci/config.yaml: $TEST_COMMAND"
+            echo "Test file: {{TEST_PATH}}"
+            echo ""
+            
+            # Execute the test command with the specific test file
+            echo "Executing: $TEST_COMMAND {{TEST_PATH}}"
+            if $TEST_COMMAND "{{TEST_PATH}}" 2>&1 | tee artifacts/test-output.log; then
+              TEST_EXIT_CODE=0
+              echo "✅ Tests passed"
+            else
+              TEST_EXIT_CODE=$?
+              echo "❌ Tests failed with exit code: $TEST_EXIT_CODE"
+            fi
+          # Fallback to language detection if no test.command specified
+          elif [ -f "package.json" ]; then
+            echo "Node.js project detected. Running npm test..."
+            echo "Test file: {{TEST_PATH}}"
+            echo ""
+            
+            # Check if npm test:integration script exists
+            if npm run | grep -q "test:integration"; then
+              echo "Executing: npm run test:integration -- {{TEST_PATH}}"
+              if npm run test:integration -- "{{TEST_PATH}}" 2>&1 | tee artifacts/test-output.log; then
+                TEST_EXIT_CODE=0
+                echo "✅ Tests passed"
+              else
+                TEST_EXIT_CODE=$?
+                echo "❌ Tests failed with exit code: $TEST_EXIT_CODE"
+              fi
+            else
+              echo "Executing: npm test -- {{TEST_PATH}}"
+              if npm test -- "{{TEST_PATH}}" 2>&1 | tee artifacts/test-output.log; then
+                TEST_EXIT_CODE=0
+                echo "✅ Tests passed"
+              else
+                TEST_EXIT_CODE=$?
+                echo "❌ Tests failed with exit code: $TEST_EXIT_CODE"
+              fi
+            fi
+          elif [ -f "go.mod" ]; then
             echo "Go project detected. Running go test..."
             echo "Executing: go test -v -timeout=10m ./{{TEST_PATH}}"
             

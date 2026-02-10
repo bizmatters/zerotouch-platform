@@ -154,8 +154,8 @@ for TEST_FILE in "${TEST_FILES[@]}"; do
     
     log_info "Running test: $TEST_NAME ($TEST_FILE)"
     
-    # Run test using platform script
-    TEST_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/run-test-job.sh"
+    # Run test using new test-runner pattern
+    TEST_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/helpers/test-runner/run-test-job.sh"
     
     if [[ ! -f "$TEST_SCRIPT" ]]; then
         log_error "Test script not found: $TEST_SCRIPT"
