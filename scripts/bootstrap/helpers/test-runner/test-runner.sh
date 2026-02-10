@@ -100,9 +100,6 @@ case "$LANGUAGE" in
         ;;
 esac
 
-# Make adapter executable
-chmod +x "$ADAPTER"
-
-# Execute adapter
+# Execute adapter (already executable from ConfigMap defaultMode)
 log_info "Executing adapter: $ADAPTER"
 exec "$ADAPTER" "$TEST_PATH" "$TEST_COMMAND" "$ARTIFACTS_DIR"
