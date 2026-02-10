@@ -164,8 +164,9 @@ parse_env_multiline() {
             current_value="${BASH_REMATCH[2]}"
             
             # Check if value ends with closing quote (single line)
-            if [[ "$current_value" =~ ^(.*)\"$ ]]; then
-                current_value="${BASH_REMATCH[1]}"
+            if [[ "$current_value" =~ \"$ ]]; then
+                # Remove trailing quote
+                current_value="${current_value%\"}"
                 echo "$current_key=$current_value"
                 current_key=""
                 current_value=""
