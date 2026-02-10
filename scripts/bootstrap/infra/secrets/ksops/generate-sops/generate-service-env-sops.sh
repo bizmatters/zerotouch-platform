@@ -145,14 +145,20 @@ fi
 # Read and process secrets
 SECRET_COUNT=0
 
-while IFS='=' read -r name value || [ -n "$name" ]; do
-    # Skip empty lines and comments
-    [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
+# Source .env file to preserve multiline values
+set -a
+source "$ENV_FILE"
+set +a
+
+# Get all variable names from .env that match supported prefixes
+ENV_VARS=$(grep -E "$SUPPORTED_PREFIXES" "$ENV_FILE" | grep -v '^[[:space:]]*#' | cut -d'=' -f1)
+
+for name in $ENV_VARS; do
+    # Get value from sourced environment
+    value="${!name}"
     
-    # Check if matches supported prefix
-    if [[ ! "$name" =~ $SUPPORTED_PREFIXES ]]; then
-        continue
-    fi
+    # Skip if empty
+    [[ -z "$value" ]] && continue
     
     # Extract environment and secret name
     if [[ "$name" =~ ^(PR|DEV|STAGING|PROD)_(.+)$ ]]; then
@@ -164,6 +170,7 @@ while IFS='=' read -r name value || [ -n "$name" ]; do
         continue
     fi
     
+    
     # Create secret YAML file directly in output directory (no env subdirectory when filtered)
     if [ -n "$ENV_FILTER" ]; then
         SECRET_FILE="$SECRETS_DIR/${secret_name}.secret.yaml"
@@ -174,21 +181,10 @@ while IFS='=' read -r name value || [ -n "$name" ]; do
         SECRET_FILE="$ENV_SECRETS_DIR/${secret_name}.secret.yaml"
     fi
     
-    # Remove surrounding quotes from value if present
-    value="${value#\"}"
-    value="${value%\"}"
-    
     # Determine platform root (cloned by sync script)
     PLATFORM_ROOT="$(dirname "$REPO_ROOT")/zerotouch-platform"
     if [ ! -d "$PLATFORM_ROOT" ]; then
         PLATFORM_ROOT="$REPO_ROOT/zerotouch-platform"
-    fi
-    
-    # Use universal template
-    TEMPLATE_FILE="$PLATFORM_ROOT/scripts/bootstrap/infra/secrets/ksops/templates/universal-secret.yaml"
-    if [ ! -f "$TEMPLATE_FILE" ]; then
-        echo -e "${RED}✗ Error: Template not found: $TEMPLATE_FILE${NC}"
-        exit 1
     fi
     
     # Determine namespace from tenant's 00-namespace.yaml file
@@ -202,14 +198,43 @@ while IFS='=' read -r name value || [ -n "$name" ]; do
         fi
     fi
     
-    # Generate secret from universal template
-    sed -e "s/SECRET_NAME_PLACEHOLDER/${secret_name}/g" \
-        -e "s/NAMESPACE_PLACEHOLDER/${secret_namespace}/g" \
-        -e "s/ANNOTATIONS_PLACEHOLDER/argocd.argoproj.io\/sync-wave: \"0\"/g" \
-        -e "s/SECRET_TYPE_PLACEHOLDER/Opaque/g" \
-        -e "s/SECRET_KEY_PLACEHOLDER/${secret_key}/g" \
-        -e "s|SECRET_VALUE_PLACEHOLDER|\"${value}\"|g" \
-        "$TEMPLATE_FILE" > "$SECRET_FILE"
+    # Check if value is multiline (contains actual newlines)
+    if [[ "$value" == *$'\n'* ]]; then
+        # Multiline value: use data field with base64 encoding
+        TEMPLATE_FILE="$PLATFORM_ROOT/scripts/bootstrap/infra/secrets/ksops/templates/universal-secret-data.yaml"
+        if [ ! -f "$TEMPLATE_FILE" ]; then
+            echo -e "${RED}✗ Error: Template not found: $TEMPLATE_FILE${NC}"
+            exit 1
+        fi
+        
+        # Base64 encode the multiline value
+        value_base64=$(echo -n "$value" | base64)
+        
+        # Generate secret from data template
+        sed -e "s/SECRET_NAME_PLACEHOLDER/${secret_name}/g" \
+            -e "s/NAMESPACE_PLACEHOLDER/${secret_namespace}/g" \
+            -e "s/ANNOTATIONS_PLACEHOLDER/argocd.argoproj.io\/sync-wave: \"0\"/g" \
+            -e "s/SECRET_TYPE_PLACEHOLDER/Opaque/g" \
+            -e "s/SECRET_KEY_PLACEHOLDER/${secret_key}/g" \
+            -e "s|SECRET_VALUE_BASE64_PLACEHOLDER|${value_base64}|g" \
+            "$TEMPLATE_FILE" > "$SECRET_FILE"
+    else
+        # Single-line value: use stringData field
+        TEMPLATE_FILE="$PLATFORM_ROOT/scripts/bootstrap/infra/secrets/ksops/templates/universal-secret.yaml"
+        if [ ! -f "$TEMPLATE_FILE" ]; then
+            echo -e "${RED}✗ Error: Template not found: $TEMPLATE_FILE${NC}"
+            exit 1
+        fi
+        
+        # Generate secret from stringData template
+        sed -e "s/SECRET_NAME_PLACEHOLDER/${secret_name}/g" \
+            -e "s/NAMESPACE_PLACEHOLDER/${secret_namespace}/g" \
+            -e "s/ANNOTATIONS_PLACEHOLDER/argocd.argoproj.io\/sync-wave: \"0\"/g" \
+            -e "s/SECRET_TYPE_PLACEHOLDER/Opaque/g" \
+            -e "s/SECRET_KEY_PLACEHOLDER/${secret_key}/g" \
+            -e "s|SECRET_VALUE_PLACEHOLDER|\"${value}\"|g" \
+            "$TEMPLATE_FILE" > "$SECRET_FILE"
+    fi
     
     # Encrypt with SOPS
     SOPS_CMD="sops -e -i"
@@ -229,7 +254,7 @@ while IFS='=' read -r name value || [ -n "$name" ]; do
         rm -f "$SECRET_FILE"
     fi
     
-done < "$ENV_FILE"
+done
 
 if [ $SECRET_COUNT -eq 0 ]; then
     echo -e "${YELLOW}⚠️  No secrets found with supported prefixes${NC}"
