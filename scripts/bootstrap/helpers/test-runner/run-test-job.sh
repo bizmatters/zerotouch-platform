@@ -50,6 +50,21 @@ log_info "Image: $IMAGE_TAG"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEST_RUNNER_DIR="$SCRIPT_DIR"
 
+# Discover all secrets in namespace
+log_info "Discovering secrets in namespace: $NAMESPACE"
+SECRETS=$(kubectl get secrets -n $NAMESPACE -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | grep -v '^default-token' | grep -v '^sh.helm.release' || true)
+
+# Build envFrom section dynamically
+ENV_FROM=""
+for secret in $SECRETS; do
+    ENV_FROM="${ENV_FROM}        - secretRef:
+            name: ${secret}
+            optional: true
+"
+done
+
+log_info "Mounting $(echo "$SECRETS" | wc -w | tr -d ' ') secrets"
+
 # Create test job manifest
 cat > /tmp/test-job-${JOB_NAME}.yaml <<EOF
 apiVersion: batch/v1
@@ -76,13 +91,7 @@ spec:
         command: ["/test-runner/test-runner.sh"]
         args: ["exec", "--config", "ci/config.yaml", "--test", "${TEST_PATH}", "--artifacts", "/app/artifacts"]
         envFrom:
-        - secretRef:
-            name: database-url
-            optional: true
-        - secretRef:
-            name: ${SERVICE_NAME}-cache-conn
-            optional: true
-        env:
+${ENV_FROM}        env:
         - name: TEST_ENV
           value: "integration"
         - name: SERVICE_NAME
