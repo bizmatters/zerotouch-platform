@@ -5,9 +5,4 @@ resources:
 - ../core
 - ./secrets
 - 99-tenants.yaml
-
-patches:
-- path: gateway-certificate-patch.yaml
-  target:
-    kind: Certificate
-    name: nutgraf-tls-cert
+- 04-gateway-config.yaml

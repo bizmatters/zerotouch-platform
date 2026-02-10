@@ -1,0 +1,34 @@
+# Override gateway-config for staging environment
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gateway-config
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/arun4infra/zerotouch-platform.git
+    targetRevision: main
+    path: bootstrap/argocd/overlays/main/staging/gateway-config
+  destination:
+    server: https://kubernetes.default.svc
+  ignoreDifferences:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      jsonPointers:
+        - /spec/infrastructure/annotations
+        - /spec/listeners/1/tls/certificateRefs
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        maxDuration: 5m
