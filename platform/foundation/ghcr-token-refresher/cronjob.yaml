@@ -3,11 +3,15 @@ kind: ServiceAccount
 metadata:
   name: ghcr-token-refresher
   namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: ghcr-token-refresher
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
 rules:
 - apiGroups: [""]
   resources: ["secrets"]
@@ -20,6 +24,8 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: ghcr-token-refresher
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -34,6 +40,8 @@ kind: CronJob
 metadata:
   name: ghcr-token-refresher
   namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   schedule: "*/30 * * * *"  # Every 30 minutes
   successfulJobsHistoryLimit: 1
