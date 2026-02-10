@@ -177,14 +177,23 @@ parse_env_multiline() {
         elif [ "$in_multiline" = true ]; then
             # Check if line ends multiline value
             if [[ "$line" =~ ^(.*)\"$ ]]; then
-                current_value="${current_value}"$'\n'"${BASH_REMATCH[1]}"
+                # Append final line without trailing quote
+                if [ -n "$current_value" ]; then
+                    current_value="${current_value}"$'\n'"${BASH_REMATCH[1]}"
+                else
+                    current_value="${BASH_REMATCH[1]}"
+                fi
                 echo "$current_key=$current_value"
                 current_key=""
                 current_value=""
                 in_multiline=false
             else
                 # Continue multiline value
-                current_value="${current_value}"$'\n'"${line}"
+                if [ -n "$current_value" ]; then
+                    current_value="${current_value}"$'\n'"${line}"
+                else
+                    current_value="${line}"
+                fi
             fi
         fi
     done < "$file"
