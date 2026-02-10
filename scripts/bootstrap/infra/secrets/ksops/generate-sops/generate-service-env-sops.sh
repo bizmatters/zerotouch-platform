@@ -233,14 +233,7 @@ while IFS='=' read -r name value; do
     
     # Detect if value is multiline (contains newlines or PEM format)
     if [[ "$value" == *$'\n'* ]] || [[ "$value" =~ ^-----BEGIN ]]; then
-        # Use multiline template
-        TEMPLATE_FILE="$PLATFORM_ROOT/scripts/bootstrap/infra/secrets/ksops/templates/universal-secret-multiline.yaml"
-        if [ ! -f "$TEMPLATE_FILE" ]; then
-            echo -e "${RED}✗ Error: Multiline template not found: $TEMPLATE_FILE${NC}"
-            exit 1
-        fi
-        
-        # Create YAML with literal block scalar
+        # Generate YAML with literal block scalar inline
         cat > "$SECRET_FILE" <<EOF
 apiVersion: v1
 kind: Secret
