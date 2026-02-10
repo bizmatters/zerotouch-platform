@@ -120,9 +120,13 @@ EOF
 # Create ConfigMap with test-runner scripts
 log_info "Creating test-runner ConfigMap..."
 kubectl create configmap test-runner-scripts \
-  --from-file=${TEST_RUNNER_DIR}/test-runner.sh \
-  --from-file=${TEST_RUNNER_DIR}/lib/ \
-  --from-file=${TEST_RUNNER_DIR}/adapters/ \
+  --from-file=test-runner.sh=${TEST_RUNNER_DIR}/test-runner.sh \
+  --from-file=logger.sh=${TEST_RUNNER_DIR}/lib/logger.sh \
+  --from-file=config-parser.sh=${TEST_RUNNER_DIR}/lib/config-parser.sh \
+  --from-file=language-detector.sh=${TEST_RUNNER_DIR}/lib/language-detector.sh \
+  --from-file=node-adapter.sh=${TEST_RUNNER_DIR}/adapters/node-adapter.sh \
+  --from-file=python-adapter.sh=${TEST_RUNNER_DIR}/adapters/python-adapter.sh \
+  --from-file=go-adapter.sh=${TEST_RUNNER_DIR}/adapters/go-adapter.sh \
   -n ${NAMESPACE} \
   --dry-run=client -o yaml | kubectl apply -f -
 
