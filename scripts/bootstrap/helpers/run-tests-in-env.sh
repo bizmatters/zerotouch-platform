@@ -5,12 +5,14 @@ set -euo pipefail
 # Run Tests in Environment Script
 # ==============================================================================
 # Purpose: Execute integration tests in existing cluster (dev/staging/prod)
-# Usage: ./run-tests-in-env.sh <service-name> <environment>
+# Usage: ./run-tests-in-env.sh <service-name> <environment> [test-file]
 # Example: ./run-tests-in-env.sh identity-service dev
+#          ./run-tests-in-env.sh identity-service dev tests/integration/test_api_token_flow.ts
 # ==============================================================================
 
 SERVICE_NAME="${1:-}"
 ENVIRONMENT="${2:-dev}"
+TEST_FILE="${3:-}"
 
 # Color codes
 RED='\033[0;31m'
@@ -93,38 +95,52 @@ fi
 
 log_success "Deployed image: $DEPLOYED_IMAGE"
 
-# Discover test files from config
-log_info "Discovering test files..."
-TEST_PATTERNS=$(yq eval '.test.test_patterns[]' "$CONFIG_FILE" 2>/dev/null || echo "")
-
-if [[ -z "$TEST_PATTERNS" ]]; then
-    log_warn "No test patterns found in ci/config.yaml, using default"
-    TEST_PATTERNS="tests/integration/test_*.py"
-fi
-
-# Find test files
-cd "$SERVICE_ROOT"
-TEST_FILES=()
-while IFS= read -r pattern; do
-    [[ -z "$pattern" ]] && continue
+# Check if specific test file provided
+if [[ -n "$TEST_FILE" ]]; then
+    log_info "Running single test: $TEST_FILE"
     
-    DIR=$(echo "$pattern" | sed 's|/\*\*.*||')
-    NAME_PATTERN=$(echo "$pattern" | sed 's|.*/||')
-    
-    if [[ -d "$DIR" ]]; then
-        while IFS= read -r file; do
-            [[ -z "$file" ]] && continue
-            TEST_FILES+=("$file")
-        done < <(find "$DIR" -name "$NAME_PATTERN" -type f | grep -v __pycache__ | grep -v conftest | sort)
+    # Validate test file exists
+    cd "$SERVICE_ROOT"
+    if [[ ! -f "$TEST_FILE" ]]; then
+        log_error "Test file not found: $TEST_FILE"
+        exit 1
     fi
-done <<< "$TEST_PATTERNS"
-
-if [[ ${#TEST_FILES[@]} -eq 0 ]]; then
-    log_error "No test files found matching patterns in ci/config.yaml"
-    exit 1
+    
+    TEST_FILES=("$TEST_FILE")
+else
+    # Discover test files from config
+    log_info "Discovering test files..."
+    TEST_PATTERNS=$(yq eval '.test.test_patterns[]' "$CONFIG_FILE" 2>/dev/null || echo "")
+    
+    if [[ -z "$TEST_PATTERNS" ]]; then
+        log_warn "No test patterns found in ci/config.yaml, using default"
+        TEST_PATTERNS="tests/integration/test_*.py"
+    fi
+    
+    # Find test files
+    cd "$SERVICE_ROOT"
+    TEST_FILES=()
+    while IFS= read -r pattern; do
+        [[ -z "$pattern" ]] && continue
+        
+        DIR=$(echo "$pattern" | sed 's|/\*\*.*||')
+        NAME_PATTERN=$(echo "$pattern" | sed 's|.*/||')
+        
+        if [[ -d "$DIR" ]]; then
+            while IFS= read -r file; do
+                [[ -z "$file" ]] && continue
+                TEST_FILES+=("$file")
+            done < <(find "$DIR" -name "$NAME_PATTERN" -type f | grep -v __pycache__ | grep -v conftest | sort)
+        fi
+    done <<< "$TEST_PATTERNS"
+    
+    if [[ ${#TEST_FILES[@]} -eq 0 ]]; then
+        log_error "No test files found matching patterns in ci/config.yaml"
+        exit 1
+    fi
+    
+    log_success "Found ${#TEST_FILES[@]} test file(s)"
 fi
-
-log_success "Found ${#TEST_FILES[@]} test file(s)"
 
 # Export environment variables for test script
 export SERVICE_ROOT
