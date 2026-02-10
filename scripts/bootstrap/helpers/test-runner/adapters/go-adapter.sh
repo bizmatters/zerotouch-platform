@@ -9,7 +9,7 @@ TEST_PATH="$1"
 TEST_COMMAND="${2:-}"
 ARTIFACTS_DIR="${3:-./artifacts}"
 
-source "$(dirname "${BASH_SOURCE[0]}")/../lib/logger.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib.logger.sh"
 
 log_info "Go adapter: Running test $TEST_PATH"
 

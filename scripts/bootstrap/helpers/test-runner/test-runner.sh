@@ -11,9 +11,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Load libraries
-source "$SCRIPT_DIR/lib/logger.sh"
-source "$SCRIPT_DIR/lib/config-parser.sh"
-source "$SCRIPT_DIR/lib/language-detector.sh"
+source "$SCRIPT_DIR/lib.logger.sh"
+source "$SCRIPT_DIR/lib.config-parser.sh"
+source "$SCRIPT_DIR/lib.language-detector.sh"
 
 # Parse arguments
 ACTION=""
@@ -86,13 +86,13 @@ log_info "Detected language from patterns: $LANGUAGE"
 ADAPTER=""
 case "$LANGUAGE" in
     node)
-        ADAPTER="$SCRIPT_DIR/adapters/node-adapter.sh"
+        ADAPTER="$SCRIPT_DIR/adapters.node-adapter.sh"
         ;;
     python)
-        ADAPTER="$SCRIPT_DIR/adapters/python-adapter.sh"
+        ADAPTER="$SCRIPT_DIR/adapters.python-adapter.sh"
         ;;
     go)
-        ADAPTER="$SCRIPT_DIR/adapters/go-adapter.sh"
+        ADAPTER="$SCRIPT_DIR/adapters.go-adapter.sh"
         ;;
     *)
         log_error "Unsupported language: $LANGUAGE"
