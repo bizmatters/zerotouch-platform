@@ -44,21 +44,38 @@ Each environment has a file describing:
 
 Bootstrap scripts automatically fetch these configurations and use them to install Talos on your servers.
 
-### repositories/
-
-Contains ExternalSecret definitions for accessing private tenant repositories.
-
-These are Kubernetes manifests that tell the platform how to fetch credentials from AWS SSM Parameter Store. The actual credentials (GitHub tokens, passwords) are stored in AWS SSM, not in Git.
-
 ### tenants/
 
 Contains definitions for each tenant application.
 
-Each tenant has a simple configuration file that tells ArgoCD:
-- Which Git repository contains the application
-- Which branch to deploy from
-- Where in the repository the Kubernetes manifests are located
-- Which namespace to deploy into
+Each tenant directory must include:
+- **Mandatory:** `overlays/{environment}/config.yaml` - ArgoCD discovery file
+- Kustomize base and overlay structure
+- Namespace definition
+
+**Critical:** ArgoCD uses an ApplicationSet with a Git file generator that scans for `tenants/*/overlays/{environment}/config.yaml`. Tenants without this file will NOT be discovered or deployed.
+
+#### Required config.yaml Structure
+
+```yaml
+# Tenant Configuration for ArgoCD ApplicationSet Discovery
+tenant: <service-name>              # Tenant identifier (kebab-case)
+environment: dev                    # Environment: dev, staging, production
+repoURL: https://github.com/org/zerotouch-tenants.git
+targetRevision: main                # Git branch to deploy from
+appPath: tenants/<service-name>/overlays  # Path to overlay directory
+namespace: <namespace>              # Target Kubernetes namespace
+```
+
+**Example:** `tenants/identity-service/overlays/dev/config.yaml`
+```yaml
+tenant: identity-service
+environment: dev
+repoURL: https://github.com/bizmatters/zerotouch-tenants.git
+targetRevision: main
+appPath: tenants/identity-service/overlays
+namespace: platform-identity
+```
 
 ## How It Works
 
@@ -75,10 +92,12 @@ When you run bootstrap scripts, they:
 
 After the platform is deployed, ArgoCD:
 1. Watches your tenant repository for changes
-2. Discovers all tenant definitions in the tenants/ directory
-3. Creates an ArgoCD Application for each tenant
-4. Syncs the tenant's Kubernetes manifests from their repository
+2. **Discovers tenants by scanning for `tenants/*/overlays/{environment}/config.yaml` files**
+3. Creates an ArgoCD Application for each discovered tenant using ApplicationSet
+4. Syncs the tenant's Kubernetes manifests from the path specified in config.yaml
 5. Automatically deploys and manages the tenant applications
+
+**Discovery Mechanism:** The ApplicationSet controller uses a Git file generator with path pattern `tenants/*/overlays/dev/config.yaml` (for dev environment). Only tenants with this file are deployed. Missing config.yaml = tenant excluded from deployment.
 
 ## Security Model
 
