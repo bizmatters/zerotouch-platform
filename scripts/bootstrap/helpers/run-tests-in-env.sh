@@ -69,6 +69,18 @@ fi
 log_info "Namespace: $NAMESPACE"
 log_info "Environment: $ENVIRONMENT"
 
+# Run pre-flight checks
+PRE_FLIGHT_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/helpers/cluster-pre-flight-checks.sh"
+if [[ -f "$PRE_FLIGHT_SCRIPT" ]]; then
+    chmod +x "$PRE_FLIGHT_SCRIPT"
+    if ! "$PRE_FLIGHT_SCRIPT" "$ENVIRONMENT" "$NAMESPACE"; then
+        log_error "Pre-flight checks failed"
+        exit 1
+    fi
+else
+    log_warn "Pre-flight checks script not found: $PRE_FLIGHT_SCRIPT"
+fi
+
 # Get deployed image tag from cluster
 log_info "Detecting deployed image tag..."
 DEPLOYED_IMAGE=$(kubectl get deployment -n "$NAMESPACE" "$SERVICE_NAME" -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "")
