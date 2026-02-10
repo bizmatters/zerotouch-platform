@@ -107,6 +107,41 @@ spec:
                   maxLength: 253
                   pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
 
+                secret6Name:
+                  type: string
+                  description: "Sixth secret name to mount via envFrom (optional)"
+                  minLength: 1
+                  maxLength: 253
+                  pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+
+                secret7Name:
+                  type: string
+                  description: "Seventh secret name to mount via envFrom (optional)"
+                  minLength: 1
+                  maxLength: 253
+                  pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+
+                secret8Name:
+                  type: string
+                  description: "Eighth secret name to mount via envFrom (optional)"
+                  minLength: 1
+                  maxLength: 253
+                  pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+
+                secret9Name:
+                  type: string
+                  description: "Ninth secret name to mount via envFrom (optional)"
+                  minLength: 1
+                  maxLength: 253
+                  pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+
+                secret10Name:
+                  type: string
+                  description: "Tenth secret name to mount via envFrom (optional)"
+                  minLength: 1
+                  maxLength: 253
+                  pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+
                 # Ingress configuration
                 hostname:
                   type: string

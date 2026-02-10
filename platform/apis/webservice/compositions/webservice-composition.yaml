@@ -182,6 +182,21 @@ spec:
                           - secretRef:
                               name: placeholder-secret5
                               optional: true
+                          - secretRef:
+                              name: placeholder-secret6
+                              optional: true
+                          - secretRef:
+                              name: placeholder-secret7
+                              optional: true
+                          - secretRef:
+                              name: placeholder-secret8
+                              optional: true
+                          - secretRef:
+                              name: placeholder-secret9
+                              optional: true
+                          - secretRef:
+                              name: placeholder-secret10
+                              optional: true
                         resources:
                           requests:
                             cpu: "500m"
@@ -365,6 +380,31 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.secret5Name
           toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[5].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret6Name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[6].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret7Name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[7].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret8Name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[8].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret9Name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[9].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret10Name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[10].secretRef.name
           policy:
             fromFieldPath: Optional
         # Patch health check paths
