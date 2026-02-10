@@ -142,65 +142,13 @@ else
     echo -e "${BLUE}Processing secrets with supported prefixes (PR_, DEV_, STAGING_, PROD_)...${NC}"
 fi
 
-# Read and process secrets with multiline support
+# Read and process secrets
 SECRET_COUNT=0
 
-# Parse .env file preserving multiline values
-parse_env_multiline() {
-    local file="$1"
-    local current_key=""
-    local current_value=""
-    local in_multiline=false
+while IFS='=' read -r name value || [ -n "$name" ]; do
+    # Skip empty lines and comments
+    [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
     
-    while IFS= read -r line || [ -n "$line" ]; do
-        # Skip empty lines and comments when not in multiline
-        if [ "$in_multiline" = false ]; then
-            [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
-        fi
-        
-        # Check if line starts a new key=value pair
-        if [[ "$line" =~ ^([A-Z_]+)=\"(.*)$ ]] && [ "$in_multiline" = false ]; then
-            current_key="${BASH_REMATCH[1]}"
-            current_value="${BASH_REMATCH[2]}"
-            
-            # Check if value ends with closing quote (single line)
-            if [[ "$current_value" =~ \"$ ]]; then
-                # Remove trailing quote
-                current_value="${current_value%\"}"
-                echo "$current_key=$current_value"
-                current_key=""
-                current_value=""
-            else
-                # Start multiline value
-                in_multiline=true
-            fi
-        elif [ "$in_multiline" = true ]; then
-            # Check if line ends multiline value
-            if [[ "$line" =~ ^(.*)\"$ ]]; then
-                # Append final line without trailing quote
-                if [ -n "$current_value" ]; then
-                    current_value="${current_value}"$'\n'"${BASH_REMATCH[1]}"
-                else
-                    current_value="${BASH_REMATCH[1]}"
-                fi
-                echo "$current_key=$current_value"
-                current_key=""
-                current_value=""
-                in_multiline=false
-            else
-                # Continue multiline value
-                if [ -n "$current_value" ]; then
-                    current_value="${current_value}"$'\n'"${line}"
-                else
-                    current_value="${line}"
-                fi
-            fi
-        fi
-    done < "$file"
-}
-
-# Process parsed secrets
-while IFS='=' read -r name value; do
     # Check if matches supported prefix
     if [[ ! "$name" =~ $SUPPORTED_PREFIXES ]]; then
         continue
@@ -211,29 +159,42 @@ while IFS='=' read -r name value; do
         env_prefix="${BASH_REMATCH[1]}"
         env=$(get_env_dir "$env_prefix")
         secret_name=$(echo "${BASH_REMATCH[2]}" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
-        secret_key="${BASH_REMATCH[2]}"
+        secret_key="${BASH_REMATCH[2]}"  # Keep original env var name as key
     else
         continue
     fi
     
-    # Create secret YAML file
+    # Create secret YAML file directly in output directory (no env subdirectory when filtered)
     if [ -n "$ENV_FILTER" ]; then
         SECRET_FILE="$SECRETS_DIR/${secret_name}.secret.yaml"
     else
+        # Create environment-specific directory when not filtered
         ENV_SECRETS_DIR="$SECRETS_DIR/$env"
         mkdir -p "$ENV_SECRETS_DIR"
         SECRET_FILE="$ENV_SECRETS_DIR/${secret_name}.secret.yaml"
     fi
     
-    # Determine platform root
+    # Remove surrounding quotes from value if present
+    value="${value#\"}"
+    value="${value%\"}"
+    
+    # Determine platform root (cloned by sync script)
     PLATFORM_ROOT="$(dirname "$REPO_ROOT")/zerotouch-platform"
     if [ ! -d "$PLATFORM_ROOT" ]; then
         PLATFORM_ROOT="$REPO_ROOT/zerotouch-platform"
     fi
     
-    # Determine namespace
+    # Use universal template
+    TEMPLATE_FILE="$PLATFORM_ROOT/scripts/bootstrap/infra/secrets/ksops/templates/universal-secret.yaml"
+    if [ ! -f "$TEMPLATE_FILE" ]; then
+        echo -e "${RED}✗ Error: Template not found: $TEMPLATE_FILE${NC}"
+        exit 1
+    fi
+    
+    # Determine namespace from tenant's 00-namespace.yaml file
     secret_namespace="default"
     if [ -n "$TENANT_NAME" ]; then
+        # Go up 3 levels from secrets dir: secrets -> dev -> overlays -> tenant-root
         TENANT_DIR="$(dirname "$(dirname "$(dirname "$SECRETS_DIR")")")"
         NAMESPACE_FILE="$TENANT_DIR/00-namespace.yaml"
         if [ -f "$NAMESPACE_FILE" ]; then
@@ -241,38 +202,14 @@ while IFS='=' read -r name value; do
         fi
     fi
     
-    # Detect if value is multiline (contains newlines or PEM format)
-    if [[ "$value" == *$'\n'* ]] || [[ "$value" =~ ^-----BEGIN ]]; then
-        # Generate YAML with literal block scalar inline
-        cat > "$SECRET_FILE" <<EOF
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ${secret_name}
-  namespace: ${secret_namespace}
-  annotations:
-    argocd.argoproj.io/sync-wave: "0"
-type: Opaque
-stringData:
-  ${secret_key}: |
-$(echo "$value" | sed 's/^/    /')
-EOF
-    else
-        # Use single-line template
-        TEMPLATE_FILE="$PLATFORM_ROOT/scripts/bootstrap/infra/secrets/ksops/templates/universal-secret.yaml"
-        if [ ! -f "$TEMPLATE_FILE" ]; then
-            echo -e "${RED}✗ Error: Template not found: $TEMPLATE_FILE${NC}"
-            exit 1
-        fi
-        
-        sed -e "s/SECRET_NAME_PLACEHOLDER/${secret_name}/g" \
-            -e "s/NAMESPACE_PLACEHOLDER/${secret_namespace}/g" \
-            -e "s/ANNOTATIONS_PLACEHOLDER/argocd.argoproj.io\/sync-wave: \"0\"/g" \
-            -e "s/SECRET_TYPE_PLACEHOLDER/Opaque/g" \
-            -e "s/SECRET_KEY_PLACEHOLDER/${secret_key}/g" \
-            -e "s|SECRET_VALUE_PLACEHOLDER|\"${value}\"|g" \
-            "$TEMPLATE_FILE" > "$SECRET_FILE"
-    fi
+    # Generate secret from universal template
+    sed -e "s/SECRET_NAME_PLACEHOLDER/${secret_name}/g" \
+        -e "s/NAMESPACE_PLACEHOLDER/${secret_namespace}/g" \
+        -e "s/ANNOTATIONS_PLACEHOLDER/argocd.argoproj.io\/sync-wave: \"0\"/g" \
+        -e "s/SECRET_TYPE_PLACEHOLDER/Opaque/g" \
+        -e "s/SECRET_KEY_PLACEHOLDER/${secret_key}/g" \
+        -e "s|SECRET_VALUE_PLACEHOLDER|\"${value}\"|g" \
+        "$TEMPLATE_FILE" > "$SECRET_FILE"
     
     # Encrypt with SOPS
     SOPS_CMD="sops -e -i"
@@ -292,7 +229,7 @@ EOF
         rm -f "$SECRET_FILE"
     fi
     
-done < <(parse_env_multiline "$ENV_FILE")
+done < "$ENV_FILE"
 
 if [ $SECRET_COUNT -eq 0 ]; then
     echo -e "${YELLOW}⚠️  No secrets found with supported prefixes${NC}"
