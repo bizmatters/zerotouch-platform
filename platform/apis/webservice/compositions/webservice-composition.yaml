@@ -52,55 +52,57 @@ spec:
             status: "True"
 
     # Resource 2: PostgreSQL Database (conditional)
-    - name: postgres-database
-      base:
-        apiVersion: kubernetes.crossplane.io/v1alpha2
-        kind: Object
-        spec:
-          providerConfigRef:
-            name: kubernetes-provider
-          forProvider:
-            manifest:
-              apiVersion: database.bizmatters.io/v1alpha1
-              kind: PostgresInstance
-              metadata:
-                name: placeholder-db
-                namespace: placeholder
-                annotations:
-                  argocd.argoproj.io/sync-wave: "0"
-              spec:
-                size: small
-                version: "16"
-                storageGB: 20
-      patches:
-        # Use claim name (always K8s safe) for resource name
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.claimRef.name
-          toFieldPath: spec.forProvider.manifest.metadata.name
-          transforms:
-            - type: string
-              string:
-                type: Format
-                fmt: "%s-db"
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.claimRef.namespace
-          toFieldPath: spec.forProvider.manifest.metadata.namespace
-        # Conditional creation - only create if databaseName is provided
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.databaseName
-          toFieldPath: spec.forProvider.manifest.metadata.annotations[database-name]
-          policy:
-            fromFieldPath: Optional
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.databaseSize
-          toFieldPath: spec.forProvider.manifest.spec.size
-          policy:
-            fromFieldPath: Optional
-      readinessChecks:
-        - type: MatchCondition
-          matchCondition:
-            type: Ready
-            status: "True"
+    # COMMENTED OUT: PostgresInstance CRD not installed. Services use pre-existing database secrets.
+    # Uncomment when PostgresInstance XRD is available and needed.
+    # - name: postgres-database
+    #   base:
+    #     apiVersion: kubernetes.crossplane.io/v1alpha2
+    #     kind: Object
+    #     spec:
+    #       providerConfigRef:
+    #         name: kubernetes-provider
+    #       forProvider:
+    #         manifest:
+    #           apiVersion: database.bizmatters.io/v1alpha1
+    #           kind: PostgresInstance
+    #           metadata:
+    #             name: placeholder-db
+    #             namespace: placeholder
+    #             annotations:
+    #               argocd.argoproj.io/sync-wave: "0"
+    #           spec:
+    #             size: small
+    #             version: "16"
+    #             storageGB: 20
+    #   patches:
+    #     # Use claim name (always K8s safe) for resource name
+    #     - type: FromCompositeFieldPath
+    #       fromFieldPath: spec.claimRef.name
+    #       toFieldPath: spec.forProvider.manifest.metadata.name
+    #       transforms:
+    #         - type: string
+    #           string:
+    #             type: Format
+    #             fmt: "%s-db"
+    #     - type: FromCompositeFieldPath
+    #       fromFieldPath: spec.claimRef.namespace
+    #       toFieldPath: spec.forProvider.manifest.metadata.namespace
+    #     # Conditional creation - only create if databaseName is provided
+    #     - type: FromCompositeFieldPath
+    #       fromFieldPath: spec.databaseName
+    #       toFieldPath: spec.forProvider.manifest.metadata.annotations[database-name]
+    #       policy:
+    #         fromFieldPath: Optional
+    #     - type: FromCompositeFieldPath
+    #       fromFieldPath: spec.databaseSize
+    #       toFieldPath: spec.forProvider.manifest.spec.size
+    #       policy:
+    #         fromFieldPath: Optional
+    #   readinessChecks:
+    #     - type: MatchCondition
+    #       matchCondition:
+    #         type: Ready
+    #         status: "True"
 
     # Resource 3: Deployment
     - name: deployment
