@@ -5,4 +5,6 @@ resources:
 - ../core
 - ./secrets
 - 99-tenants.yaml
+
+patchesStrategicMerge:
 - 04-gateway-config.yaml
